@@ -11,13 +11,14 @@ from matplotlib import cm
 from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
+from plot_script import *
 
 def read_data(var_name, site_name, input_file, bin_by=None):
 
     f = nc.Dataset(input_file, mode='r')
 
     model_in_list = f.variables[var_name + '_models']
-    time   = nc.num2date(f.variables['CABLE_time'][:],f.variables['CABLE_time'].units, 
+    time          = nc.num2date(f.variables['CABLE_time'][:],f.variables['CABLE_time'].units, 
                         only_use_cftime_datetimes=False,
                         only_use_python_datetimes=True)
     ntime      = len(time)
@@ -49,21 +50,19 @@ def read_data(var_name, site_name, input_file, bin_by=None):
         var_output['obs'] = f.variables[f"obs_{var_name}"][:] 
         model_out_list.append('obs')
 
-    if bin_by=='EF_obs':
+    if bin_by=='EF_obs' or bin_by=='EF_model' :
         var_output['obs_EF'] = f.variables["obs_EF"][:] 
         
     # Read VPD and soil moisture information
     var_output['VPD']    = f.variables['VPD'][:]
 
-    print('model_out_list', model_out_list)
-    print('var_output',     var_output)
-
+    # close the file
     f.close()
 
     ntime      = len(var_output)
     month      = np.zeros(ntime)
     hour       = np.zeros(ntime)
-    site       = np.full([ntime], site_name, dtype=str)
+    # site       = np.full([ntime], site_name.rjust(6), dtype=str)
 
     for i in np.arange(ntime):
         month[i] = var_output['time'][i].month
@@ -71,72 +70,109 @@ def read_data(var_name, site_name, input_file, bin_by=None):
 
     var_output['month']     = month
     var_output['hour']      = hour
-    var_output['site_name'] = site
+    var_output['site_name'] = site_name
     
     # return the var values and the model list has the required output
     return var_output, model_out_list
 
+def plot_spatial_land_days(var_name, site_names, PLUMBER2_met_path, read_write='read', bin_by=None, bin_vals=None, message=None, day_time=False, summer_time=False):
 
-def plot_spatial_land_days(var_name, site_name, input_file, bin_by=None, day_time=False, summer_time=False):
+    if read_write == 'write':
+        # ============= read all sites data ================
+        # get veg type info
+        IGBP_dict = read_IGBP_veg_type(site_names, PLUMBER2_met_path)
+        
+        # read data
+        for i, site_name in enumerate(site_names):
+            # print('site_name',site_name)
+            input_file = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
+            var_output_tmp, model_out_list = read_data(var_name, site_name, input_file, bin_by)
 
-    # ============= read data ================
-    var_output, model_out_list = read_data(var_name, site_name, input_file, bin_by)
+            # Add veg type
+            var_output_tmp['IGBP_type'] = IGBP_dict[site_name]
 
+            if i == 0:
+                var_output         = var_output_tmp
+                pre_model_out_list = model_out_list
+            else:
+                if pre_model_out_list != model_out_list: 
+                    # Find the elements that are only in pre_model_out_list
+                    only_in_pre_model_out_list = np.setdiff1d(pre_model_out_list, model_out_list, assume_unique=True)
+                    print('Elements only in pre_model_out_list:',only_in_pre_model_out_list)
+                    # Set the missing model simulation as np.nan
+                    for missed_model in only_in_pre_model_out_list:
+                        var_output_tmp[missed_model] = np.nan
+                        if bin_by=='EF_model':        
+                            var_output_tmp[missed_model+'_EF'] = np.nan
 
-    if 0:
-        # check the diurnal cycle
-        var_diurnal_cycle = var_output.groupby(['hour']).mean()
+                # connect different sites data together
+                var_output = var_output.append(var_output_tmp, ignore_index=True)
 
-        fig1, ax1 = plt.subplots(figsize=[10, 7])
-            
-        # set the colors for different models
-        model_colors = set_model_colors()
+            print('var_output',var_output)
+        model_out_list = pre_model_out_list
 
-        for i, model_out_name in enumerate(model_out_list):
-            line_color = model_colors[model_out_name]#plt.cm.tab20(i / len(model_out_list))
-            sct = ax1.plot(var_diurnal_cycle[model_out_name], lw=2.0,  
-                            color=line_color, alpha=0.9, label=model_out_name) 
+        # save the dataframe
+        var_output.to_csv(f'./txt/{var_name}_all_sites.csv')
 
-        if var_name == 'trans':
-            ax1.set_ylabel('Transpiration (mm h$\mathregular{^{-1}}$)', loc='center',size=14)# rotation=270,    
-        if var_name == 'latent':
-            ax1.set_ylabel('Latent heat (W m$\mathregular{^{-2}}$)', loc='center',size=14)# rotation=270,
+    elif read_write == 'read':
+        # read the data
+        var_output = pd.read_csv(f'./txt/{var_name}_all_sites.csv')
 
-        ax1.legend(fontsize=8,frameon=False)
-        fig1.savefig("./plots/diurnal_cycle_"+var_name+"_"+site_name,bbox_inches='tight',dpi=300)
+        # get the model namelist
+        f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
+        model_in_list = f.variables[var_name + '_models']
+        ntime         = len(f.variables['CABLE_time'])
+        model_out_list= []
+
+        for model_in in model_in_list:
+            if len(f.variables[f"{model_in}_time"]) == ntime:
+                model_out_list.append(model_in)
+        if var_name in ['latent','sensible']:
+            model_out_list.append('obs')
 
     # Select periods
     if day_time:
-        day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 15)
+        day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
         var_output     = var_output[day_mask]
 
     if summer_time:
         summer_mask = (var_output['month'] > 11) | (var_output['month']< 3)
         var_output  = var_output[summer_mask]
 
+    # if using observed EF
     if bin_by == 'EF_obs':
+        # exclude the time steps, Qh<0 or Qle+Qh<10.
         EF_notNan_mask = ~ np.isnan(var_output['obs_EF'])
-        print(EF_notNan_mask)
-        var_output  = var_output[EF_notNan_mask]
+        var_output     = var_output[EF_notNan_mask]
 
-        EF75        = np.percentile(var_output['obs_EF'], 75) 
-        EF25        = np.percentile(var_output['obs_EF'], 25)
+        # select the data
+        if len(bin_vals) == 1:
+            EF_mask  = (var_output['obs_EF'] <= bin_vals[0]) 
+        elif len(bin_vals) == 2:
+            EF_mask  = (var_output['obs_EF'] >= bin_vals[0]) & (var_output['obs_EF'] <= bin_vals[1]) 
 
-        EF_25_mask  = (var_output['obs_EF'] <= EF25) 
-        var_EF_25   = var_output[EF_25_mask]
+        # mask out the time steps that obs_EF is np.nan
+        var_output  = var_output[EF_mask]
 
-        EF_75_mask  = (var_output['obs_EF'] >= EF75) 
-        var_EF_75   = var_output[EF_75_mask]
-
-        EF_mid_mask = (var_output['obs_EF'] < EF75) & (var_output['obs_EF'] > EF25) 
-        var_EF_mid  = var_output[EF_mid_mask]
-
-        var_output  = var_EF_25
+    # if using model simulated EF
+    if bin_by == 'EF_model': 
+        # go throught all models which have the var_name
+        for model_out_name in model_out_list:
+            # bin the variable by the model's own EF
+            if len(bin_vals) == 1:
+                var_output[model_out_name] = np.where(
+                    (var_output[model_out_name+'_EF'] <= bin_vals[0]),
+                    var_output[model_out_name], np.nan )
+            elif len(bin_vals) == 2:
+                var_output[model_out_name] = np.where(
+                    (var_output[model_out_name+'_EF'] >= bin_vals[0]) 
+                  & (var_output[model_out_name+'_EF'] <= bin_vals[1]),
+                    var_output[model_out_name], np.nan )
 
     # ============ Setting for plotting ============
     cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
 
-    fig, ax  = plt.subplots(nrows=2, ncols=1, figsize=[8,10],sharex=True, sharey=False, squeeze=True) #
+    fig, ax  = plt.subplots(nrows=2, ncols=1, figsize=[10,15],sharex=True, sharey=False, squeeze=True) #
     # fig, ax = plt.subplots(figsize=[10, 7])
     # plt.subplots_adjust(wspace=0.0, hspace=0.0)
 
@@ -163,45 +199,60 @@ def plot_spatial_land_days(var_name, site_name, input_file, bin_by=None, day_tim
     plt.rcParams['axes.edgecolor']  = almost_black
     plt.rcParams['axes.labelcolor'] = almost_black
     
-    # set the colors for different models
+    # Set the colors for different models
     model_colors = set_model_colors()
 
     props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
-    # set variable needed to plot
+    # Set variable needed to plot
     var_plot    = var_output #var_sm_mid #var_summur
-    print(var_plot)
-    vpd_series  = np.arange(0.02,5.04,0.04)
+
+    # Set up the VPD bins
+    vpd_top     = 6.54
+    vpd_bot     = 0.02
+    vpd_interval= 0.04
+    vpd_series  = np.arange(vpd_bot,vpd_top,vpd_interval)
+
+    # Set up the values need to draw
     vpd_sum     = len(vpd_series)
     var_vals    = np.zeros((len(model_out_list), vpd_sum))
-    var_vals_75 = np.zeros((len(model_out_list), vpd_sum))
-    var_vals_25 = np.zeros((len(model_out_list), vpd_sum))
-    print('var_plot["VPD"]',var_plot['VPD'])
+    var_vals_top= np.zeros((len(model_out_list), vpd_sum))
+    var_vals_bot= np.zeros((len(model_out_list), vpd_sum))
 
-    # bin VPD
+    # Binned by VPD
     for j, vpd_val in enumerate(vpd_series):
-        print('vpd_val',vpd_val)
         mask_vpd       = (var_plot['VPD'] > vpd_val-0.02) & (var_plot['VPD'] < vpd_val+0.02)
         try:
-            var_masked     = var_plot[mask_vpd]
+            var_masked = var_plot[mask_vpd]
         except:
-            var_masked     = np.nan
+            var_masked = np.nan
 
+        # Draw the line for different models
         for i, model_out_name in enumerate(model_out_list):
-            if j == 0:
-                print('i=',i,'model_out_name=',model_out_name)
 
-            var_vals[i,j]  = var_masked[model_out_name].mean()
-            if len(var_masked[model_out_name]) > 0:
-                var_vals_75[i,j] = np.percentile(var_masked[model_out_name], 75) 
-                var_vals_25[i,j] = np.percentile(var_masked[model_out_name], 25) 
-            else:
-                var_vals_75[i,j] = np.nan
-                var_vals_25[i,j] = np.nan
+            # calculate mean value
+            var_vals[i,j] = var_masked[model_out_name].mean(skipna=True)
+
+            if 0:
+                # using 1 std as the uncertainty
+                var_std   = var_masked[model_out_name].std(skipna=True)
+                print(i,j,var_vals[i,j],var_std)
+                var_vals_top[i,j] = var_vals[i,j] + var_std
+                var_vals_bot[i,j] = var_vals[i,j] - var_std
+
+            if 1:
+                # using percentile as the uncertainty
+                var_temp  = var_masked[model_out_name]
+                mask_temp = ~ np.isnan(var_temp)
+                if np.any(mask_temp):
+                    var_vals_top[i,j] = np.percentile(var_temp[mask_temp], 75)
+                    var_vals_bot[i,j] = np.percentile(var_temp[mask_temp], 25)
+                else:
+                    var_vals_top[i,j] = np.nan
+                    var_vals_bot[i,j] = np.nan
 
     # Plot the PDF of the normal distribution
-    print(var_plot['VPD'])
-    hist = ax[0].hist(var_plot['VPD'], bins=400, density=True, alpha=0.6, color='g', histtype='stepfilled')
+    hist = ax[0].hist(var_plot['VPD'], bins=400, density=False, alpha=0.6, color='g', histtype='stepfilled')
     # ax[0].xlabel('VPD (kPa)', loc='center',size=14)
     # ax[0].ylabel('Probability density')
     
@@ -209,25 +260,24 @@ def plot_spatial_land_days(var_name, site_name, input_file, bin_by=None, day_tim
         # Calculate uncertainty
         if i == 0:
             df_var_vals     = pd.DataFrame({model_out_name: var_vals[i,:]})
-            df_var_vals_75  = pd.DataFrame({model_out_name: var_vals_75[i,:]})
-            df_var_vals_25  = pd.DataFrame({model_out_name: var_vals_25[i,:]})
+            df_var_vals_top = pd.DataFrame({model_out_name: var_vals_top[i,:]})
+            df_var_vals_bot = pd.DataFrame({model_out_name: var_vals_bot[i,:]})
         else:
             df_var_vals[model_out_name]    = var_vals[i,:]
-            df_var_vals_75[model_out_name] = var_vals_75[i,:]
-            df_var_vals_25[model_out_name] = var_vals_25[i,:]
+            df_var_vals_top[model_out_name]= var_vals_top[i,:]
+            df_var_vals_bot[model_out_name]= var_vals_bot[i,:]
 
-        print('i=',i,'model_out_name=',model_out_name,np.std(df_var_vals[model_out_name]),np.mean(df_var_vals[model_out_name]))
         line_color = model_colors[model_out_name] #plt.cm.tab20(i / len(model_out_list))
 
-        sct = ax[1].plot(vpd_series, df_var_vals[model_out_name].rolling(window=10).mean(), lw=2.0,  
-                     color=line_color, alpha=0.9, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
-        fill = ax[1].fill_between(vpd_series, df_var_vals_25[model_out_name].rolling(window=10).mean(), 
-                               df_var_vals_75[model_out_name].rolling(window=10).mean(),
+        plot = ax[1].plot(vpd_series, df_var_vals[model_out_name], lw=2.0,  
+                          color=line_color, alpha=0.9, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
+        fill = ax[1].fill_between(vpd_series, df_var_vals_bot[model_out_name],
+                               df_var_vals_top[model_out_name],
                                color=line_color, edgecolor="none", alpha=0.05) #  .rolling(window=10).mean()
         
         if 0:
             edge_colors = cmap(np.linspace(0, 1, len(var_plot[model_out_name])))
-            sct = ax[1].scatter(var_plot['VPD'], var_plot[model_out_name],  color='none', edgecolors=edge_colors,  s=9,
+            sct         = ax[1].scatter(var_plot['VPD'], var_plot[model_out_name],  color='none', edgecolors=edge_colors,  s=9,
                             alpha=0.05, cmap=cmap, label=model_out_name) #edgecolor='none', c='red'
         
     ax[1].legend(fontsize=8,frameon=False)
@@ -238,7 +288,7 @@ def plot_spatial_land_days(var_name, site_name, input_file, bin_by=None, day_tim
     #     ax[1].set_ylabel('Latent heat (W m$\mathregular{^{-2}}$)', loc='center',size=14)# rotation=270,
 
     # ax[1].set_xlabel('VPD (kPa)', loc='center',size=14)# rotation=270,
-    fig.savefig("./plots/"+var_name+"_VPD_"+site_name+'_EF_low',bbox_inches='tight',dpi=300)
+    fig.savefig("./plots/"+var_name+'_VPD_all_sites'+message,bbox_inches='tight',dpi=300)
 
 if __name__ == "__main__":
 
@@ -250,15 +300,25 @@ if __name__ == "__main__":
 
     # The site names
     all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
-    # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    site_names     = ['AU-How']
-    print(site_names)
+    site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
 
-    var_name       = 'latent'#'trans'#
-    bin_by         = 'EF_obs'
+    var_name       = 'trans'#'latent'  #
+    bin_by         = 'EF_obs'#'EF_model' #'EF_obs'#
+    read_write     = 'write' #'read'
 
-    for site_name in site_names:
+    for i in np.arange(0.0,0.2,0.1):    
+        bin_vals   = [0+i,0.1+i]
+        if len(bin_vals) == 1:
+            message    = f'_bin_by_model_EF_{int(bin_vals[0]*10)}'
+        else:
+            message    = f'_bin_by_model_EF_{int(bin_vals[0]*10)}_{int(bin_vals[1]*10)}'
+        
+        day_time       = False
+        if day_time:
+            message    = message+'_daytime'
+        plot_spatial_land_days(var_name, site_names, PLUMBER2_met_path, read_write, bin_by, bin_vals, message, day_time=day_time)
 
-        input_file = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
-    
-        plot_spatial_land_days(var_name, site_name, input_file, bin_by)
+        day_time       = True
+        if day_time:
+            message    = message+'_daytime'
+        plot_spatial_land_days(var_name, site_names, PLUMBER2_met_path, read_write, bin_by, bin_vals, message, day_time=day_time)

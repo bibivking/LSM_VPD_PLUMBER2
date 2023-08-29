@@ -1,7 +1,6 @@
 import os
 import sys
 import glob
-import codecs
 from osgeo import gdal
 import netCDF4 as nc
 import numpy as np
@@ -15,6 +14,7 @@ from matplotlib.cm import get_cmap
 from matplotlib.colors import ListedColormap
 from cartopy.feature import NaturalEarthFeature, OCEAN
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+from PLUMBER2_VPD_common_utils import *
 
 def read_clim_class(clim_class_path, clim_class_out):
 
@@ -169,7 +169,6 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
         lat[:] = gt[3] + y * gt[5]
     for x in np.arange(size2):
         lon[:] = gt[0] + x * gt[1] 
-
 
     # ____ plotting ____
     fig, ax = plt.subplots(nrows=1, ncols=1, figsize=[5,5],sharex=True, sharey=True, squeeze=True,

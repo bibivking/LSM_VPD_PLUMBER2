@@ -2,8 +2,8 @@ import os
 import re
 import sys
 import glob
-import netCDF4
-import multiprocessing
+import netCDF4 as nc
+import codecs
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -21,7 +21,7 @@ def check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_w
         file_path    = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
         var_exist    = False
         try:
-            with netCDF4.Dataset(file_path[0], 'r') as dataset:
+            with nc.Dataset(file_path[0], 'r') as dataset:
                 for var_name in dataset.variables:
                     # print(var_name)
                     variable  = dataset.variables[var_name]
@@ -109,7 +109,7 @@ def set_model_colors():
     # file path
     model_colors = {"obs":'black',
                     "ACASA": 'darkorange',
-                    "CABLE":'firebrick',
+                    "CABLE":'red',
                     "CABLE-POP-CN":'gold',
                     "CHTESSEL_Ref_exp1":'dodgerblue',
                     "CHTESSEL_ERA5_3":'lightgreen',
@@ -123,13 +123,13 @@ def set_model_colors():
                     "NoahMPv401":"tan",
                     "ORCHIDEE_tag2.1":"teal",
                     "ORCHIDEE_tag3_2":"lightblue",
-                    "QUINCY":"red",
+                    "QUINCY":"firebrick",
                     "SDGVM":"slategrey",
                     "STEMMUS-SCOPE":"navy",
                     "6km729":"forestgreen",
                     "6km729lag":"palevioletred",
-                    "RF":"crimson",
-                    "3km27":"chocolate",
+                    "RF":"pink",
+                    "3km27":"cyan",
                     "LSTM_raw":"lightseagreen",
                       } 
 
