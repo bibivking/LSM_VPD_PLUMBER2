@@ -27,6 +27,7 @@
 /__pycache__/
 /nc_files/*
 /nc_files_backup/*
+/submit/*
 */*/refuse/*
 */*/plots/*
 */*/data/*
