@@ -24,6 +24,7 @@
 */data/*
 */refuse/*
 */csv/*
+/__pycache__/
 /nc_files/*
 /nc_files_backup/*
 */*/refuse/*
