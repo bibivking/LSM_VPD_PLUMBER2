@@ -99,6 +99,69 @@ def plot_pdf(var_output, model_out_list, message=None, plot_type='fitting_line',
 
     return
 
+def plot_scatter(var_output, model_out_list, message=None):
+
+    # Plotting
+    fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[8,6],sharex=True, sharey=False, squeeze=True)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+    
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+
+    for model_name in model_out_list:
+        # set data
+        var_name_plot = model_name#+'_latent'
+        var_vals      = var_output[var_name_plot]
+        notNan_mask   = ~ np.isnan(var_vals)
+        var_vals      = np.sort(var_vals[notNan_mask])
+
+        # Plot the PDF of the normal distribution
+        if np.any(var_vals):
+
+            if plot_type == 'fitting_line':
+                # Estimate the probability density function using kernel density estimation.
+                bandwidth = 0.5
+                pdf       = gaussian_kde(var_vals, bw_method=bandwidth)
+
+                # Plot the probability density function.
+                ax.plot(var_vals, pdf(var_vals),
+                        color=model_colors[model_name],label=model_name)
+            if plot_type == 'hist':
+                hist = ax.hist(var_output[model_name+'_EF'], bins=100, density=density, alpha=0.6, color=model_colors[model_name], 
+                            label=model_name, histtype='stepfilled')
+    
+    ax.legend(fontsize=8,frameon=False)
+    if message == None:
+        fig.savefig("./plots/"+var_name+'_PDF_all_sites',bbox_inches='tight',dpi=300)
+    else:
+        fig.savefig("./plots/"+var_name+'_PDF_all_sites'+message,bbox_inches='tight',dpi=300)
+
+    return
+
 if __name__ == "__main__":
 
 
@@ -110,7 +173,7 @@ if __name__ == "__main__":
     var_output    = pd.read_csv(f'./txt/{var_name}_all_sites.csv')
     
     # get the model namelist
-    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
+    f             = nc.Dataset("/srv/ccrc/LandAP/z5218916/script/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
     model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
     model_out_list= []
@@ -120,4 +183,6 @@ if __name__ == "__main__":
             model_out_list.append(model_in)
     model_out_list.append('obs')
 
-    plot_pdf(var_output, model_out_list, plot_type=plot_type, density=density)
+    # plot_pdf(var_output, model_out_list, plot_type=plot_type, density=density)
+    message = ''
+    plot_scatter(var_output, model_out_list, message=message)

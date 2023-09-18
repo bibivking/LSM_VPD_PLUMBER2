@@ -104,33 +104,76 @@ def read_IGBP_veg_type(site_names, PLUMBER2_met_path):
 
     return IGBP_dict
 
+def read_climate_class(lat, lon):
+
+    """
+    Read the climate_class value of the nearest pixel to lat and lon.
+
+    Parameters:
+        nc_file (str): The path to the netCDF4 file.
+        lat (float): The latitude of the site.
+        lon (float): The longitude of the site.
+
+    Returns:
+        int: The climate_class value of the nearest pixel.
+    """
+    climate_class_path = '/g/data/w97/mm3972/data/Köppen-Geiger_climate_classification/Beck_KG_V1/Beck_KG_V1_present_0p0083.nc'
+    f                  = nc.Dataset(climate_class_path)
+
+    latitude  = f.variables['latitude'][:]
+    longitude = f.variables['longitude'][:]
+    print('latitude',latitude)
+    print('longitude',longitude)
+    # Find the indices of the nearest pixels to lat and lon.
+    lat_idx = np.argmin(np.abs(latitude - lat))
+    lon_idx = np.argmin(np.abs(longitude - lon))
+
+    # Read the climate_class value of the nearest pixel.
+    print('lat_idx, lon_idx',lat_idx, lon_idx)
+    climate_class = f.variables['climate_class'][lat_idx, lon_idx]
+    class_name = f.variables['class_name'][:]
+    print('climate_class',climate_class)
+    print('class_name',class_name[int(climate_class)-1])
+
+    return class_name[int(climate_class)-1]
+
 def set_model_colors():
 
     # file path
-    model_colors = {"obs":'black',
-                    "ACASA": 'darkorange',
-                    "CABLE":'red',
-                    "CABLE-POP-CN":'gold',
-                    "CHTESSEL_Ref_exp1":'dodgerblue',
-                    "CHTESSEL_ERA5_3":'lightgreen',
-                    "CLM5a":"blue",
-                    "GFDL":"yellowgreen",
-                    "JULES_GL9":"forestgreen",
-                    "LPJ-GUESS":"mediumorchid",
-                    "MATSIRO":"violet",
-                    "MuSICA":"moccasin",
-                    "NASAEnt":"peru",
-                    "NoahMPv401":"tan",
-                    "ORCHIDEE_tag2.1":"teal",
-                    "ORCHIDEE_tag3_2":"lightblue",
-                    "QUINCY":"firebrick",
-                    "SDGVM":"slategrey",
-                    "STEMMUS-SCOPE":"navy",
-                    "6km729":"forestgreen",
-                    "6km729lag":"palevioletred",
-                    "RF":"pink",
-                    "3km27":"cyan",
-                    "LSTM_raw":"lightseagreen",
-                      } 
+    model_colors = {
+                    "obs": 'black',
+                    "1lin": 'lightcoral' ,
+                    "3km27": 'indianred', 
+                    "6km729": 'brown',
+                    "6km729lag":'red',
+                    "LSTM_eb": 'lightsalmon',
+                    "LSTM_raw": 'rosybrown',
+                    "RF_eb": 'sienna',
+                    "RF_raw": 'tomato',
+                    "ACASA": 'peru',
+                    "CABLE": 'gold',
+                    "CABLE-POP-CN": 'orange',
+                    "CHTESSEL_ERA5_3": "olive",
+                    "CHTESSEL_Ref_exp1": "olivedrab",
+                    "CLM5a":"darkkhaki",
+                    "GFDL": "yellowgreen",
+                    "JULES_GL9_withLAI": "limegree", 
+                    "JULES_test": "forestgreen",
+                    "LPJ-GUESS": "turquoise",
+                    "Manabe": "lightseagreen",
+                    "ManabeV2": "darkcyan",
+                    "MATSIRO": "deepskyblue",
+                    "MuSICA": "dodgerlblue",
+                    "NASAEnt": "blue",
+                    "NoahMPv401":"royalblue",
+                    "ORC2_r6593": "blueviolet", 
+                    "ORC2_r6593_CO2":"violet",
+                    "ORC3_r7245_NEE":"fuchsia", 
+                    "ORC3_r8120":"orchid",
+                    "PenmanMonteith": "purple",
+                    "QUINCY": "mediumvioletred",
+                    "SDGVM": "deeppink",
+                    "STEMMUS-SCOPE": "pink"} 
 
     return model_colors
+

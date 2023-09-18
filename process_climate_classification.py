@@ -43,9 +43,9 @@ def read_clim_class(clim_class_path, clim_class_out):
     lon = np.zeros((size2))
     
     for y in np.arange(size1):
-        lat[:] = gt[3] + y * gt[5]
+        lat[y] = gt[3] + y * gt[5]
     for x in np.arange(size2):
-        lon[:] = gt[0] + x * gt[1] 
+        lon[x] = gt[0] + x * gt[1] 
 
 
     # Convert the clim_class to a float32 array 
@@ -276,5 +276,5 @@ if __name__ == '__main__':
     # lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
     # IGBP_dict = read_IGBP_veg_type(site_names, PLUMBER2_met_path)
 
-    # read_clim_class(clim_class_path, clim_class_out)
+    read_clim_class(clim_class_path, clim_class_out)
     plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res)
