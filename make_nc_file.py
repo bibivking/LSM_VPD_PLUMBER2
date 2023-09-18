@@ -284,10 +284,6 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     Qle                = f_in.variables['Qle'][:]
     Qle                = np.where(Qle == -9999., np.nan, Qle)
 
-    Qle_cor            = f_in.variables['Qle_cor'][:]
-    Qle_cor            = np.where(Qle_cor == -9999., np.nan, Qle_cor)
-    f_in.close()
-
     f_out              = nc.Dataset(output_file,'r+')
     obs                = f_out.createVariable('obs_Qle', 'f4', ('CABLE_time'))
     obs.standard_name  = "obs_latent_heat"
@@ -295,11 +291,18 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     obs.units          = "W/m2"
     obs[:]             = Qle
 
-    obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
-    obs_cor.standard_name  = "obs_latent_heat_cor"
-    obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
-    obs_cor.units          = "W/m2"
-    obs_cor[:]             = Qle_cor
+    try:
+        Qle_cor                = f_in.variables['Qle_cor'][:]
+        Qle_cor                = np.where(Qle_cor == -9999., np.nan, Qle_cor)
+        obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
+        obs_cor.standard_name  = "obs_latent_heat_cor"
+        obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
+        obs_cor.units          = "W/m2"
+        obs_cor[:]             = Qle_cor
+    except:
+        print('No Qle_cor at ', site_name)
+
+    f_in.close()
     f_out.close()
 
     return
@@ -313,9 +316,6 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     f_in               = nc.Dataset(file_path[0])
     Qh                 = f_in.variables['Qh'][:]
     Qh                 = np.where(Qh == -9999., np.nan, Qh)
-    Qh_cor             = f_in.variables['Qh_cor'][:]
-    Qh_cor             = np.where(Qh_cor == -9999., np.nan, Qh_cor)
-    f_in.close()
 
     f_out              = nc.Dataset(output_file,'r+')
     obs                = f_out.createVariable('obs_Qh', 'f4', ('CABLE_time'))
@@ -324,11 +324,18 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     obs.units          = "W/m2"
     obs[:]             = Qh
 
-    obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
-    obs_cor.standard_name  = "obs_sensible_heat_cor"
-    obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
-    obs_cor.units          = "W/m2"
-    obs_cor[:]             = Qh_cor
+    try:
+        Qh_cor                 = f_in.variables['Qh_cor'][:]
+        Qh_cor                 = np.where(Qh_cor == -9999., np.nan, Qh_cor)
+        obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
+        obs_cor.standard_name  = "obs_sensible_heat_cor"
+        obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
+        obs_cor.units          = "W/m2"
+        obs_cor[:]             = Qh_cor
+    except:
+        print('No Qh_cor at ', site_name)
+
+    f_in.close()
     f_out.close()
 
     return
@@ -495,7 +502,8 @@ if __name__ == "__main__":
 
     # The name of models
     model_names   = [   "1lin","3km27", "6km729","6km729lag",
-                        "ACASA", "CABLE", "CABLE-POP-CN","CLM5a",
+                        "ACASA", "CABLE", "CABLE-POP-CN",
+                        "CHTESSEL_ERA5_3","CHTESSEL_Ref_exp1","CLM5a",
                         "GFDL","JULES_GL9_withLAI","JULES_test",
                         "LPJ-GUESS","LSTM_eb","LSTM_raw","Manabe",
                         "ManabeV2","MATSIRO","MuSICA","NASAEnt",
@@ -505,8 +513,8 @@ if __name__ == "__main__":
 
     # The site names
     all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
-    # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    site_names     = ['AU-Sam','AU-Stp','AU-TTE','AU-Tum','AU-Whr','AU-Wrr','AU-Ync'] 
+    site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
+    # site_names     = ['AU-Sam','AU-Stp','AU-TTE','AU-Tum','AU-Whr','AU-Wrr','AU-Ync'] 
     #['AR-SLu']# 'AU-Tum',
 
     print(site_names)
