@@ -9,7 +9,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from scipy import stats
 
-def conduct_quality_control(key_word, data_input,zscore_threshold=2):
+def conduct_quality_control(varname, data_input,zscore_threshold=2):
     
     '''
     Please notice EF has nan values 
@@ -18,8 +18,8 @@ def conduct_quality_control(key_word, data_input,zscore_threshold=2):
     data_output = np.where(z_scores > zscore_threshold, np.nan, data_input)
 
     # print('z_scores',z_scores)
-    if 'EF' not in key_word:
-        print('EF is not in ', key_word)
+    if 'EF' not in varname:
+        print('EF is not in ', varname)
         # Iterate through the data to replace NaN with the average of nearby non-NaN values
         for i in range(1, len(data_output) - 1):
             if np.isnan(data_output[i]):

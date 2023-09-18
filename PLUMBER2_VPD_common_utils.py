@@ -9,7 +9,7 @@ import xarray as xr
 import pandas as pd
 from datetime import datetime, timedelta
 
-def check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_word_not=None):
+def check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):
 
     # file path
     my_dict      = {} 
@@ -24,21 +24,25 @@ def check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_w
             with nc.Dataset(file_path[0], 'r') as dataset:
                 for var_name in dataset.variables:
                     # print(var_name)
-                    variable  = dataset.variables[var_name]
+                    if varname.lower() in var_name.lower():
+                        my_dict[model_name] = var_name
+                        var_exist = True
+                    else:
+                        variable  = dataset.variables[var_name]
 
-                    # Check whether long_name exists
-                    if hasattr(variable, 'long_name'):
-                        long_name = variable.long_name.lower()  # Convert description to lowercase for case-insensitive search
+                        # Check whether long_name exists
+                        if hasattr(variable, 'long_name'):
+                            long_name = variable.long_name.lower()  # Convert description to lowercase for case-insensitive search
 
-                        # Check whether key_word exists
-                        # make sure key_word in long_name and all key_word_not are not in key_word_not
-                        if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
-                            # print(long_name)
-                            my_dict[model_name] = var_name
-                            var_exist = True
-                            # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
-                            break  # Exit the loop once a variable is found
-                
+                            # Check whether key_word exists
+                            # make sure key_word in long_name and all key_word_not are not in key_word_not
+                            if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
+                                # print(long_name)
+                                my_dict[model_name] = var_name
+                                var_exist = True
+                                # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
+                                break  # Exit the loop once a variable is found
+                    
 
         except Exception as e:
             print(f"An error occurred: {e}")

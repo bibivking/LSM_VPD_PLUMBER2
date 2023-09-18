@@ -5,6 +5,7 @@ Note that VPD still has issue
 """
 
 import os
+import gc
 import sys
 import glob
 import numpy as np
@@ -15,7 +16,7 @@ from datetime import datetime, timedelta
 from quality_control import *
 from PLUMBER2_VPD_common_utils import check_variable_exists
 
-def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_file, key_word, zscore_threshold=2):
+def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_file, varname, zscore_threshold=2):
 
     '''
     Make the netcdf file
@@ -34,10 +35,10 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
     for j, model_name in enumerate(model_names):
 
         print(var_name_dict[model_name])
-        
+
         # if the variable exists
         if var_name_dict[model_name] != 'None':
-            
+
             # add the model name into output list
             model_out_names.append(model_name)
             model_out_num  = model_out_num + 1
@@ -48,6 +49,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
             # Change var_name for the different models
             var_name_tmp   = var_name_dict[model_name]
+            print('len(var_name_tmp)',len(var_name_tmp))
 
             # Open input file
             f = nc.Dataset(file_path[0])
@@ -71,61 +73,90 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             if var_FillValue is not None:
                 Var_tmp = np.where(Var_tmp == var_FillValue, np.nan, Var_tmp)
 
-            #  ==== check whether the model use patches ==== 
+            #  ==== check whether the model use patches ====
             # Check if the variable has patch dimensions (coordinates)
             patch = None
+            veget = None
+
             if hasattr(f.variables[var_name_tmp], 'dimensions'):
                 if 'patch' in f.variables[var_name_tmp].dimensions:
                     print('model_name', model_name, 'site_name', site_name,'has patch demension' )
                     patch = f.dimensions['patch'].size
                     print('patch',patch)
 
+            if hasattr(f.variables[var_name_tmp], 'dimensions'):
+                if 'veget' in f.variables[var_name_tmp].dimensions:
+                    print('model_name', model_name, 'site_name', site_name,'has veget demension' )
+                    veget = f.dimensions['veget'].size
+                    print('veget',veget)
+
+
             if patch is not None:
                 if patch > 1:
                     # if model uses patches
                     # read patch fraction
-                    patchfrac   = f.variables['patchfrac'] 
+                    patchfrac   = f.variables['patchfrac']
                     print('model_name', model_name, 'site_name', site_name, 'patch = ', patch, 'patchfrac =', patchfrac )
-                    
+
                     # initlize Var_tmp_tmp
                     Var_tmp_tmp = Var_tmp[:,0]*patchfrac[0]
 
-                    # calculate the patch fraction weighted pixel value 
+                    # calculate the patch fraction weighted pixel value
                     for i in np.arange(1,patch):
                         Var_tmp_tmp = Var_tmp_tmp + Var_tmp[:,i]*patchfrac[i]
                 else:
-                    # if model doesn't use patches 
+                    # if model doesn't use patches
                      Var_tmp_tmp = Var_tmp.reshape(-1)
-            else:
-                # if model doesn't use patches 
-                Var_tmp_tmp = Var_tmp.reshape(-1)
-            
 
-            # Read variable units 
+            if veget is not None:
+                if veget > 1:
+                    # if model uses patches
+                    # read veget fraction
+                    vegetfrac   = f.variables['vegetfrac']
+                    print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
+
+                    # initlize Var_tmp_tmp
+                    Var_tmp_tmp = np.zeros(len(Var_tmp[:,0]))
+
+                    # calculate the veget fraction weighted pixel value for each time step
+                    for i in np.arange(len(Var_tmp[:,0])):
+                        for j in np.arange(0,veget):
+                            Var_tmp_tmp[i] = Var_tmp_tmp[i] + Var_tmp[i,j]*vegetfrac[i,j]
+
+                else:
+                    # if model doesn't use patches
+                     Var_tmp_tmp = Var_tmp.reshape(-1)
+
+            if patch == None and veget == None:
+                # if model doesn't use patches
+                Var_tmp_tmp = Var_tmp.reshape(-1)
+
+
+            # Read variable units
             model_var_units[model_name] = f.variables[var_name_tmp].units
 
             print('model_name=',model_name,len(Var_tmp_tmp))
             # ===== Quality Control =====
-            # use average of the previous and later values to replace outlier 
-            Var_tmp_tmp                 = conduct_quality_control(key_word, Var_tmp_tmp,zscore_threshold)
-            
+            # use average of the previous and later values to replace outlier
+            Var_tmp_tmp                 = conduct_quality_control(varname, Var_tmp_tmp,zscore_threshold)
+
             # ===== Convert Units =====
-            # use average of the previous and later values to replace outlier 
-            if key_word == 'trans':
+            # use average of the previous and later values to replace outlier
+            if varname == 'TVeg':
                 if 'kg' not in model_var_units[model_name] or 's' not in model_var_units[model_name]:
                     print('model_var_units[model_name]',model_var_units[model_name])
                     Var_tmp_tmp  = convert_into_kg_m2_s(Var_tmp_tmp,model_var_units[model_name])
 
                 # unify units
                 model_var_units[model_name] = "kg/m^2/s"
-            
+
             # assign values
             model_vars[model_name]      = Var_tmp_tmp
 
-            # Set time var name for different models 
-            time_name_in = 'time_counter' if 'ORCHIDEE' in model_name else 'time'
+            # Set time var name for different models
+            time_name_in = 'time_counter' if 'ORC' in model_name else 'time'
             print('time_name_in=',time_name_in)
-            
+
             # Read time info from input
             model_times[model_name]          = f.variables[time_name_in][:]
             model_time_units[model_name]     = f.variables[time_name_in].units
@@ -144,9 +175,9 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
     # Form the model names array
     model_names_array = np.array(model_out_names, dtype="S20")
 
-    # Put out data 
+    # Put out data
     for i, model_out_name in enumerate(model_out_names):
-        print('processing ',site_name,'site', model_out_name, ' model')
+        # print('processing ',site_name,'site', model_out_name, ' model')
 
         # check whether the nc file exists if not creat it
         if not os.path.exists(output_file):
@@ -157,18 +188,18 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             ### Create nc file ###
             f.history           = "Created by: %s" % (os.path.basename(__file__))
             f.creation_date     = "%s" % (datetime.now())
-            f.description       = 'PLUMBER2 '+key_word+' at '+site_name+', made by MU Mengyuan'
+            f.description       = 'PLUMBER2 '+varname+' at '+site_name+', made by MU Mengyuan'
 
             f.Conventions       = "CF-1.0"
 
             # set time dimensions
             ntime               = len(model_times[model_out_name])
             time_name           = model_out_name+'_time'
-            var_name            = model_out_name+"_"+key_word
+            var_name            = model_out_name+"_"+varname
             f.createDimension(time_name, ntime)
 
             # set model names dimension
-            model_list_name     = key_word+"_models"
+            model_list_name     = varname+"_models"
             f.createDimension(model_list_name, model_out_num)
 
             # create variables
@@ -201,7 +232,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # set dimensions
             ntime               = len(model_times[model_out_name])
             time_name           = model_out_name+'_time'
-            var_name            = model_out_name+"_"+key_word
+            var_name            = model_out_name+"_"+varname
 
             if time_name not in f.variables:
                 # create a time dimension
@@ -216,7 +247,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 time[:]             = model_times[model_out_name]
 
             # check whether the model namelists for this variable exists
-            model_list_name = key_word+"_models"
+            model_list_name = varname+"_models"
 
             # if it doesn't exist then create
             if model_list_name not in f.variables:
@@ -231,8 +262,9 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             var.standard_name  = var_name
             var.units          = model_var_units[model_out_name]
             var.long_name      = var_long_name
-            print('len(model_vars[model_out_name])',len(model_vars[model_out_name]))
-            print('ntime',ntime)
+            # print('len(model_vars[model_out_name])',len(model_vars[model_out_name]))
+            # print('ntime',ntime)
+            # print('type(model_vars[model_out_name])',type(model_vars[model_out_name]))
             var[:]             = model_vars[model_out_name]
 
             f.close()
@@ -251,14 +283,23 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     f_in               = nc.Dataset(file_path[0])
     Qle                = f_in.variables['Qle'][:]
     Qle                = np.where(Qle == -9999., np.nan, Qle)
+
+    Qle_cor            = f_in.variables['Qle_cor'][:]
+    Qle_cor            = np.where(Qle_cor == -9999., np.nan, Qle_cor)
     f_in.close()
 
     f_out              = nc.Dataset(output_file,'r+')
-    obs                = f_out.createVariable('obs_latent', 'f4', ('CABLE_time'))
+    obs                = f_out.createVariable('obs_Qle', 'f4', ('CABLE_time'))
     obs.standard_name  = "obs_latent_heat"
     obs.long_name      = "Latent heat flux from surface"
     obs.units          = "W/m2"
     obs[:]             = Qle
+
+    obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
+    obs_cor.standard_name  = "obs_latent_heat_cor"
+    obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
+    obs_cor.units          = "W/m2"
+    obs_cor[:]             = Qle_cor
     f_out.close()
 
     return
@@ -272,14 +313,22 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     f_in               = nc.Dataset(file_path[0])
     Qh                 = f_in.variables['Qh'][:]
     Qh                 = np.where(Qh == -9999., np.nan, Qh)
+    Qh_cor             = f_in.variables['Qh_cor'][:]
+    Qh_cor             = np.where(Qh_cor == -9999., np.nan, Qh_cor)
     f_in.close()
 
     f_out              = nc.Dataset(output_file,'r+')
-    obs                = f_out.createVariable('obs_sensible', 'f4', ('CABLE_time'))
+    obs                = f_out.createVariable('obs_Qh', 'f4', ('CABLE_time'))
     obs.standard_name  = "obs_sensible_heat"
     obs.long_name      = "Sensible heat flux from surface"
     obs.units          = "W/m2"
     obs[:]             = Qh
+
+    obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
+    obs_cor.standard_name  = "obs_sensible_heat_cor"
+    obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
+    obs_cor.units          = "W/m2"
+    obs_cor[:]             = Qh_cor
     f_out.close()
 
     return
@@ -316,7 +365,7 @@ def add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file):
     Tair      = f_in.variables['Tair'][:]
     Psurf     = f_in.variables['Psurf'][:]
     VPD       = f_in.variables['VPD'][:]/10.
-    
+
     f_in.close()
 
     Tair      = np.where(Tair  < 0., np.nan, Tair)
@@ -358,14 +407,14 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
     # Set input file path
     f_out                 = nc.Dataset(output_file,'r+')
 
-    obs_sensible          = f_out.variables['obs_sensible'][:] 
-    obs_latent            = f_out.variables['obs_latent'][:] 
-    obs_EF_tmp            = np.where(np.all([obs_sensible+obs_latent > Qle_Qh_threshold, obs_sensible>0],axis=0), 
+    obs_sensible          = f_out.variables['obs_Qh'][:]
+    obs_latent            = f_out.variables['obs_Qle'][:]
+    obs_EF_tmp            = np.where(np.all([obs_sensible+obs_latent > Qle_Qh_threshold, obs_sensible>0],axis=0),
                                      obs_latent/(obs_sensible+obs_latent), np.nan)
     obs_EF_tmp            = np.where(obs_EF_tmp<0, np.nan, obs_EF_tmp)
     obs_EF_tmp            = conduct_quality_control('EF',obs_EF_tmp,zscore_threshold)
-    latent_models         = f_out.variables['latent_models'][:] 
-    sensible_models       = f_out.variables['sensible_models'][:] 
+    latent_models         = f_out.variables['Qle_models'][:]
+    sensible_models       = f_out.variables['Qh_models'][:]
 
     # Try to access the variable
     try:
@@ -380,7 +429,7 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
         obs_EF[:]             = obs_EF_tmp
 
     f_out.close()
-    
+
     model_out_names      = []
     model_out_num        = 0
 
@@ -390,13 +439,13 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
 
             model_out_names.append(latent_model)
             model_out_num  = model_out_num + 1
-    
+
             print(latent_model, 'has both Qle and Qh')
 
             f_out          = nc.Dataset(output_file,'r+')
-            model_sensible = f_out.variables[latent_model+'_sensible'][:] 
-            model_latent   = f_out.variables[latent_model+'_latent'][:] 
-            model_EF_tmp   = np.where(np.all([model_sensible+model_latent > Qle_Qh_threshold , model_sensible>0],axis=0), 
+            model_sensible = f_out.variables[latent_model+'_Qh'][:]
+            model_latent   = f_out.variables[latent_model+'_Qle'][:]
+            model_EF_tmp   = np.where(np.all([model_sensible+model_latent > Qle_Qh_threshold , model_sensible>0],axis=0),
                                       model_latent/(model_sensible+model_latent), np.nan)
             model_EF_tmp   = np.where(model_EF_tmp<0,np.nan,model_EF_tmp)
             model_EF_tmp   = conduct_quality_control('EF',model_EF_tmp,zscore_threshold)
@@ -445,16 +494,20 @@ if __name__ == "__main__":
     PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
 
     # The name of models
-    model_names   = [ "ACASA","CABLE","CABLE-POP-CN","CHTESSEL_Ref_exp1",
-                      "CHTESSEL_ERA5_3","CLM5a","GFDL","JULES_GL9","LPJ-GUESS",
-                      "MATSIRO","MuSICA","NASAEnt","NoahMPv401",
-                      "ORCHIDEE_tag2.1","ORCHIDEE_tag3_2","QUINCY","SDGVM", "STEMMUS-SCOPE",
-                      "6km729","6km729lag","RF","3km27","LSTM_raw",] #"BEPS",
+    model_names   = [   "1lin","3km27", "6km729","6km729lag",
+                        "ACASA", "CABLE", "CABLE-POP-CN","CLM5a",
+                        "GFDL","JULES_GL9_withLAI","JULES_test",
+                        "LPJ-GUESS","LSTM_eb","LSTM_raw","Manabe",
+                        "ManabeV2","MATSIRO","MuSICA","NASAEnt",
+                        "NoahMPv401","ORC2_r6593" ,  "ORC2_r6593_CO2",
+                        "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
+                        "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
 
     # The site names
     all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
-    site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    # site_names     = ['AU-How']#['AR-SLu']# 'AU-Tum',
+    # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
+    site_names     = ['AU-Sam','AU-Stp','AU-TTE','AU-Tum','AU-Whr','AU-Wrr','AU-Ync'] 
+    #['AR-SLu']# 'AU-Tum',
 
     print(site_names)
 
@@ -463,30 +516,48 @@ if __name__ == "__main__":
         output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
-        
-        # key_word      = "trans"
-        # key_word_not  = ["evap","transmission"]
-        # trans_dict    = check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_word_not)
-        # print(trans_dict)
-        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, key_word, zscore_threshold)
 
-        # key_word      = 'latent' 
-        # key_word_not  = ['None']   
-        # qle_dict      = check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_word_not)
-        # print(qle_dict)
-        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, key_word, zscore_threshold)
+        varname       = "TVeg"
+        key_word      = "trans"
+        key_word_not  = ["evap","transmission","pedo","electron",]
+        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        print(trans_dict)
+        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # key_word      = 'sensible' 
-        # key_word_not  = ['vegetation','soil','corrected']
-        # qh_dict       = check_variable_exists(PLUMBER2_path, site_name, model_names, key_word, key_word_not)
-        # print(qh_dict)
-        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, key_word, zscore_threshold)
+        varname       = "Qle"
+        key_word      = 'latent'
+        key_word_not  = ['None']
+        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        print(qle_dict)
+        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        varname       = "Qh"
+        key_word      = 'sensible'
+        key_word_not  = ['vegetation','soil','corrected']
+        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        print(qh_dict)
+        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        varname       = "NEE"
+        key_word      = 'exchange'
+        key_word_not  = ['None']
+        nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        print(nee_dict)
+        make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
+
+        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
+
+        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        gc.collect()
 
         Qle_Qh_threshold=10
         add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        gc.collect()
