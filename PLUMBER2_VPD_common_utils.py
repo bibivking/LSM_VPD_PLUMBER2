@@ -1,5 +1,6 @@
 import os
 import re
+import gc
 import sys
 import glob
 import netCDF4 as nc
@@ -126,18 +127,18 @@ def read_climate_class(lat, lon):
 
     latitude  = f.variables['latitude'][:]
     longitude = f.variables['longitude'][:]
-    print('latitude',latitude)
-    print('longitude',longitude)
+    # print('latitude',latitude)
+    # print('longitude',longitude)
     # Find the indices of the nearest pixels to lat and lon.
     lat_idx = np.argmin(np.abs(latitude - lat))
     lon_idx = np.argmin(np.abs(longitude - lon))
 
     # Read the climate_class value of the nearest pixel.
-    print('lat_idx, lon_idx',lat_idx, lon_idx)
+    # print('lat_idx, lon_idx',lat_idx, lon_idx)
     climate_class = f.variables['climate_class'][lat_idx, lon_idx]
     class_name = f.variables['class_name'][:]
-    print('climate_class',climate_class)
-    print('class_name',class_name[int(climate_class)-1])
+    # print('climate_class',climate_class)
+    # print('class_name',class_name[int(climate_class)-1])
 
     return class_name[int(climate_class)-1]
 
@@ -146,6 +147,7 @@ def set_model_colors():
     # file path
     model_colors = {
                     "obs": 'black',
+                    "obs_cor": 'dimgrey',
                     "1lin": 'lightcoral' ,
                     "3km27": 'indianred', 
                     "6km729": 'brown',
@@ -161,13 +163,13 @@ def set_model_colors():
                     "CHTESSEL_Ref_exp1": "olivedrab",
                     "CLM5a":"darkkhaki",
                     "GFDL": "yellowgreen",
-                    "JULES_GL9_withLAI": "limegree", 
+                    "JULES_GL9_withLAI": "limegreen", 
                     "JULES_test": "forestgreen",
                     "LPJ-GUESS": "turquoise",
                     "Manabe": "lightseagreen",
                     "ManabeV2": "darkcyan",
                     "MATSIRO": "deepskyblue",
-                    "MuSICA": "dodgerlblue",
+                    "MuSICA": "dodgerblue",
                     "NASAEnt": "blue",
                     "NoahMPv401":"royalblue",
                     "ORC2_r6593": "blueviolet", 

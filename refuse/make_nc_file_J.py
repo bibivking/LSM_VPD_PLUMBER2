@@ -258,15 +258,10 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 model.standard_name = model_list_name
                 model[:]            = model_names_array
 
-            # if it doesn't exist then create
-            if var_name not in f.variables:
-                var                = f.createVariable(var_name, 'f4', (time_name))
-                var.standard_name  = var_name
-                var.units          = model_var_units[model_out_name]
-                var.long_name      = var_long_name
-            else:
-                var                = f.variables[var_name]
-                
+            var                = f.createVariable(var_name, 'f4', (time_name))
+            var.standard_name  = var_name
+            var.units          = model_var_units[model_out_name]
+            var.long_name      = var_long_name
             # print('len(model_vars[model_out_name])',len(model_vars[model_out_name]))
             # print('ntime',ntime)
             # print('type(model_vars[model_out_name])',type(model_vars[model_out_name]))
@@ -340,32 +335,6 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     except:
         print('No Qh_cor at ', site_name)
 
-    f_in.close()
-    f_out.close()
-
-    return
-
-
-def add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
-
-    # Set input file path
-    file_path          = glob.glob(PLUMBER2_flux_path +"/*"+site_name+"*.nc")
-    print('file_path', file_path)
-
-    f_in               = nc.Dataset(file_path[0])
-    NEE                = f_in.variables['NEE'][:]
-    NEE                = np.where(NEE == -9999., np.nan, NEE)
-
-    f_out              = nc.Dataset(output_file,'r+')
-
-    try:
-        obs                = f_out.createVariable('obs_NEE', 'f4', ('CABLE_time'))
-        obs.standard_name  = "surface_net_downward_mass_flux_of_carbon_dioxide_expressed_as_carbon_due_to_all_land_processes_excluding_anthropogenic_land_use_change"
-        obs.long_name      = "Net ecosystem exchange of CO2"
-        obs.units          = "umol/m2/s"
-        obs[:]             = NEE
-    except:
-        print('NEE has existed ')
     f_in.close()
     f_out.close()
 
@@ -541,12 +510,11 @@ if __name__ == "__main__":
                         "NoahMPv401","ORC2_r6593" ,  "ORC2_r6593_CO2",
                         "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
                         "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
-    # model_names    = ["RF_eb"] #"BEPS"
 
     # The site names
-    all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
+    all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/US-T*.nc"))
     site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    site_names     = ['US-Syv'] 
+    # site_names     = ['AU-Sam','AU-Stp','AU-TTE','AU-Tum','AU-Whr','AU-Wrr','AU-Ync'] 
     #['AR-SLu']# 'AU-Tum',
 
     print(site_names)
@@ -575,7 +543,7 @@ if __name__ == "__main__":
 
         varname       = "Qh"
         key_word      = 'sensible'
-        key_word_not  = ['vegetation','soil',] # 'corrected'
+        key_word_not  = ['vegetation','soil','corrected']
         qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
         print(qh_dict)
         make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
@@ -593,9 +561,6 @@ if __name__ == "__main__":
         gc.collect()
 
         add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
-
-        add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
         gc.collect()
 
         add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
