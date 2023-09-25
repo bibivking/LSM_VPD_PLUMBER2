@@ -340,6 +340,7 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
         dry_vals = smooth_vpd_series(var_dry[model_out_name+'_vals'], window_size, order, type)
         wet_vals = smooth_vpd_series(var_wet[model_out_name+'_vals'], window_size, order, type)
 
+
         plot = ax[1,0].plot(var_dry['vpd_series'], dry_vals, lw=2.0,
                             color=line_color, alpha=0.9, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
 
@@ -398,7 +399,7 @@ if __name__ == "__main__":
 
     print(site_names)
 
-    var_name       = 'TVeg'  #'TVeg'
+    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_obs' #'EF_model' #'EF_obs'#
     IGBP_types     = ['CRO', 'CSH', 'DBF', 'EBF','EBF', 'ENF', 'GRA', 'MF', 'OSH', 'WET', 'WSA', 'SAV']
     clim_types     = ['Af', 'Am', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb', 'Csa', 'Csb', 'Cwa',

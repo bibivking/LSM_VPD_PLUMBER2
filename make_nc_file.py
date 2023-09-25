@@ -14,7 +14,7 @@ import pandas as pd
 import netCDF4 as nc
 from datetime import datetime, timedelta
 from quality_control import *
-from PLUMBER2_VPD_common_utils import check_variable_exists
+from PLUMBER2_VPD_common_utils import *
 
 def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_file, varname, zscore_threshold=2):
 
@@ -150,6 +150,18 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 # unify units
                 model_var_units[model_name] = "kg/m^2/s"
 
+            if varname == 'NEE':
+                if 'umol' in model_var_units[model_name]:
+                    # from umol/m2/s to gC/m2/s
+                    print('model_var_units[model_name]',model_var_units[model_name])
+                    Var_tmp_tmp  = convert_from_umol_m2_s_into_kg_m2_s(Var_tmp_tmp,model_var_units[model_name])
+                elif 'kg' in model_var_units[model_name]:
+                    # from kg/m2/s to gC/m2/s
+                    Var_tmp_tmp  = Var_tmp_tmp*1000.
+
+                # unify units
+                model_var_units[model_name] = "gC/m2/s"
+
             # assign values
             model_vars[model_name]      = Var_tmp_tmp
 
@@ -264,13 +276,9 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 var.standard_name  = var_name
                 var.units          = model_var_units[model_out_name]
                 var.long_name      = var_long_name
+                var[:]             = model_vars[model_out_name]
             else:
-                var                = f.variables[var_name]
-                
-            # print('len(model_vars[model_out_name])',len(model_vars[model_out_name]))
-            # print('ntime',ntime)
-            # print('type(model_vars[model_out_name])',type(model_vars[model_out_name]))
-            var[:]             = model_vars[model_out_name]
+                f.variables[var_name][:] = model_vars[model_out_name]
 
             f.close()
             time = None
@@ -290,20 +298,27 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     Qle                = np.where(Qle == -9999., np.nan, Qle)
 
     f_out              = nc.Dataset(output_file,'r+')
-    obs                = f_out.createVariable('obs_Qle', 'f4', ('CABLE_time'))
-    obs.standard_name  = "obs_latent_heat"
-    obs.long_name      = "Latent heat flux from surface"
-    obs.units          = "W/m2"
-    obs[:]             = Qle
+
+    try:
+        obs                = f_out.createVariable('obs_Qle', 'f4', ('CABLE_time'))
+        obs.standard_name  = "obs_latent_heat"
+        obs.long_name      = "Latent heat flux from surface"
+        obs.units          = "W/m2"
+        obs[:]             = Qle
+    except:
+        f_out.variables['obs_Qle'][:] = Qle
 
     try:
         Qle_cor                = f_in.variables['Qle_cor'][:]
         Qle_cor                = np.where(Qle_cor == -9999., np.nan, Qle_cor)
-        obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
-        obs_cor.standard_name  = "obs_latent_heat_cor"
-        obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
-        obs_cor.units          = "W/m2"
-        obs_cor[:]             = Qle_cor
+        try:
+            obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
+            obs_cor.standard_name  = "obs_latent_heat_cor"
+            obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
+            obs_cor.units          = "W/m2"
+            obs_cor[:]             = Qle_cor
+        except:
+            f_out.variables['obs_Qle_cor'][:] = Qle_cor
     except:
         print('No Qle_cor at ', site_name)
 
@@ -323,20 +338,26 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     Qh                 = np.where(Qh == -9999., np.nan, Qh)
 
     f_out              = nc.Dataset(output_file,'r+')
-    obs                = f_out.createVariable('obs_Qh', 'f4', ('CABLE_time'))
-    obs.standard_name  = "obs_sensible_heat"
-    obs.long_name      = "Sensible heat flux from surface"
-    obs.units          = "W/m2"
-    obs[:]             = Qh
+    try:
+        obs                = f_out.createVariable('obs_Qh', 'f4', ('CABLE_time'))
+        obs.standard_name  = "obs_sensible_heat"
+        obs.long_name      = "Sensible heat flux from surface"
+        obs.units          = "W/m2"
+        obs[:]             = Qh
+    except:
+        f_out.variables['obs_Qh'][:] = Qh
 
     try:
         Qh_cor                 = f_in.variables['Qh_cor'][:]
         Qh_cor                 = np.where(Qh_cor == -9999., np.nan, Qh_cor)
-        obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
-        obs_cor.standard_name  = "obs_sensible_heat_cor"
-        obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
-        obs_cor.units          = "W/m2"
-        obs_cor[:]             = Qh_cor
+        try:
+            obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
+            obs_cor.standard_name  = "obs_sensible_heat_cor"
+            obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
+            obs_cor.units          = "W/m2"
+            obs_cor[:]             = Qh_cor
+        except:
+            f_out.variables['obs_Qh_cor'][:] = Qh_cor
     except:
         print('No Qh_cor at ', site_name)
 
@@ -355,17 +376,22 @@ def add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
     f_in               = nc.Dataset(file_path[0])
     NEE                = f_in.variables['NEE'][:]
     NEE                = np.where(NEE == -9999., np.nan, NEE)
-
+    NEE                = convert_from_umol_m2_s_into_kg_m2_s(NEE,"umol/m2/s")
     f_out              = nc.Dataset(output_file,'r+')
 
     try:
         obs                = f_out.createVariable('obs_NEE', 'f4', ('CABLE_time'))
         obs.standard_name  = "surface_net_downward_mass_flux_of_carbon_dioxide_expressed_as_carbon_due_to_all_land_processes_excluding_anthropogenic_land_use_change"
         obs.long_name      = "Net ecosystem exchange of CO2"
-        obs.units          = "umol/m2/s"
+        obs.units          = "gC/m2/s"
         obs[:]             = NEE
     except:
         print('NEE has existed ')
+        f_out.variable['obs_NEE'].standard_name  = "surface_net_downward_mass_flux_of_carbon_dioxide_expressed_as_carbon_due_to_all_land_processes_excluding_anthropogenic_land_use_change"
+        f_out.variable['obs_NEE'].long_name      = "Net ecosystem exchange of CO2"
+        f_out.variable['obs_NEE'].units          = "gC/m2/s"
+        f_out.variable['obs_NEE'][:]             = NEE
+
     f_in.close()
     f_out.close()
 
@@ -557,29 +583,29 @@ if __name__ == "__main__":
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
 
-        varname       = "TVeg"
-        key_word      = "trans"
-        key_word_not  = ["evap","transmission","pedo","electron",]
-        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        print(trans_dict)
-        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "TVeg"
+        # key_word      = "trans"
+        # key_word_not  = ["evap","transmission","pedo","electron",]
+        # trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # print(trans_dict)
+        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "Qle"
-        key_word      = 'latent'
-        key_word_not  = ['None']
-        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        print(qle_dict)
-        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qle"
+        # key_word      = 'latent'
+        # key_word_not  = ['None']
+        # qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # print(qle_dict)
+        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "Qh"
-        key_word      = 'sensible'
-        key_word_not  = ['vegetation','soil',] # 'corrected'
-        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        print(qh_dict)
-        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qh"
+        # key_word      = 'sensible'
+        # key_word_not  = ['vegetation','soil',] # 'corrected'
+        # qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # print(qh_dict)
+        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
         varname       = "NEE"
         key_word      = 'exchange'
@@ -589,18 +615,18 @@ if __name__ == "__main__":
         make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
         gc.collect()
 
-        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
         add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
         gc.collect()
 
-        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        gc.collect()
+        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
 
-        Qle_Qh_threshold=10
-        add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
-        gc.collect()
+        # Qle_Qh_threshold=10
+        # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        # gc.collect()

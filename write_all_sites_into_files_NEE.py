@@ -39,28 +39,30 @@ def read_data(var_name, site_name, input_file):
         if model_ntime == ntime:
             model_out_list.append(model_in)
             if var_name == 'TVeg':
-                var_output[model_in] = f.variables[model_var_name][:]*3600
-            if var_name == 'NEE':
+                var_output['model_'+model_in] = f.variables[model_var_name][:]*3600
+            elif var_name == 'NEE':
                 # convert from umol/m2/s to g C/h
                 s2h                  = 3600.              # s-1 to h-1
-                GPP_scale            = -0.000001*12*s2h   # umol s-1 to g C h-1
-                var_output[model_in] = f.variables[model_var_name][:]*GPP_scale
+                var_output['model_'+model_in] = f.variables[model_var_name][:]*s2h
             else:
-                var_output[model_in] = f.variables[model_var_name][:]
+                var_output['model_'+model_in] = f.variables[model_var_name][:]
 
             # model_bin_name             = f"{model_in}_EF"
             # var_output[model_in+'_EF'] = f.variables[model_bin_name][:]
 
-    if var_name == 'Qle' or var_name == 'Qh' or var_name == 'NEE':
+    if var_name == 'Qle' or var_name == 'Qh':
         var_output['obs'] = f.variables[f"obs_{var_name}"][:]
         model_out_list.append('obs')
-
-    if var_name == 'Qle' or var_name == 'Qh':
         try:
-            var_output['obs_cor'] = f.variables[f"{var_name}_cor"][:]
+            var_output['obs_cor'] = f.variables[f"obs_{var_name}_cor"][:]
         except:
             var_output['obs_cor'] = np.nan
         model_out_list.append('obs_cor')
+
+    if var_name == 'NEE':
+        s2h               = 3600.              # s-1 to h-1
+        GPP_scale         = -0.000001*12*s2h   # umol s-1 to g C h-1
+        var_output['obs'] = f.variables[f"obs_{var_name}"][:]*GPP_scale
 
     var_output['obs_EF'] = f.variables["obs_EF"][:]
 
@@ -135,7 +137,7 @@ def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_pa
 
             # connect different sites data together
             var_output = var_output.append(var_output_tmp, ignore_index=True)
-            
+
         # save the dataframe
         var_output_tmp=None
         gc.collect()
@@ -147,7 +149,7 @@ if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
-    PLUMBER2_path     ="/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    PLUMBER2_path     = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
 
     # The site names
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
