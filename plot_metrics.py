@@ -15,18 +15,23 @@ from PLUMBER2_VPD_common_utils import *
 from plot_script import *
 from PLUMBER2_VPD_common_utils import *
 
-def calc_derivative(model_out_list, vpd_series, vals_smooth):
+def calc_derivative(model_out_list, vpd_series, values, option='S-G_filter', window_size=11, order=3):
 
-    nmodel          = len(model_out_list)
-    vpd_series_len  = len(vpd_series)
-    vpd_interval    = vpd_series[1]-vpd_series[0]
-    derivative_vals = np.full([nmodel,vpd_series_len], np.nan)
-    derivative      = {}
+    derivative = {}
 
-    for i,model_out_name in enumerate(model_out_list):
-        for j in np.arange(1,vpd_series_len-1):
-            derivative_vals[i,j] = (vals_smooth[i,j+1]-vals_smooth[i,j-1])/(2*vpd_interval)
-        derivative[model_out_name] = derivative_vals[i,:]
+    if option == 'manually':
+        nmodel          = len(model_out_list)
+        vpd_series_len  = len(vpd_series)
+        derivative_vals = np.full([nmodel,vpd_series_len], np.nan)
+        vpd_interval    = vpd_series[1]-vpd_series[0]
+
+        for i,model_out_name in enumerate(model_out_list):
+            for j in np.arange(1,vpd_series_len-1):
+                derivative_vals[i,j] = (values[i,j+1]-values[i,j-1])/(2*vpd_interval)
+            derivative[model_out_name] = derivative_vals[i,:]
+    elif option == 'S-G_filter':
+        for i,model_out_name in enumerate(model_out_list):
+            derivative[model_out_name] = savgol_filter(values[i,:], window_size, order, deriv=1, mode='nearest') #  deriv=1: calc 1-order derivative
 
     return derivative
 
@@ -43,7 +48,7 @@ def find_peak(model_out_list, vpd_series, derivative):
     peak_values     = np.full([nmodel,vpd_series_len], np.nan)
     tmp             = np.full(vpd_series_len, np.nan)
 
-    for i,model_out_name in enumerate(model_out_list):
+    for i, model_out_name in enumerate(model_out_list):
         derivative_tmp = derivative[model_out_name]
         for j in np.arange(0,vpd_series_len-1):
             # if they are not the beginning and ending points
@@ -62,7 +67,7 @@ def find_peak(model_out_list, vpd_series, derivative):
                         tmp[j] = vpd_series[j+1]*(-1)
         peak_values[i,:] = tmp
 
-        print('np.unique(peak_values[i,:])',np.unique(peak_values[i,:]))
+        print('tmp',tmp)
     return peak_values
 
 # def calc_slope():
@@ -102,7 +107,7 @@ def single_plot_lines(model_out_list, x_values, y_values ,message=None):
 
     props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
-    for i, model_out_name in enumerate(model_out_list):
+    for i, model_out_name in enumerate(model_out_list[0:2]):
 
         line_color = model_colors[model_out_name]
         plot       = ax.plot(x_values, y_values[model_out_name], lw=2.0, color=line_color, alpha=0.9, label=model_out_name)
@@ -219,7 +224,7 @@ if __name__ == "__main__":
 
     print(site_names)
 
-    var_name       = 'TVeg'  #'TVeg'
+    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_obs' #'EF_model' #'EF_obs'#
     IGBP_types     = ['CRO']#, 'CSH', 'DBF', 'EBF','EBF', 'ENF', 'GRA', 'MF', 'OSH', 'WET', 'WSA', 'SAV']
     clim_types     = ['Af', 'Am', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb', 'Csa', 'Csb', 'Cwa',
@@ -263,15 +268,21 @@ if __name__ == "__main__":
         for column_name in var_bin_by_VPD.columns:
             if "_vals" in column_name:
                 model_out_list.append(column_name.split("_vals")[0])
-
+                
         vpd_series      = var_bin_by_VPD['vpd_series']
 
+        nmodel          = len(model_out_list)
+        nvpd            = len(vpd_series)
+
         # ================= Smoothing =================
-        window_size = 11
-        order       = 3
+        window_size = 31
+        order       = 2
         type        = 'S-G_filter'
-        
-        vals_smooth = smooth_vpd_series(var_bin_by_VPD, window_size=window_size, order=order, type=type)
+
+        vals_smooth = np.zeros((nmodel,nvpd))
+
+        for i, model_out_name in enumerate(model_out_list):
+            vals_smooth[i,:] = smooth_vpd_series(var_bin_by_VPD[model_out_name+'_vals'], window_size=window_size, order=order, type=type)
 
         # ================= Calc derivative =================
         derivative = calc_derivative(model_out_list, vpd_series, vals_smooth)

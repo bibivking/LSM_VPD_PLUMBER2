@@ -61,8 +61,7 @@ def read_data(var_name, site_name, input_file):
 
     if var_name == 'NEE':
         s2h               = 3600.              # s-1 to h-1
-        GPP_scale         = -0.000001*12*s2h   # umol s-1 to g C h-1
-        var_output['obs'] = f.variables[f"obs_{var_name}"][:]*GPP_scale
+        var_output['obs'] = f.variables[f"obs_{var_name}"][:]*s2h
 
     var_output['obs_EF'] = f.variables["obs_EF"][:]
 

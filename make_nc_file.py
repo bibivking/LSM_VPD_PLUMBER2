@@ -34,7 +34,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
     # Read in data
     for j, model_name in enumerate(model_names):
 
-        print(var_name_dict[model_name])
+        # print(var_name_dict[model_name])
 
         # if the variable exists
         if var_name_dict[model_name] != 'None':
@@ -45,18 +45,19 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
             # Set input file path
             file_path      = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
-            print('j=',j, "model_name=",model_name, 'file_path=',file_path)
+            # print('j=',j, "model_name=",model_name, 'file_path=',file_path)
 
             # Change var_name for the different models
             var_name_tmp   = var_name_dict[model_name]
-            print('len(var_name_tmp)',len(var_name_tmp))
+            # print('len(var_name_tmp)',len(var_name_tmp))
 
             # Open input file
             f = nc.Dataset(file_path[0])
 
             # Read variable attributions info from input
-            if not model_vars:
-                var_long_name = f.variables[var_name_tmp].long_name
+            # if not var_long_name:
+            var_long_name = f.variables[var_name_tmp].long_name
+            print('var_long_name',var_long_name)
 
             # Read variable from input
             Var_tmp = f.variables[var_name_tmp][:]
@@ -80,23 +81,22 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
             if hasattr(f.variables[var_name_tmp], 'dimensions'):
                 if 'patch' in f.variables[var_name_tmp].dimensions:
-                    print('model_name', model_name, 'site_name', site_name,'has patch demension' )
+                    # print('model_name', model_name, 'site_name', site_name,'has patch demension' )
                     patch = f.dimensions['patch'].size
-                    print('patch',patch)
+                    # print('patch',patch)
 
             if hasattr(f.variables[var_name_tmp], 'dimensions'):
                 if 'veget' in f.variables[var_name_tmp].dimensions:
-                    print('model_name', model_name, 'site_name', site_name,'has veget demension' )
+                    # print('model_name', model_name, 'site_name', site_name,'has veget demension' )
                     veget = f.dimensions['veget'].size
-                    print('veget',veget)
-
+                    # print('veget',veget)
 
             if patch is not None:
                 if patch > 1:
                     # if model uses patches
                     # read patch fraction
                     patchfrac   = f.variables['patchfrac']
-                    print('model_name', model_name, 'site_name', site_name, 'patch = ', patch, 'patchfrac =', patchfrac )
+                    # print('model_name', model_name, 'site_name', site_name, 'patch = ', patch, 'patchfrac =', patchfrac )
 
                     # initlize Var_tmp_tmp
                     Var_tmp_tmp = Var_tmp[:,0]*patchfrac[0]
@@ -113,7 +113,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                     # if model uses patches
                     # read veget fraction
                     vegetfrac   = f.variables['vegetfrac']
-                    print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
+                    # print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
 
                     # initlize Var_tmp_tmp
                     Var_tmp_tmp = np.zeros(len(Var_tmp[:,0]))
@@ -135,7 +135,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # Read variable units
             model_var_units[model_name] = f.variables[var_name_tmp].units
 
-            print('model_name=',model_name,len(Var_tmp_tmp))
+            # print('model_name=',model_name,len(Var_tmp_tmp))
             # ===== Quality Control =====
             # use average of the previous and later values to replace outlier
             Var_tmp_tmp                 = conduct_quality_control(varname, Var_tmp_tmp,zscore_threshold)
@@ -144,7 +144,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # use average of the previous and later values to replace outlier
             if varname == 'TVeg':
                 if 'kg' not in model_var_units[model_name] or 's' not in model_var_units[model_name]:
-                    print('model_var_units[model_name]',model_var_units[model_name])
+                    # print('model_var_units[model_name]',model_var_units[model_name])
                     Var_tmp_tmp  = convert_into_kg_m2_s(Var_tmp_tmp,model_var_units[model_name])
 
                 # unify units
@@ -153,8 +153,8 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             if varname == 'NEE':
                 if 'umol' in model_var_units[model_name]:
                     # from umol/m2/s to gC/m2/s
-                    print('model_var_units[model_name]',model_var_units[model_name])
-                    Var_tmp_tmp  = convert_from_umol_m2_s_into_kg_m2_s(Var_tmp_tmp,model_var_units[model_name])
+                    # print('model_var_units[model_name]',model_var_units[model_name])
+                    Var_tmp_tmp  = convert_from_umol_m2_s_into_gC_m2_s(Var_tmp_tmp,model_var_units[model_name])
                 elif 'kg' in model_var_units[model_name]:
                     # from kg/m2/s to gC/m2/s
                     Var_tmp_tmp  = Var_tmp_tmp*1000.
@@ -167,7 +167,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
             # Set time var name for different models
             time_name_in = 'time_counter' if 'ORC' in model_name else 'time'
-            print('time_name_in=',time_name_in)
+            # print('time_name_in=',time_name_in)
 
             # Read time info from input
             model_times[model_name]          = f.variables[time_name_in][:]
@@ -278,7 +278,8 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 var.long_name      = var_long_name
                 var[:]             = model_vars[model_out_name]
             else:
-                f.variables[var_name][:] = model_vars[model_out_name]
+                f.variables[var_name][:]    = model_vars[model_out_name]
+                f.variables[var_name].units = model_var_units[model_out_name]
 
             f.close()
             time = None
@@ -291,33 +292,33 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     # Set input file path
     file_path          = glob.glob(PLUMBER2_flux_path +"/*"+site_name+"*.nc")
-    print('file_path', file_path)
+    # print('file_path', file_path)
 
     f_in               = nc.Dataset(file_path[0])
     Qle                = f_in.variables['Qle'][:]
     Qle                = np.where(Qle == -9999., np.nan, Qle)
 
-    f_out              = nc.Dataset(output_file,'r+')
+    f_out              = nc.Dataset(output_file,'r+', format='NETCDF4')
 
-    try:
+    if 'obs_Qle' not in f_out.variables:
         obs                = f_out.createVariable('obs_Qle', 'f4', ('CABLE_time'))
         obs.standard_name  = "obs_latent_heat"
         obs.long_name      = "Latent heat flux from surface"
         obs.units          = "W/m2"
         obs[:]             = Qle
-    except:
+    else:
         f_out.variables['obs_Qle'][:] = Qle
 
     try:
         Qle_cor                = f_in.variables['Qle_cor'][:]
         Qle_cor                = np.where(Qle_cor == -9999., np.nan, Qle_cor)
-        try:
+        if 'obs_Qle_cor' not in f_out.variables:
             obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
             obs_cor.standard_name  = "obs_latent_heat_cor"
             obs_cor.long_name      = "Latent heat flux from surface, energy balance corrected"
             obs_cor.units          = "W/m2"
             obs_cor[:]             = Qle_cor
-        except:
+        else:
             f_out.variables['obs_Qle_cor'][:] = Qle_cor
     except:
         print('No Qle_cor at ', site_name)
@@ -331,33 +332,36 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     # Set input file path
     file_path          = glob.glob(PLUMBER2_flux_path +"/*"+site_name+"*.nc")
-    print('file_path', file_path)
+    # print('file_path', file_path)
 
     f_in               = nc.Dataset(file_path[0])
     Qh                 = f_in.variables['Qh'][:]
     Qh                 = np.where(Qh == -9999., np.nan, Qh)
 
-    f_out              = nc.Dataset(output_file,'r+')
-    try:
+    f_out              = nc.Dataset(output_file,'r+', format='NETCDF4')
+
+    if 'obs_Qh' not in f_out.variables:
         obs                = f_out.createVariable('obs_Qh', 'f4', ('CABLE_time'))
         obs.standard_name  = "obs_sensible_heat"
         obs.long_name      = "Sensible heat flux from surface"
         obs.units          = "W/m2"
         obs[:]             = Qh
-    except:
+    else:
         f_out.variables['obs_Qh'][:] = Qh
 
     try:
         Qh_cor                 = f_in.variables['Qh_cor'][:]
         Qh_cor                 = np.where(Qh_cor == -9999., np.nan, Qh_cor)
-        try:
+
+        if 'obs_Qh_cor' not in f_out.variables:
             obs_cor                = f_out.createVariable('obs_Qh_cor', 'f4', ('CABLE_time'))
             obs_cor.standard_name  = "obs_sensible_heat_cor"
             obs_cor.long_name      = "Sensible heat flux from surface, energy balance corrected"
             obs_cor.units          = "W/m2"
             obs_cor[:]             = Qh_cor
-        except:
+        else:
             f_out.variables['obs_Qh_cor'][:] = Qh_cor
+
     except:
         print('No Qh_cor at ', site_name)
 
@@ -366,31 +370,29 @@ def add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     return
 
-
 def add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     # Set input file path
     file_path          = glob.glob(PLUMBER2_flux_path +"/*"+site_name+"*.nc")
-    print('file_path', file_path)
+    # print('file_path', file_path)
 
     f_in               = nc.Dataset(file_path[0])
     NEE                = f_in.variables['NEE'][:]
     NEE                = np.where(NEE == -9999., np.nan, NEE)
-    NEE                = convert_from_umol_m2_s_into_kg_m2_s(NEE,"umol/m2/s")
-    f_out              = nc.Dataset(output_file,'r+')
+    NEE                = convert_from_umol_m2_s_into_gC_m2_s(NEE,"umol/m2/s")
+    f_out              = nc.Dataset(output_file,'r+', format='NETCDF4')
 
-    try:
+    if 'obs_NEE' not in f_out.variables:
         obs                = f_out.createVariable('obs_NEE', 'f4', ('CABLE_time'))
         obs.standard_name  = "surface_net_downward_mass_flux_of_carbon_dioxide_expressed_as_carbon_due_to_all_land_processes_excluding_anthropogenic_land_use_change"
         obs.long_name      = "Net ecosystem exchange of CO2"
         obs.units          = "gC/m2/s"
         obs[:]             = NEE
-    except:
-        print('NEE has existed ')
-        f_out.variable['obs_NEE'].standard_name  = "surface_net_downward_mass_flux_of_carbon_dioxide_expressed_as_carbon_due_to_all_land_processes_excluding_anthropogenic_land_use_change"
-        f_out.variable['obs_NEE'].long_name      = "Net ecosystem exchange of CO2"
-        f_out.variable['obs_NEE'].units          = "gC/m2/s"
-        f_out.variable['obs_NEE'][:]             = NEE
+    else:
+        # print('NEE has existed ')
+        # print("f_out.variables['obs_NEE']",f_out.variables['obs_NEE'])
+        f_out.variables['obs_NEE'].units = "gC/m2/s"
+        f_out.variables['obs_NEE'][:]    = NEE
 
     f_in.close()
     f_out.close()
@@ -401,7 +403,7 @@ def add_SM_50cm_CABLE_to_nc_file(PLUMBER2_path, site_name, output_file):
 
     # Set input file path
     file_path          = glob.glob(PLUMBER2_path +"CABLE/*"+site_name+"*.nc")
-    print('file_path', file_path)
+    # print('file_path', file_path)
 
     f_in               = nc.Dataset(file_path[0])
     SM                 = f_in.variables['SoilMoist'][:]
@@ -481,17 +483,16 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
     sensible_models       = f_out.variables['Qh_models'][:]
 
     # Try to access the variable
-    try:
-        # if obs_EF exists, update to the new values
-        f_out.variables['obs_EF'][:] = obs_EF_tmp
-    except:
+    if 'obs_EF' not in f_out.variables:
         # if obs_EF doesn't exist, create the obs_EF
         obs_EF                = f_out.createVariable('obs_EF', 'f4', ('CABLE_time'))
         obs_EF.standard_name  = "obs_evaporative_fraction"
         obs_EF.long_name      = "Evaporative fraction (Qle/(Qle+Qh)) in obs"
         obs_EF.units          = "-"
         obs_EF[:]             = obs_EF_tmp
-
+    else:
+        # if obs_EF exists, update to the new values
+        f_out.variables['obs_EF'][:] = obs_EF_tmp
     f_out.close()
 
     model_out_names      = []
@@ -504,7 +505,7 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
             model_out_names.append(latent_model)
             model_out_num  = model_out_num + 1
 
-            print(latent_model, 'has both Qle and Qh')
+            # print(latent_model, 'has both Qle and Qh')
 
             f_out          = nc.Dataset(output_file,'r+')
             model_sensible = f_out.variables[latent_model+'_Qh'][:]
@@ -572,10 +573,10 @@ if __name__ == "__main__":
     # The site names
     all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    site_names     = ['US-Syv'] 
+    # site_names     = ['US-Syv']
     #['AR-SLu']# 'AU-Tum',
 
-    print(site_names)
+    # print(site_names)
 
     for site_name in site_names:
         print('site_name',site_name)
@@ -583,50 +584,50 @@ if __name__ == "__main__":
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
 
-        # varname       = "TVeg"
-        # key_word      = "trans"
-        # key_word_not  = ["evap","transmission","pedo","electron",]
-        # trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        varname       = "TVeg"
+        key_word      = "trans"
+        key_word_not  = ["evap","transmission","pedo","electron",]
+        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
         # print(trans_dict)
-        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # varname       = "Qle"
-        # key_word      = 'latent'
-        # key_word_not  = ['None']
-        # qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        varname       = "Qle"
+        key_word      = 'latent'
+        key_word_not  = ['None']
+        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
         # print(qle_dict)
-        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # varname       = "Qh"
-        # key_word      = 'sensible'
-        # key_word_not  = ['vegetation','soil',] # 'corrected'
-        # qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        varname       = "Qh"
+        key_word      = 'sensible'
+        key_word_not  = ['vegetation','soil',] # 'corrected'
+        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
         # print(qh_dict)
-        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
         varname       = "NEE"
         key_word      = 'exchange'
         key_word_not  = ['None']
         nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        print(nee_dict)
+        # print(nee_dict)
         make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
         gc.collect()
 
-        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        # gc.collect()
+        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
 
-        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        # gc.collect()
+        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
 
         add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
         gc.collect()
 
-        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        # gc.collect()
+        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        gc.collect()
 
-        # Qle_Qh_threshold=10
-        # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
-        # gc.collect()
+        Qle_Qh_threshold=10
+        add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        gc.collect()

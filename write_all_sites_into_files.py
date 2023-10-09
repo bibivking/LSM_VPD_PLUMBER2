@@ -61,8 +61,7 @@ def read_data(var_name, site_name, input_file):
 
     if var_name == 'NEE':
         s2h               = 3600.              # s-1 to h-1
-        GPP_scale         = -0.000001*12*s2h   # umol s-1 to g C h-1
-        var_output['obs'] = f.variables[f"obs_{var_name}"][:]*GPP_scale
+        var_output['obs'] = f.variables[f"obs_{var_name}"][:]*s2h
 
     var_output['obs_EF'] = f.variables["obs_EF"][:]
 
@@ -156,5 +155,5 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'NEE'
+    var_name          = 'Qle'
     write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path)

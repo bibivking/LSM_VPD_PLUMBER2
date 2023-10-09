@@ -4,6 +4,7 @@ import glob
 import numpy as np
 import pandas as pd
 import netCDF4 as nc
+from pygam import LinearGAM
 from datetime import datetime, timedelta
 from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
@@ -72,9 +73,29 @@ def bin_VPD(var_plot,model_out_list):
 
     return vpd_series, vpd_num, var_vals, var_vals_top, var_vals_bot
 
+def fit_GAM(x_values,y_values,n_splines=4,spline_order=2):
+
+    vpd_top      = 7.04
+    vpd_bot      = 0.02
+    vpd_interval = 0.04
+    vpd_pred     = np.arange(vpd_bot,vpd_top,vpd_interval)
+
+    # x_values in gridsearch should be of shape [n_samples, m_features], for this case
+    # m_features=1, so reshape x_values to [len(x_values),1]
+    x_values_array = x_values.to_numpy()
+    x_values       = x_values_array.reshape(len(x_values),1)
+
+    # calculate mean value
+    gam          = PoissonGAM(n_splines=n_splines,spline_order=spline_order).gridsearch(x_values, y_values) # n_splines=22
+    # gam          = LinearGAM(n_splines=n_splines,spline_order=spline_order).gridsearch(x_values, y_values) # n_splines=22
+    y_pred       = gam.predict(vpd_pred)
+    y_int        = gam.confidence_intervals(vpd_pred, width=.95)
+
+    return vpd_pred, y_pred, y_int
+
 def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30,
                   high_bound=70, day_time=False, summer_time=False, IGBP_type=None,
-                  clim_type=None, energy_cor=False,VPD_num_threshold=50):
+                  clim_type=None, energy_cor=False,VPD_num_threshold=50, method='GAM'):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -201,42 +222,81 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
 
     print('Finish dividing dry and wet periods')
 
-    # ============ Bin by VPD ============
-    # vpd_series[vpd_tot]
-    # var_vals[model_tot, vpd_tot]
-    # var_vals_top[model_tot, vpd_tot]
-    # var_vals_bot[model_tot, vpd_tot]
+    # ============ Choosing fitting or binning ============
 
-    vpd_series_dry, vpd_num_dry, var_vals_dry, var_vals_top_dry, var_vals_bot_dry = bin_VPD(var_output_dry, model_out_list)
-    vpd_series_wet, vpd_num_wet, var_vals_wet, var_vals_top_wet, var_vals_bot_wet = bin_VPD(var_output_wet, model_out_list)
+    if method == 'bin_by_vpd':
+        # ============ Bin by VPD ============
+        # vpd_series[vpd_tot]
+        # var_vals[model_tot, vpd_tot]
+        # var_vals_top[model_tot, vpd_tot]
+        # var_vals_bot[model_tot, vpd_tot]
 
-    # ============ Creat the output dataframe ============
-    var_dry = pd.DataFrame(vpd_series_dry, columns=['vpd_series'])
-    var_wet = pd.DataFrame(vpd_series_wet, columns=['vpd_series'])
+        vpd_series_dry, vpd_num_dry, var_vals_dry, var_vals_top_dry, var_vals_bot_dry = bin_VPD(var_output_dry, model_out_list)
+        vpd_series_wet, vpd_num_wet, var_vals_wet, var_vals_top_wet, var_vals_bot_wet = bin_VPD(var_output_wet, model_out_list)
 
-    var_dry['vpd_num']     = vpd_num_dry
-    var_wet['vpd_num']     = vpd_num_wet
+        # ============ Creat the output dataframe ============
+        var_dry = pd.DataFrame(vpd_series_dry, columns=['vpd_series'])
+        var_wet = pd.DataFrame(vpd_series_wet, columns=['vpd_series'])
 
-    for i, model_out_name in enumerate(model_out_list):
+        var_dry['vpd_num']     = vpd_num_dry
+        var_wet['vpd_num']     = vpd_num_wet
 
-        if VPD_num_threshold == None:
-            var_dry[model_out_name+'_vals'] = var_vals_dry[i,:]
-            var_dry[model_out_name+'_top']  = var_vals_top_dry[i,:]
-            var_dry[model_out_name+'_bot']  = var_vals_bot_dry[i,:]
+        for i, model_out_name in enumerate(model_out_list):
 
-            var_wet[model_out_name+'_vals'] = var_vals_wet[i,:]
-            var_wet[model_out_name+'_top']  = var_vals_top_wet[i,:]
-            var_wet[model_out_name+'_bot']  = var_vals_bot_wet[i,:]
+            if VPD_num_threshold == None:
+                var_dry[model_out_name+'_vals'] = var_vals_dry[i,:]
+                var_dry[model_out_name+'_top']  = var_vals_top_dry[i,:]
+                var_dry[model_out_name+'_bot']  = var_vals_bot_dry[i,:]
+                var_wet[model_out_name+'_vals'] = var_vals_wet[i,:]
+                var_wet[model_out_name+'_top']  = var_vals_top_wet[i,:]
+                var_wet[model_out_name+'_bot']  = var_vals_bot_wet[i,:]
+            else:
+                var_dry[model_out_name+'_vals'] = np.where(var_dry['vpd_num'] >= 50, var_vals_dry[i,:], np.nan)
+                var_dry[model_out_name+'_top']  = np.where(var_dry['vpd_num'] >= 50, var_vals_top_dry[i,:], np.nan)
+                var_dry[model_out_name+'_bot']  = np.where(var_dry['vpd_num'] >= 50, var_vals_bot_dry[i,:], np.nan)
+                var_wet[model_out_name+'_vals'] = np.where(var_wet['vpd_num'] >= 50, var_vals_wet[i,:], np.nan)
+                var_wet[model_out_name+'_top']  = np.where(var_wet['vpd_num'] >= 50, var_vals_top_wet[i,:], np.nan)
+                var_wet[model_out_name+'_bot']  = np.where(var_wet['vpd_num'] >= 50, var_vals_bot_wet[i,:], np.nan)
+        var_dry['site_num']    = site_num
+        var_wet['site_num']    = site_num
 
-        else:
-            var_dry[model_out_name+'_vals'] = np.where(var_dry['vpd_num'] >= 50, var_vals_dry[i,:], np.nan)
-            var_dry[model_out_name+'_top']  = np.where(var_dry['vpd_num'] >= 50, var_vals_top_dry[i,:], np.nan)
-            var_dry[model_out_name+'_bot']  = np.where(var_dry['vpd_num'] >= 50, var_vals_bot_dry[i,:], np.nan)
-            var_wet[model_out_name+'_vals'] = np.where(var_wet['vpd_num'] >= 50, var_vals_wet[i,:], np.nan)
-            var_wet[model_out_name+'_top']  = np.where(var_wet['vpd_num'] >= 50, var_vals_top_wet[i,:], np.nan)
-            var_wet[model_out_name+'_bot']  = np.where(var_wet['vpd_num'] >= 50, var_vals_bot_wet[i,:], np.nan)
-    var_dry['site_num']    = site_num
-    var_wet['site_num']    = site_num
+
+    elif method == 'GAM':
+        '''
+        fitting GAM curve
+        '''
+
+        # ============ Creat the output dataframe ============
+
+        #reshape for gam
+        for i, model_out_name in enumerate(model_out_list):
+            print('In GAM fitting for model:', model_out_name)
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            dry_x_values = var_output_dry['VPD']
+            dry_y_values = var_output_dry[head+model_out_name]
+            dry_vpd_pred, dry_y_pred, dry_y_int = fit_GAM(dry_x_values,dry_y_values,n_splines=7,spline_order=3)
+            gc.collect()
+
+            wet_x_values = var_output_wet['VPD']
+            wet_y_values = var_output_wet[head+model_out_name]
+            wet_vpd_pred, wet_y_pred, wet_y_int = fit_GAM(wet_x_values,wet_y_values,n_splines=7,spline_order=3)
+            gc.collect()
+            if i == 0:
+                var_dry      = pd.DataFrame(dry_vpd_pred, columns=['vpd_series'])
+                var_wet      = pd.DataFrame(wet_vpd_pred, columns=['vpd_series'])
+
+            var_dry[model_out_name+'_vals'] = dry_y_pred
+            var_dry[model_out_name+'_top']  = dry_y_int[:,0]
+            var_dry[model_out_name+'_bot']  = dry_y_int[:,1]
+            var_wet[model_out_name+'_vals'] = wet_y_pred
+            var_wet[model_out_name+'_top']  = wet_y_int[:,0]
+            var_wet[model_out_name+'_bot']  = wet_y_int[:,1]
+        var_dry['site_num']    = site_num
+        var_wet['site_num']    = site_num
 
     # ============ Set the output file name ============
     message = ''
@@ -252,15 +312,15 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
 
     # save data
     if bin_by == 'EF_obs':
-        var_dry.to_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(low_bound)+'th.csv')
-        var_wet.to_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(high_bound)+'th.csv')
+        var_dry.to_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(low_bound)+'th_'+method+'.csv')
+        var_wet.to_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(high_bound)+'th_'+method+'.csv')
 
     return
 
 
 def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
-                 day_time=False, summer_time=False, window_size=11, order=2, type='S-G_filter', 
-                 IGBP_type=None, clim_type=None):
+                 day_time=False, summer_time=False, window_size=11, order=2, type='S-G_filter',
+                 IGBP_type=None, clim_type=None, method='GAM'):
 
     # ============== read data ==============
     message = ''
@@ -275,8 +335,8 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
         message = message + '_clim='+clim_type
 
     if bin_by == 'EF_obs':
-        var_dry = pd.read_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(low_bound)+'th.csv')
-        var_wet = pd.read_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(high_bound)+'th.csv')
+        var_dry = pd.read_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(low_bound)+'th_'+method+'.csv')
+        var_wet = pd.read_csv(f'./txt/{var_name}_VPD'+message+'_EF_'+str(high_bound)+'th_'+method+'.csv')
 
     print('var_dry',var_dry)
     print('var_wet',var_wet)
@@ -328,15 +388,15 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
     # hist = ax[0,1].hist(var_output_wet['VPD'], bins=400, density=False, alpha=0.6, color='g', histtype='stepfilled')
     # Get the histogram data
 
-    ax[0,0].bar(var_dry['vpd_series'], var_dry['vpd_num'])
-    ax[0,1].bar(var_wet['vpd_series'], var_wet['vpd_num'])
-    ax[0,0].axhline(y=500, color='black', linestyle='-.', linewidth=1)
-    ax[0,1].axhline(y=500, color='black', linestyle='-.', linewidth=1)
+    # ax[0,0].bar(var_dry['vpd_series'], var_dry['vpd_num'])
+    # ax[0,1].bar(var_wet['vpd_series'], var_wet['vpd_num'])
+    # ax[0,0].axhline(y=50, color='black', linestyle='-.', linewidth=1)
+    # ax[0,1].axhline(y=50, color='black', linestyle='-.', linewidth=1)
 
     for i, model_out_name in enumerate(model_out_list):
 
         line_color = model_colors[model_out_name] #plt.cm.tab20(i / len(model_out_list))
-        
+
         dry_vals = smooth_vpd_series(var_dry[model_out_name+'_vals'], window_size, order, type)
         wet_vals = smooth_vpd_series(var_wet[model_out_name+'_vals'], window_size, order, type)
 
@@ -384,7 +444,7 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
         ax[1,1].set_ylim(-0.2, 1)
 
     # ax[1].set_xlabel('VPD (kPa)', loc='center',size=14)# rotation=270,
-    fig.savefig("./plots/30percent/"+var_name+'_VPD_all_sites'+message,bbox_inches='tight',dpi=300) # '_30percent'
+    fig.savefig("./plots/30percent/"+var_name+'_VPD_all_sites'+message+'_'+method,bbox_inches='tight',dpi=300) # '_30percent'
 
 if __name__ == "__main__":
 
@@ -398,7 +458,7 @@ if __name__ == "__main__":
 
     print(site_names)
 
-    var_name       = 'TVeg'  #'TVeg'
+    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_obs' #'EF_model' #'EF_obs'#
     IGBP_types     = ['CRO', 'CSH', 'DBF', 'EBF','EBF', 'ENF', 'GRA', 'MF', 'OSH', 'WET', 'WSA', 'SAV']
     clim_types     = ['Af', 'Am', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb', 'Csa', 'Csb', 'Cwa',
@@ -408,9 +468,9 @@ if __name__ == "__main__":
     energy_cor     = True
     low_bound      = 30
     high_bound     = 70
+    method         = 'GAM'
 
-
-    # Smoothing setting 
+    # Smoothing setting
 
 
     window_size    = 11
@@ -425,9 +485,11 @@ if __name__ == "__main__":
 
         write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
                       high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
-                      energy_cor=energy_cor) # clim_type=None,
+                      energy_cor=energy_cor, method='GAM') # clim_type=None,
+        gc.collect()
 
         plot_var_VPD(var_name, bin_by=bin_by, low_bound=low_bound, high_bound=high_bound,
-                 day_time=day_time, window_size=window_size, order=order, type=type, IGBP_type=IGBP_type) #, clim_type=clim_type)
+                 day_time=day_time, window_size=window_size, order=order,
+                 type=type, IGBP_type=IGBP_type, method='GAM') #, clim_type=clim_type)
 
         gc.collect()

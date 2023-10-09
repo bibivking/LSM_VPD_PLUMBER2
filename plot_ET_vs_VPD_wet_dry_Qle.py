@@ -259,7 +259,7 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
 
 
 def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
-                 day_time=False, summer_time=False, window_size=11, order=2, type='S-G_filter', 
+                 day_time=False, summer_time=False, window_size=11, order=2, type='S-G_filter',
                  IGBP_type=None, clim_type=None):
 
     # ============== read data ==============
@@ -330,13 +330,13 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
 
     ax[0,0].bar(var_dry['vpd_series'], var_dry['vpd_num'])
     ax[0,1].bar(var_wet['vpd_series'], var_wet['vpd_num'])
-    ax[0,0].axhline(y=500, color='black', linestyle='-.', linewidth=1)
-    ax[0,1].axhline(y=500, color='black', linestyle='-.', linewidth=1)
+    ax[0,0].axhline(y=50, color='black', linestyle='-.', linewidth=1)
+    ax[0,1].axhline(y=50, color='black', linestyle='-.', linewidth=1)
 
     for i, model_out_name in enumerate(model_out_list):
 
         line_color = model_colors[model_out_name] #plt.cm.tab20(i / len(model_out_list))
-        
+
         dry_vals = smooth_vpd_series(var_dry[model_out_name+'_vals'], window_size, order, type)
         wet_vals = smooth_vpd_series(var_wet[model_out_name+'_vals'], window_size, order, type)
 
@@ -371,8 +371,8 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
     ax[0,0].set_xlim(0, 7.)
     ax[0,1].set_xlim(0, 7.)
 
-    ax[0,0].set_ylim(0, 500)
-    ax[0,1].set_ylim(0, 500)
+    # ax[0,0].set_ylim(0, 500)
+    # ax[0,1].set_ylim(0, 500)
 
     if var_name == 'TVeg':
         ax[1,0].set_ylim(-0.1, 0.5)
@@ -411,7 +411,7 @@ if __name__ == "__main__":
     high_bound     = 70
 
 
-    # Smoothing setting 
+    # Smoothing setting
 
 
     window_size    = 11
@@ -424,9 +424,10 @@ if __name__ == "__main__":
     for IGBP_type in IGBP_types:
     # for clim_type in clim_types:
 
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                      high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
-                      energy_cor=energy_cor) # clim_type=None,
+        # write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+        #               high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
+        #               energy_cor=energy_cor) # clim_type=None,
+        # gc.collect()
 
         plot_var_VPD(var_name, bin_by=bin_by, low_bound=low_bound, high_bound=high_bound,
                  day_time=day_time, window_size=window_size, order=order, type=type, IGBP_type=IGBP_type) #, clim_type=clim_type)
