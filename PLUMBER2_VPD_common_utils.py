@@ -8,12 +8,57 @@ import codecs
 import numpy as np
 import xarray as xr
 import pandas as pd
-from scipy import stats
+from pygam import LinearGAM, PoissonGAM
+from scipy import stats, interpolate
 from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
 
+def load_default_list():
 
-def smooth_vpd_series(values, window_size=11, order=3, type='S-G_filter'):
+    # The site names
+    PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    all_site_path  = sorted(glob.glob(PLUMBER2_path+"/*.nc"))
+    site_names     = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
+
+    IGBP_types     = ['GRA','OSH', 'SAV', 'WSA', 'CSH', 'DBF', 'ENF', 'EBF', 'MF', 'WET', 'CRO']
+    clim_types     = ['Af', 'Am', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb', 'Csa', 'Csb', 'Cwa',
+                      'Dfa', 'Dfb', 'Dfc', 'Dsb', 'Dsc', 'Dwa', 'Dwb', 'ET']
+
+    return site_names, IGBP_types, clim_types
+
+
+def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
+
+    x_series   = np.arange(x_bot, x_top, x_interval)
+
+    # x_values in gridsearch should be of shape [n_samples, m_features], for this case
+    # m_features=1, so reshape x_values to [len(x_values),1]
+    x_values_array = x_values.to_numpy()
+    x_values       = x_values_array.reshape(len(x_values),1)
+
+    # calculate mean value
+    gam          = PoissonGAM(n_splines=n_splines,spline_order=spline_order).gridsearch(x_values, y_values) # n_splines=22
+    # gam          = LinearGAM(n_splines=n_splines,spline_order=spline_order).gridsearch(x_values, y_values) # n_splines=22
+    y_pred       = gam.predict(x_series)
+    y_int        = gam.confidence_intervals(x_series, width=.95)
+
+    return x_series, y_pred, y_int
+
+def fit_spline(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
+
+    x_series   = np.arange(x_bot, x_top, x_interval)
+
+    # x_values in gridsearch should be of shape [n_samples, m_features], for this case
+    # m_features=1, so reshape x_values to [len(x_values),1]
+    x_values_array = x_values.to_numpy()
+    x_values       = x_values_array.reshape(len(x_values),1)
+
+    tck  = interpolate.splrep(x_values, y_values, s=len(x_series))
+    y_pred = interpolate.BSpline(*tck)(x_series)
+
+    return x_series, y_pred
+
+def smooth_vpd_series(values, window_size=11, order=3, smooth_type='S-G_filter',deriv=0):
 
     """
     Smooth the data using a window with requested size.
@@ -32,11 +77,13 @@ def smooth_vpd_series(values, window_size=11, order=3, type='S-G_filter'):
     nx          = len(values)
     vals_smooth = np.full([nx], np.nan)
 
-    if type=='S-G_filter':
-        vals_smooth = savgol_filter(values, window_size, order,mode='nearest')
-    elif type=='smoothing':
+    if smooth_type=='S-G_filter':
+        vals_smooth = savgol_filter(values, window_size, order, mode='nearest',deriv=deriv)
+    elif smooth_type=='smoothing':
         for j in np.arange(window_half,nx-window_half):
             vals_smooth[j] = np.nanmean(values[j-window_half:j+window_half])
+        vals_smooth = np.roll(vals_smooth, 10, fill_value='NaN')
+    # elif 
 
     # elif len(np.shape(values))==2:
     #     nx              = len(values[:,0])

@@ -468,6 +468,30 @@ def add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     return
 
+def add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file):
+
+    # Set input file path
+    file_path = glob.glob(PLUMBER2_met_path +"/*"+site_name+"*.nc")
+    f_in      = nc.Dataset(file_path[0])
+    Precip    = f_in.variables['Precip'][:]
+
+    f_in.close()
+
+    Precip    = np.where(Precip  < 0., np.nan, Precip)
+
+    f_out               = nc.Dataset(output_file,'r+')
+
+    prec                = f_out.createVariable('obs_Precip', 'f4', ('CABLE_time'))
+    prec.standard_name  = "obs_Precip"
+    prec.long_name      = "Precipitation rate"
+    prec.units          = "kg/m2/s"
+    prec[:]             = Precip
+
+    f_out.close()
+
+    return
+
+
 def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
 
     # Set input file path
@@ -584,50 +608,53 @@ if __name__ == "__main__":
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
 
-        varname       = "TVeg"
-        key_word      = "trans"
-        key_word_not  = ["evap","transmission","pedo","electron",]
-        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # print(trans_dict)
-        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "TVeg"
+        # key_word      = "trans"
+        # key_word_not  = ["evap","transmission","pedo","electron",]
+        # trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # # print(trans_dict)
+        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "Qle"
-        key_word      = 'latent'
-        key_word_not  = ['None']
-        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # print(qle_dict)
-        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qle"
+        # key_word      = 'latent'
+        # key_word_not  = ['None']
+        # qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # # print(qle_dict)
+        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "Qh"
-        key_word      = 'sensible'
-        key_word_not  = ['vegetation','soil',] # 'corrected'
-        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # print(qh_dict)
-        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qh"
+        # key_word      = 'sensible'
+        # key_word_not  = ['vegetation','soil',] # 'corrected'
+        # qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # # print(qh_dict)
+        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "NEE"
-        key_word      = 'exchange'
-        key_word_not  = ['None']
-        nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # print(nee_dict)
-        make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "NEE"
+        # key_word      = 'exchange'
+        # key_word_not  = ['None']
+        # nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        # # print(nee_dict)
+        # make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        gc.collect()
+        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
 
-        Qle_Qh_threshold=10
-        add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        # Qle_Qh_threshold=10
+        # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        # gc.collect()
+
+        add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
         gc.collect()
