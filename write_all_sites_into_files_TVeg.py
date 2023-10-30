@@ -75,6 +75,7 @@ def read_data(var_name, site_name, input_file):
     var_output['obs_Tair']   = f.variables['obs_Tair'][:]
     var_output['obs_Qair']   = f.variables['obs_Qair'][:]
     var_output['obs_Precip'] = f.variables['obs_Precip'][:]
+    var_output['obs_SWdown'] = f.variables['obs_SWdown'][:]
 
     # close the file
     f.close()
@@ -115,17 +116,22 @@ def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
 
     # calcualte hours without precipitation
     accul_hours      = 0
-    hrs_after_precip = np.zeros(ntime)
+    half_hrs_after_precip = np.zeros(ntime)
 
     for t in np.arange(ntime):
         accul_hours         = np.where(valid_prec[t] == 1,  0, accul_hours+1)
-        hrs_after_precip[t] = accul_hours
+        half_hrs_after_precip[t] = accul_hours
+    
+    # Check the plot
+    if 0:
+        fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[8,6],sharex=True, sharey=False, squeeze=True) #
+        plot       = ax.plot(half_hrs_after_precip, lw=1.0, color='black', alpha=0.3)
+        plot       = ax.plot(prec_24*10, lw=1.0, color='green', alpha=0.5)
+        plot       = ax.plot(precip*s2h*10, lw=1.0, color='blue', alpha=0.5)
 
-    fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[8,6],sharex=True, sharey=False, squeeze=True) #
-    plot       = ax.plot(hrs_after_precip, lw=1.0, color='black', alpha=0.3)
-    fig.savefig('./plots/check_'+site_name+'_rain_free_days.png',bbox_inches='tight',dpi=300) # '_30percent'
+        fig.savefig('./plots/check_'+site_name+'_rain_free_days.png',bbox_inches='tight',dpi=300) # '_30percent'
 
-    return hrs_after_precip
+    return half_hrs_after_precip
 
 def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path):
 
@@ -160,7 +166,7 @@ def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_pa
         var_output_tmp['climate_type'] = clim_class_dict[site_name]
 
         # Add hours after previous valid rainfall
-        var_output_tmp['hrs_after_precip'] = calc_hours_after_precip(var_output_tmp['obs_Precip'],valid_daily_precip=1,site_name=site_name) # No rain: Less than 1.0 mm, Light rain: 1.0 mm to 10.0 mm
+        var_output_tmp['half_hrs_after_precip'] = calc_hours_after_precip(var_output_tmp['obs_Precip'],valid_daily_precip=1,site_name=site_name) # No rain: Less than 1.0 mm, Light rain: 1.0 mm to 10.0 mm
 
         if i == 0:
             var_output         = var_output_tmp

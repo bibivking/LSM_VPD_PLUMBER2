@@ -5,6 +5,7 @@ import glob
 import numpy as np
 import pandas as pd
 import netCDF4 as nc
+import pwlf
 from kneed import KneeLocator
 from datetime import datetime, timedelta
 from matplotlib.cm import get_cmap
@@ -43,7 +44,7 @@ def find_turning_points_by_gradient(model_out_list, vpd_series, vals_smooth, thr
     #   https://blog.csdn.net/u012005313/article/details/84035371
     # Method
     #   When the increasing gradient lower than a threshold then think it is at the turning point
-    
+
     nmodel          = len(model_out_list)
     vpd_series_len  = len(vpd_series)
 
@@ -51,14 +52,14 @@ def find_turning_points_by_gradient(model_out_list, vpd_series, vals_smooth, thr
     max_loc_index   = np.zeros(len(model_out_list))
     max_loc_vpd     = np.zeros(len(model_out_list))
 
-    derivative      = calc_derivative(model_out_list, vpd_series, vals_smooth, 
-                                      option=smooth_option, window_size=smooth_window_size, 
+    derivative      = calc_derivative(model_out_list, vpd_series, vals_smooth,
+                                      option=smooth_option, window_size=smooth_window_size,
                                       order=smooth_order)
 
     for i, model_out_name in enumerate(model_out_list):
 
         derivative_tmp   = derivative[model_out_name]
-        
+
         print(model_out_name, 'derivative_tmp',derivative_tmp)
 
         try:
@@ -83,15 +84,15 @@ def find_turning_points_by_max_peaks(model_out_list, vpd_series, vals_smooth, sm
     #   Find the turning points and find the max value in these turning points as the one for
     #   this curve
     # output: peak_values[nmodel]
-    
+
     nmodel          = len(model_out_list)
     vpd_series_len  = len(vpd_series)
 
     peak_values     = np.full([nmodel,vpd_series_len], np.nan)
     tmp             = np.full(vpd_series_len, np.nan)
 
-    derivative      = calc_derivative(model_out_list, vpd_series, vals_smooth, 
-                                      option=smooth_option, window_size=smooth_window_size, 
+    derivative      = calc_derivative(model_out_list, vpd_series, vals_smooth,
+                                      option=smooth_option, window_size=smooth_window_size,
                                       order=smooth_order)
 
     for i, model_out_name in enumerate(model_out_list):
@@ -118,7 +119,7 @@ def find_turning_points_by_max_peaks(model_out_list, vpd_series, vals_smooth, sm
     vals_smooth    = np.where(~np.isnan(peak_values), vals_smooth, np.nan)
 
     print('np.any(~np.isnan(vals_smooth))',np.any(~np.isnan(vals_smooth)))
-    
+
     max_vals      = np.zeros(len(model_out_list))
     max_loc_index = np.zeros(len(model_out_list))
     max_loc_vpd   = np.zeros(len(model_out_list))
@@ -135,7 +136,7 @@ def find_turning_points_by_max_peaks(model_out_list, vpd_series, vals_smooth, sm
             max_loc_vpd[i] = -9999.
         else:
             max_loc_vpd[i] = vpd_series[index]
-    
+
     print('max_vals',max_vals)
     print('max_loc_vpd',max_loc_vpd)
 
@@ -150,24 +151,124 @@ def find_turning_points_by_kneed(model_out_list, vpd_series, vals_smooth):
 
     # Method source:  https://kneed.readthedocs.io/en/latest/parameters.html#curve
     # Parameters:
-    # S: The sensitivity parameter allows us to adjust how aggressive we want Kneedle to 
-    #    be when detecting knees. Smaller values for S detect knees quicker, while larger 
-    #    values are more conservative. Put simply, S is a measure of how many “flat” points 
+    # S: The sensitivity parameter allows us to adjust how aggressive we want Kneedle to
+    #    be when detecting knees. Smaller values for S detect knees quicker, while larger
+    #    values are more conservative. Put simply, S is a measure of how many “flat” points
     #    we expect to see in the unmodified data curve before declaring a knee
 
     turning_points = {}
-    
+
     for i, model_out_name in enumerate(model_out_list):
 
-        kneedle = KneeLocator(vpd_series, vals_smooth[i,:], 
+        kneedle = KneeLocator(vpd_series, vals_smooth[i,:],
                               S=11.0, curve="concave", direction="increasing",online=False,
                               interp_method='interp1d') #interp_method="polynomial",polynomial_degree=2)#
 
         turning_points[model_out_name] = [kneedle.knee, kneedle.knee_y]
 
     print('turning_points',turning_points)
-    
+
     return turning_points
+
+def find_turning_points_by_cdf(model_out_list, vpd_series, vals_smooth):
+
+    turning_points = {}
+
+    for i, model_out_name in enumerate(model_out_list):
+
+        # Calculate the cumulative distribution function (CDF)
+        cdf = np.cumsum(vals_smooth[i,:])
+
+        # Calculate the 2-sided moving average of the CDF
+        moving_mean = pd.Series(cdf).rolling(window=3, center=True).mean(fill_value=np.nan)
+
+        # Calculate the differences between the moving average values
+        diff = moving_mean.diff()
+
+        # Identify the index of the maximum difference
+        idxmin = diff.idxmin()
+        print('idxmin',idxmin)
+
+        if idxmin>0:
+            turning_points[model_out_name] = [vpd_series[idxmin], vals_smooth[i,idxmin]]
+        else:
+            turning_points[model_out_name] = [np.nan, np.nan]
+
+        fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[5,5],sharex=True, sharey=False, squeeze=True) #
+        ax.plot(vpd_series,vals_smooth[i,:],c='orange')
+        ax.plot(vpd_series,cdf,c='red')
+        ax.plot(vpd_series,moving_mean,c='blue')
+        ax.plot(vpd_series,diff,c='black')
+        ax.scatter(turning_points[model_out_name][0],turning_points[model_out_name][1],c='orange')
+
+        fig.savefig("./plots/check_find_turning_points_by_cdf_"+model_out_name+".png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    print('turning_points',turning_points)
+    return turning_points
+
+def find_turning_points_by_piecewise_regression(model_out_list, vpd_series, vals_smooth, var_name, piece_num=5):
+
+    # Example : https://www.5axxw.com/questions/simple/nl9brn
+
+
+    turning_points = {}
+    slopes         = {}
+
+    for i, model_out_name in enumerate(model_out_list):
+        print('model_out_name',model_out_name)
+        if var_name == 'NEE':
+            if model_out_name in ['GFDL','NoahMPv401','STEMMUS-SCOPE','ACASA']:
+                print(model_out_name,',vals_smooth[i,:]=vals_smooth[i,:]')
+            else:
+                print(model_out_name,',vals_smooth[i,:]=vals_smooth[i,:] * (-1)')
+                vals_smooth[i,:] = vals_smooth[i,:] * (-1)
+
+        values       = vals_smooth[i,:]
+        vpds         = np.copy(vpd_series)
+
+        not_nan_mask = (~np.isnan(values)) & (~np.isnan(vpds))
+        values       = values[not_nan_mask]
+        vpds         = vpds[not_nan_mask]
+
+        if len(values)>5:
+            print('len(values)',len(values))
+            # Create a PiecewiseLinFit object.
+            my_pwlf = pwlf.PiecewiseLinFit(vpds, values,disp_res=True)
+
+            # Fit a piecewise linear function to the data with 3 breakpoints.
+            my_pwlf.fit(piece_num)
+
+            # Calculate the slopes of the lines.
+            piecewise_slopes = my_pwlf.slopes
+            piecewise_breaks = my_pwlf.fit_breaks
+
+            # Select the break points I want to plot
+            slope2      = piecewise_slopes[1:]*piecewise_slopes[0:-1]
+            slope_index = np.argmin(slope2)
+            print('slope2',slope2,'slope_index',slope_index)
+
+
+            # if slope2[slope_index]<0:
+            # Find the index of the element with the smallest absolute difference.
+            vpd_diff      = np.abs(vpd_series - piecewise_breaks[slope_index+1])
+            closest_index = np.argmin(vpd_diff)
+
+            # Calculate the breaking points.
+            turning_points[model_out_name]  = [vpd_series[closest_index],  vals_smooth[i,closest_index]]
+            # turning_points[model_out_name]  = [piecewise_breaks[1], my_pwlf.predict(piecewise_breaks[1])[0]]
+            slopes[model_out_name]          = [piecewise_slopes[0],piecewise_slopes[1]]
+            # else:
+            #     turning_points[model_out_name] = [-9999., np.nan]
+            #     slopes[model_out_name]          = [np.nan,np.nan]
+        else:
+            turning_points[model_out_name] = [-9999., np.nan]
+            slopes[model_out_name]          = [np.nan,np.nan]
+
+    print('turning_points',turning_points)
+    print('slopes',slopes)
+
+    return turning_points, slopes
+
 
 def single_plot_lines(turning_points, model_out_list, x_values, y_values ,message=None):
 
@@ -210,7 +311,7 @@ def single_plot_lines(turning_points, model_out_list, x_values, y_values ,messag
         plot       = ax.plot(x_values, y_values[i,:], lw=2.0, color=line_color, alpha=0.7, label=model_out_name)
         plot       = ax.scatter(turning_points[model_out_name][0],turning_points[model_out_name][1], marker='o', color=line_color, s=10)
         plot       = ax.axhline(y=0.0, color='black', linestyle='-.', linewidth=1)
-        
+
     ax.set_xlim(0, 7.)
     ax.set_ylim(0, 200)
 
@@ -283,7 +384,7 @@ if __name__ == "__main__":
     for column_name in var_bin_by_VPD.columns:
         if "_vals" in column_name:
             model_out_list.append(column_name.split("_vals")[0])
-            
+
     vpd_series      = var_bin_by_VPD['vpd_series']
 
     nmodel          = len(model_out_list)
@@ -291,7 +392,7 @@ if __name__ == "__main__":
 
     # ================= Smoothing =================
     window_size = 11
-    order       = 2
+    order       = 3
     smooth_type = 'S-G_filter'
 
     # Smoothing the curve and remove vpd_num < 100.
@@ -300,7 +401,7 @@ if __name__ == "__main__":
     for i, model_out_name in enumerate(model_out_list):
 
         vals_smooth_tmp = smooth_vpd_series(var_bin_by_VPD[model_out_name+'_vals'],
-                            window_size=window_size, order=order, 
+                            window_size=window_size, order=order,
                             smooth_type=smooth_type)
         vals_vpd_num    = var_bin_by_VPD[model_out_name+'_vpd_num']
 
@@ -324,4 +425,3 @@ if __name__ == "__main__":
             message = var_name+'_VPD'+message+'_EF_'+str(low_bound)
 
     single_plot_lines(turning_points, model_out_list, x_values=vpd_series, y_values=vals_smooth, message=message)
-

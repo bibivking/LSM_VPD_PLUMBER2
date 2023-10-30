@@ -112,15 +112,16 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
     # add obs to draw-out namelist
     if var_name in ['Qle','Qh']:
         model_out_list.append('obs')
-        model_out_list.append('obs_cor')
+        # model_out_list.append('obs_cor')
 
     if var_name in ['NEE']:
         model_out_list.append('obs')
 
     # total site number
     site_num    = len(np.unique(var_output["site_name"]))
-
+    print('Point 1, site_num=',site_num)
     print('Finish reading csv file')
+    print('Check 1 np.unique(var_output["site_name"])', np.unique(var_output["site_name"]))
 
     # ========== select data ==========
 
@@ -128,20 +129,25 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
     if var_name in ['Qle','Qh'] and energy_cor:
         check_obs_cor = var_output['obs_cor']
         check_obs_cor.to_csv(f'./txt/check_obs_cor.csv')
-        print( 'Check point 2, np.any(~np.isnan(var_output["model_CABLE"]))=',
-                np.any(~np.isnan(var_output["model_CABLE"])) )
+
         cor_notNan_mask = ~ np.isnan(var_output['obs_cor'])
         var_output      = var_output[cor_notNan_mask]
-        print( 'Check point 3, np.any(~np.isnan(var_output["model_CABLE"]))=',
-                np.any(~np.isnan(var_output["model_CABLE"])) )
-        # print('var_output["obs_EF"][:100] point 2', var_output["obs_EF"][:100])
-
+        
     # whether only considers day time
     if day_time:
-        day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
-        # print('np.any(day_mask)', np.any(day_mask))
+        # print('Check 1 var_output["hour"]', var_output['hour'])
+
+        # Use hours as threshold
+        # day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
+
+        # Use radiation as threshold
+        day_mask    = (var_output['obs_SWdown'] >= 5) 
+
         var_output  = var_output[day_mask]
         site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 2, site_num=',site_num)
+
+        check_site = var_output[ var_output['site_name']=='CA-NS1']
 
     # whether only considers summers
     if summer_time:
@@ -149,6 +155,7 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
         # print('np.any(summer_mask)', np.any(summer_mask))
         var_output  = var_output[summer_mask]
         site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 3, site_num=',site_num)
 
     # whether only considers one type of IGBP
     if IGBP_type!=None:
@@ -156,6 +163,7 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
         # print('np.any(IGBP_mask)', np.any(IGBP_mask))
         var_output  = var_output[IGBP_mask]
         site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 4, site_num=',site_num)
 
     # whether only considers one type of climate type
     if clim_type!=None:
@@ -163,13 +171,16 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
         # print('np.any(clim_mask)', np.any(clim_mask))
         var_output  = var_output[clim_mask]
         site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 5, site_num=',site_num)
 
     # whether only considers observation without precipitation in hours_precip_free hours
     if hours_precip_free!=None:
         rain_mask   = (var_output['hrs_after_precip'] > hours_precip_free)
         var_output  = var_output[rain_mask]
         site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 6, site_num=',site_num)
 
+    print('Point 7, site_num=',site_num)
 
     print( 'Check point 4, np.any(~np.isnan(var_output["model_CABLE"]))=',
            np.any(~np.isnan(var_output["model_CABLE"])) )
@@ -409,7 +420,7 @@ if __name__ == "__main__":
     site_names, IGBP_types, clim_types = load_default_list()
 
     day_time       = True
-    energy_cor     = True
+    energy_cor     = False
     method         = 'bin_by_vpd' #'GAM'
 
     if var_name == 'NEE':
@@ -419,64 +430,64 @@ if __name__ == "__main__":
     low_bound      = [0,0.2] #30
     high_bound     = [0.2,0.4] #70
     
-    # write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,
-    #                 energy_cor=energy_cor, method=method)
-    # gc.collect()
+    write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,
+                    energy_cor=energy_cor, method=method)
+    gc.collect()
     
-    for IGBP_type in IGBP_types:
+    # for IGBP_type in IGBP_types:
     
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
+    #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    #                     high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
+    #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    #     gc.collect()
     
-    for clim_type in clim_types:
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, clim_type=clim_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
+    # for clim_type in clim_types:
+    #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    #                     high_bound=high_bound, day_time=day_time, clim_type=clim_type,
+    #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    #     gc.collect()
 
-    # ================== 0.6-1.0 ==================
-    low_bound      = [0.6,0.8] #30
-    high_bound     = [0.8,1.] #70
-
-    # write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,
-    #                 energy_cor=energy_cor, method=method)
-    # gc.collect()
-
-    for IGBP_type in IGBP_types:
-
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
-
-    for clim_type in clim_types:
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, clim_type=clim_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
-
-    # ================== 0.4-0.6 ==================
-    low_bound      = [0.4,0.6] #30
-    high_bound     = [0.8,1.] #70
+    # # ================== 0.6-1.0 ==================
+    # low_bound      = [0.6,0.8] #30
+    # high_bound     = [0.8,1.] #70
 
     # write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
     #                 high_bound=high_bound, day_time=day_time,
     #                 energy_cor=energy_cor, method=method)
     # gc.collect()
 
-    for IGBP_type in IGBP_types:
+    # # for IGBP_type in IGBP_types:
 
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
+    # #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    # #                     high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
+    # #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    # #     gc.collect()
 
-    for clim_type in clim_types:
-        write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time, clim_type=clim_type,
-                        energy_cor=energy_cor, method=method) # clim_type=None,
-        gc.collect()
+    # # for clim_type in clim_types:
+    # #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    # #                     high_bound=high_bound, day_time=day_time, clim_type=clim_type,
+    # #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    # #     gc.collect()
+
+    # # ================== 0.4-0.6 ==================
+    # low_bound      = [0.4,0.6] #30
+    # high_bound     = [0.8,1.] #70
+
+    # write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    #                 high_bound=high_bound, day_time=day_time,
+    #                 energy_cor=energy_cor, method=method)
+    # gc.collect()
+
+    # for IGBP_type in IGBP_types:
+
+    #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    #                     high_bound=high_bound, day_time=day_time, IGBP_type=IGBP_type,
+    #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    #     gc.collect()
+
+    # for clim_type in clim_types:
+    #     write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    #                     high_bound=high_bound, day_time=day_time, clim_type=clim_type,
+    #                     energy_cor=energy_cor, method=method) # clim_type=None,
+    #     gc.collect()

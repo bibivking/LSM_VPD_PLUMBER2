@@ -24,45 +24,7 @@ def load_default_list():
     clim_types     = ['Af', 'Am', 'Aw', 'BSh', 'BSk', 'BWh', 'BWk', 'Cfa', 'Cfb', 'Csa', 'Csb', 'Cwa',
                       'Dfa', 'Dfb', 'Dfc', 'Dsb', 'Dsc', 'Dwa', 'Dwb', 'ET']
 
-    model_names_all = [ "1lin","3km27", "6km729","6km729lag",
-                        "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",
-                        "Manabe", "ManabeV2","PenmanMonteith",
-                        "CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                        "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                        "JULES_GL9_withLAI","JULES_test","MATSIRO",
-                        "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                        "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",
-                        "ACASA","LPJ-GUESS","MuSICA",
-                        "NASAEnt","QUINCY", "SDGVM",] #"BEPS"
-
-    model_names_select= ["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                         "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                         "JULES_GL9_withLAI","JULES_test","LPJ-GUESS",
-                         "MATSIRO","MuSICA","NASAEnt",
-                         "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                         "ORC3_r7245_NEE", "ORC3_r8120","QUINCY",
-                         "SDGVM","STEMMUS-SCOPE",] #"BEPS"
-
-    empirical_model  = ["1lin","3km27", "6km729","6km729lag",
-                        "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",]
-    hydrological_model  = ["Manabe", "ManabeV2","PenmanMonteith",]
-    land_surface_model=["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                        "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                        "JULES_GL9_withLAI","JULES_test","MATSIRO",
-                        "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                        "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",]
-    ecosystem_model  = ["ACASA","LPJ-GUESS","MuSICA",
-                        "NASAEnt","QUINCY", "SDGVM",]
-
-    model_names      = {
-                        'all_model': model_names_all,
-                        'model_select':model_names_select,
-                        'empirical_model':empirical_model,
-                        'hydrological_model':hydrological_model,
-                        'land_surface_model':land_surface_model,
-                        'ecosystem_model':ecosystem_model}
-
-    return site_names, IGBP_types, clim_types, model_names
+    return site_names, IGBP_types, clim_types
 
 
 def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
@@ -121,7 +83,7 @@ def smooth_vpd_series(values, window_size=11, order=3, smooth_type='S-G_filter',
         for j in np.arange(window_half,nx-window_half):
             vals_smooth[j] = np.nanmean(values[j-window_half:j+window_half])
         vals_smooth = np.roll(vals_smooth, 10, fill_value='NaN')
-    # elif
+    # elif 
 
     # elif len(np.shape(values))==2:
     #     nx              = len(values[:,0])
@@ -318,42 +280,40 @@ def set_model_colors():
 
     # file path
     model_colors = {
-                    'obs': 'black',
-                    'obs_cor': 'dimgrey',
-                    '1lin': 'lightcoral' ,
-                    '3km27': 'indianred',
-                    '6km729': 'firebrick',
-                    '6km729lag':'red',
-                    'LSTM_eb': 'coral',
-                    'LSTM_raw': 'pink',
-                    'RF_eb': 'tomato',
-                    'RF_raw': 'deeppink',
-                    'Manabe':'violet',
-                    'ManabeV2':'darkviolet',
-                    'PenmanMonteith': 'purple',
-                    'CABLE':'darkblue',
-                    'CABLE-POP-CN':'blue',
-                    'CHTESSEL_ERA5_3':'cornflowerblue',
-                    'CHTESSEL_Ref_exp1':'dodgerblue',
-                    'CLM5a':'deepskyblue',
-                    'GFDL':'c',
-                    'JULES_GL9_withLAI':'aquamarine',
-                    'JULES_test':'lightseagreen',
-                    'MATSIRO':'darkcyan',
-                    'NoahMPv401':'darkolivegreen',
-                    'ORC2_r6593':'forestgreen',
-                    'ORC2_r6593_CO2':'limegreen',
-                    'ORC3_r7245_NEE':'lime',
-                    'ORC3_r8120':'lightgreen',
-                    'STEMMUS-SCOPE':'yellowgreen',
-                    'ACASA':'yellow',
-                    'LPJ-GUESS':'orange',
-                    'MuSICA':'gold',
-                    'NASAEnt': 'goldenrod',
-                    'QUINCY':'peru',
-                    'SDGVM':'sandybrown',
-                    }
-
+                    "obs": 'black',
+                    "obs_cor": 'dimgrey',
+                    "1lin": 'lightcoral' ,
+                    "3km27": 'indianred',
+                    "6km729": 'brown',
+                    "6km729lag":'red',
+                    "LSTM_eb": 'lightsalmon',
+                    "LSTM_raw": 'rosybrown',
+                    "RF_eb": 'sienna',
+                    "RF_raw": 'tomato',
+                    "ACASA": 'peru',
+                    "CABLE": 'gold',
+                    "CABLE-POP-CN": 'orange',
+                    "CHTESSEL_ERA5_3": "olive",
+                    "CHTESSEL_Ref_exp1": "olivedrab",
+                    "CLM5a":"darkkhaki",
+                    "GFDL": "yellowgreen",
+                    "JULES_GL9_withLAI": "limegreen",
+                    "JULES_test": "forestgreen",
+                    "LPJ-GUESS": "turquoise",
+                    "Manabe": "lightseagreen",
+                    "ManabeV2": "darkcyan",
+                    "MATSIRO": "deepskyblue",
+                    "MuSICA": "dodgerblue",
+                    "NASAEnt": "blue",
+                    "NoahMPv401":"royalblue",
+                    "ORC2_r6593": "blueviolet",
+                    "ORC2_r6593_CO2":"violet",
+                    "ORC3_r7245_NEE":"fuchsia",
+                    "ORC3_r8120":"orchid",
+                    "PenmanMonteith": "purple",
+                    "QUINCY": "mediumvioletred",
+                    "SDGVM": "deeppink",
+                    "STEMMUS-SCOPE": "pink"}
 
     return model_colors
 

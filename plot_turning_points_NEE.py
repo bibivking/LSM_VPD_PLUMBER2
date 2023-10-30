@@ -100,7 +100,7 @@ if __name__ == "__main__":
     # Load site_names, IGBP_types, clim_types
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    var_name       = 'Qle'#'Qle'  #
+    var_name       = 'NEE'#'Qle'  #
     bin_by         = 'EF_model' #'EF_model' #'EF_model'
     day_time       = True
     energy_cor     = True
@@ -120,14 +120,14 @@ if __name__ == "__main__":
     file_names = [f'./txt/{var_name}_VPD_daytime_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_'+method+'_coarse.csv']
     case_names = ['all']
 
-    # for IGBP_type in IGBP_types:
-    #     file_names.append(f'./txt/{var_name}_VPD_daytime_IGBP='+IGBP_type+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_'+method+'_coarse.csv')
-    #     case_names.append(IGBP_type)
-    # message        = var_name+"_all_IGBP"
-    for clim_type in clim_types:
-        file_names.append(f'./txt/{var_name}_VPD_daytime_clim='+clim_type+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_'+method+'_coarse.csv')
-        case_names.append(clim_type)
-    message        = var_name+"_all_clim"
+    for IGBP_type in IGBP_types:
+        file_names.append(f'./txt/{var_name}_VPD_daytime_IGBP='+IGBP_type+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_'+method+'_coarse.csv')
+        case_names.append(IGBP_type)
+    message        = var_name+"_all_IGBP"
+    # for clim_type in clim_types:
+    #     file_names.append(f'./txt/{var_name}_VPD_daytime_clim='+clim_type+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_'+method+'_coarse.csv')
+    #     case_names.append(clim_type)
+    # message        = var_name+"_all_clim"
 
     turning_points = {}
     slopes         = {}

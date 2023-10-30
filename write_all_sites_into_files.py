@@ -54,7 +54,7 @@ def read_data(var_name, site_name, input_file):
             except:
                 var_output[model_in+'_EF'] = np.nan
 
-    # read obs values                
+    # read obs values
     if var_name == 'Qle' or var_name == 'Qh':
         var_output['obs'] = f.variables[f"obs_{var_name}"][:]
         model_out_list.append('obs')
@@ -96,7 +96,7 @@ def read_data(var_name, site_name, input_file):
     return var_output, model_out_list
 
 
-def calc_hours_after_precip(precip, valid_daily_precip=1):
+def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
 
     s2h     = 60*60
 
@@ -113,15 +113,24 @@ def calc_hours_after_precip(precip, valid_daily_precip=1):
     # check whether 24-h precipation pass the threshold
     valid_prec = np.where(prec_24 > valid_daily_precip, 1, 0)
 
-    # calcualte hours without precipitation 
+    # calcualte hours without precipitation
     accul_hours      = 0
-    hrs_after_precip = np.zeros(ntime)
+    half_hrs_after_precip = np.zeros(ntime)
 
     for t in np.arange(ntime):
         accul_hours         = np.where(valid_prec[t] == 1,  0, accul_hours+1)
-        hrs_after_precip[t] = accul_hours
+        half_hrs_after_precip[t] = accul_hours
+    
+    # Check the plot
+    if 0:
+        fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[8,6],sharex=True, sharey=False, squeeze=True) #
+        plot       = ax.plot(half_hrs_after_precip, lw=1.0, color='black', alpha=0.3)
+        plot       = ax.plot(prec_24*10, lw=1.0, color='green', alpha=0.5)
+        plot       = ax.plot(precip*s2h*10, lw=1.0, color='blue', alpha=0.5)
 
-    return hrs_after_precip
+        fig.savefig('./plots/check_'+site_name+'_rain_free_days.png',bbox_inches='tight',dpi=300) # '_30percent'
+
+    return half_hrs_after_precip
 
 def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path):
 
@@ -156,7 +165,7 @@ def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_pa
         var_output_tmp['climate_type'] = clim_class_dict[site_name]
 
         # Add hours after previous valid rainfall
-        var_output_tmp['hrs_after_precip'] = calc_hours_after_precip(var_output_tmp['obs_Precip'],valid_daily_precip=1) # No rain: Less than 1.0 mm, Light rain: 1.0 mm to 10.0 mm
+        var_output_tmp['half_hrs_after_precip'] = calc_hours_after_precip(var_output_tmp['obs_Precip'],valid_daily_precip=1,site_name=site_name) # No rain: Less than 1.0 mm, Light rain: 1.0 mm to 10.0 mm
 
         if i == 0:
             var_output         = var_output_tmp
@@ -192,5 +201,5 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'NEE'
+    var_name          = 'Qle'
     write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path)

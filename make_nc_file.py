@@ -491,6 +491,28 @@ def add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     return
 
+def add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file):
+
+    # Set input file path
+    file_path = glob.glob(PLUMBER2_met_path +"/*"+site_name+"*.nc")
+    f_in      = nc.Dataset(file_path[0])
+    SWdown    = f_in.variables['SWdown'][:]
+
+    f_in.close()
+
+    # SWdown                  = np.where(SWdown  < 0., np.nan, SWdown)
+    f_out                   = nc.Dataset(output_file,'r+')
+    shortwave               = f_out.createVariable('obs_SWdown', 'f4', ('CABLE_time'))
+    shortwave.standard_name = "obs_SWdown"
+    shortwave.long_name     = "Downward shortwave radiation"
+    shortwave.units         = "W/m^2"
+    shortwave[:]            = SWdown
+
+    f_out.close()
+
+    return
+
+
 
 def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
 
@@ -656,5 +678,8 @@ if __name__ == "__main__":
         # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
         # gc.collect()
 
-        add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
+
+        add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file)
         gc.collect()

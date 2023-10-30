@@ -13,6 +13,7 @@ from matplotlib import cm
 from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
+import resource
 
 def bin_VPD(var_plot, model_out_list):
 
@@ -129,26 +130,34 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
     if var_name in ['Qle','Qh'] and energy_cor:
         check_obs_cor = var_output['obs_cor']
         check_obs_cor.to_csv(f'./txt/check_obs_cor.csv')
-
+        print( 'Check point 2, np.any(~np.isnan(var_output["model_CABLE"]))=',
+                np.any(~np.isnan(var_output["model_CABLE"])) )
         cor_notNan_mask = ~ np.isnan(var_output['obs_cor'])
         var_output      = var_output[cor_notNan_mask]
-        
+        print( 'Check point 3, np.any(~np.isnan(var_output["model_CABLE"]))=',
+                np.any(~np.isnan(var_output["model_CABLE"])) )
+        # print('var_output["obs_EF"][:100] point 2', var_output["obs_EF"][:100])
+
     # whether only considers day time
     if day_time:
         # print('Check 1 var_output["hour"]', var_output['hour'])
 
-        # Use hours as threshold
-        # day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
-
-        # Use radiation as threshold
-        day_mask    = (var_output['obs_SWdown'] >= 5) 
+        day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
+        # print('np.any(day_mask)', np.any(day_mask))
+        # print('Check 2 var_output["hour"]', var_output[day_mask]['hour'])
+        # print('Check 3 var_output[~day_mask]', var_output[~day_mask]['hour'])
+        print('Check 3 np.unique(var_output[~day_mask]["site_name"])', np.unique(var_output[~day_mask]["site_name"]))
+        # print('Check 4 np.unique(var_output[~day_mask])', np.unique(var_output[~day_mask]['hour']))
+        print('Check 3 np.unique(var_output[day_mask]["site_name"])', np.unique(var_output[day_mask]["site_name"]))
 
         var_output  = var_output[day_mask]
         site_num    = len(np.unique(var_output["site_name"]))
         print('Point 2, site_num=',site_num)
 
-        check_site = var_output[ var_output['site_name']=='CA-NS1']
-
+        check_site = var_output[ var_output['site_name']=='AR-SLu']#'CA-NS1']
+        # print("np.any((check_site['hour'] >= 9) & (check_site['hour'] <= 16))",np.any((check_site['hour'] >= 9) & (check_site['hour'] <= 16)))
+        print("np.unique(check_site['hour'])",np.unique(check_site['hour']))
+        print("np.unique(check_site['time'])",np.unique(check_site['time']))
     # whether only considers summers
     if summer_time:
         summer_mask = (var_output['month'] > 11) | (var_output['month']< 3)
@@ -411,11 +420,18 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
 
 
 if __name__ == "__main__":
+    
+    # Check memory
+    # Get the maximum amount of memory that the process can use
+    max_memory = resource.getrlimit(resource.RLIMIT_RSS)[1]
+
+    # Print the maximum amount of memory
+    print("Maximum memory usage: {} MB".format(max_memory / 1024 / 1024))
 
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
 
-    var_name       = 'NEE'  #'TVeg'
+    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     site_names, IGBP_types, clim_types = load_default_list()
 
