@@ -32,8 +32,8 @@ def calc_stat(data_in):
     P25         = pd.Series(data_in).quantile(0.25)
     P75         = pd.Series(data_in).quantile(0.75)
     IQR         = P75-P25
-    Minimum     = P25 - 1.5*IQR # the lowest data point excluding any outliers.
-    Maximum     = P75 + 1.5*IQR # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
+    Minimum     = pd.Series(data_in).quantile(0.05) #pd.Series(data_in).min() #P25 - 1.5*IQR # the lowest data point excluding any outliers.
+    Maximum     = pd.Series(data_in).quantile(0.95) #pd.Series(data_in).max() #P75 + 1.5*IQR # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
     print("Median ", Median)
     print("P25 ", P25)
     print("P75 ", P75)
@@ -191,13 +191,16 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
     print('Finish dividing dry and wet periods')
 
     # ============ Choosing fitting or binning ============
-    box_metrics = {}
-    for model_out_name in model_out_list:
+    for i, model_out_name in enumerate(model_out_list):
         if 'obs' in model_out_name:
             head = ''
         else:
             head = 'model_'
-        box_metrics[model_out_name] = [calc_stat(var_output[head+model_out_name])]
+        if i == 0:
+            box_metrics = pd.DataFrame({model_out_name: np.array(calc_stat(var_output[head+model_out_name]))})
+        else:
+            box_metrics[model_out_name] = np.array(calc_stat(var_output[head+model_out_name]))
+
     print(box_metrics)
 
     # ============ Set the output file name ============
@@ -214,9 +217,9 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
 
     # save data
     if bounds[1] > 1:
-        box_metrics.to_csv(f'./txt/{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
+        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
     else:
-        box_metrics.to_csv(f'./txt/{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
+        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
             
     return
 
@@ -225,18 +228,40 @@ if __name__ == '__main__':
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
 
-    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
     day_time       = True
     energy_cor     = False
 
-    if var_name == 'NEE':
-        energy_cor     = False
+    # if var_name == 'NEE':
+    #     energy_cor     = False
 
-    # # ================== 0-0.4 ==================
+    # ================== 0-0.4 ==================
+    var_name    = 'Qle'  #'TVeg'
     bounds      = [0,0.2] #30
+    
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  day_time=day_time, energy_cor=energy_cor)
+    gc.collect()
+
+
+    var_name    = 'NEE'  #'TVeg'
+    bounds      = [0,0.2] #30
+    
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  day_time=day_time, energy_cor=energy_cor)
+    gc.collect()
+
+    var_name    = 'Qle'  #'TVeg'
+    bounds      = [0.8,1.0] #30
+    
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  day_time=day_time, energy_cor=energy_cor)
+    gc.collect()
+
+    var_name    = 'NEE'  #'TVeg'
+    bounds      = [0.8,1.0] #30
     
     write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
                   day_time=day_time, energy_cor=energy_cor)

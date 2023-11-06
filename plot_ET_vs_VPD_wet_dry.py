@@ -166,7 +166,6 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
         wet_vals_bot       = var_wet[model_out_name+'_bot'][wet_above_200]
         wet_vals_top       = var_wet[model_out_name+'_top'][wet_above_200]
 
-
         if (var_name=='NEE'):
             # Unify NEE units : upwards CO2 movement is positive values
             if  model_out_name in ['GFDL','NoahMPv401','STEMMUS-SCOPE','ACASA']:

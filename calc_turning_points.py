@@ -264,8 +264,8 @@ def find_turning_points_by_piecewise_regression(model_out_list, vpd_series, vals
             turning_points[model_out_name] = [-9999., np.nan]
             slopes[model_out_name]          = [np.nan,np.nan]
 
-    print('turning_points',turning_points)
-    print('slopes',slopes)
+    # print('turning_points',turning_points)
+    # print('slopes',slopes)
 
     return turning_points, slopes
 
