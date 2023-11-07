@@ -21,29 +21,35 @@ import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 # from check_vars import check_variable_exists
 
-def calc_stat(data_in):
+def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile=0.95):
 
     # Delete nan values
     notNan_mask = ~ np.isnan(data_in)
     data_in     = data_in[notNan_mask]
-    
+
     # calculate statistics
     Median      = pd.Series(data_in).median()
     P25         = pd.Series(data_in).quantile(0.25)
     P75         = pd.Series(data_in).quantile(0.75)
     IQR         = P75-P25
-    Minimum     = pd.Series(data_in).quantile(0.05) #pd.Series(data_in).min() #P25 - 1.5*IQR # the lowest data point excluding any outliers.
-    Maximum     = pd.Series(data_in).quantile(0.95) #pd.Series(data_in).max() #P75 + 1.5*IQR # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
-    print("Median ", Median)
-    print("P25 ", P25)
-    print("P75 ", P75)
-    print("IQR ", IQR)
-    print("Minimum ", Minimum)
-    print("Maximum ", Maximum)
+    if outlier_method=='IQR':
+        Minimum     = P25 - 1.5*IQR # pd.Series(data_in).quantile(0.05) # # the lowest data point excluding any outliers.
+        Maximum     = P75 + 1.5*IQR #pd.Series(data_in).quantile(0.95) # # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
+    elif outlier_method=='percentile':
+        Minimum     = pd.Series(data_in).quantile(min_percentile) # # the lowest data point excluding any outliers.
+        Maximum     = pd.Series(data_in).quantile(max_percentile) # # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
+
+    # print("Median ", Median)
+    # print("P25 ", P25)
+    # print("P75 ", P75)
+    # print("IQR ", IQR)
+    # print("Minimum ", Minimum)
+    # print("Maximum ", Maximum)
 
     return Median, P25, P75, Minimum, Maximum
 
 def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, bounds=30,
+                  outlier_method='IQR', min_percentile=0.05, max_percentile=0.95,
                   day_time=False, summer_time=False, IGBP_type=None,
                   clim_type=None, energy_cor=False,
                   hours_precip_free=None):
@@ -86,11 +92,11 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
 
         cor_notNan_mask = ~ np.isnan(var_output['obs_cor'])
         var_output      = var_output[cor_notNan_mask]
-        
+
     # whether only considers day time
     if day_time:
         # Use radiation as threshold
-        day_mask    = (var_output['obs_SWdown'] >= 5) 
+        day_mask    = (var_output['obs_SWdown'] >= 5)
         var_output  = var_output[day_mask]
         site_num    = len(np.unique(var_output["site_name"]))
 
@@ -197,9 +203,9 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
         else:
             head = 'model_'
         if i == 0:
-            box_metrics = pd.DataFrame({model_out_name: np.array(calc_stat(var_output[head+model_out_name]))})
+            box_metrics = pd.DataFrame({model_out_name: np.array(calc_stat(var_output[head+model_out_name], outlier_method=outlier_method))})
         else:
-            box_metrics[model_out_name] = np.array(calc_stat(var_output[head+model_out_name]))
+            box_metrics[model_out_name] = np.array(calc_stat(var_output[head+model_out_name], outlier_method=outlier_method))
 
     print(box_metrics)
 
@@ -217,20 +223,20 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
 
     # save data
     if bounds[1] > 1:
-        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
+        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
     else:
-        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
-            
+        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
+
     return
 
 if __name__ == '__main__':
 
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
-
+ 
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     site_names, IGBP_types, clim_types, model_names = load_default_list()
-
+    outlier_method ='percentile'
     day_time       = True
     energy_cor     = False
 
@@ -240,29 +246,40 @@ if __name__ == '__main__':
     # ================== 0-0.4 ==================
     var_name    = 'Qle'  #'TVeg'
     bounds      = [0,0.2] #30
-    
-    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                  day_time=day_time, energy_cor=energy_cor)
-    gc.collect()
 
+    # for IGBP_type in IGBP_types:
+    for clim_type in clim_types:
+        write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                      outlier_method=outlier_method,
+                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+        gc.collect()
 
     var_name    = 'NEE'  #'TVeg'
     bounds      = [0,0.2] #30
-    
-    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                  day_time=day_time, energy_cor=energy_cor)
-    gc.collect()
+
+    # for IGBP_type in IGBP_types:
+    for clim_type in clim_types:
+        write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                      outlier_method=outlier_method,
+                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+        gc.collect()
 
     var_name    = 'Qle'  #'TVeg'
     bounds      = [0.8,1.0] #30
-    
-    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                  day_time=day_time, energy_cor=energy_cor)
-    gc.collect()
+
+    # for IGBP_type in IGBP_types:
+    for clim_type in clim_types:
+        write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                      outlier_method=outlier_method,
+                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+        gc.collect()
 
     var_name    = 'NEE'  #'TVeg'
     bounds      = [0.8,1.0] #30
-    
-    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                  day_time=day_time, energy_cor=energy_cor)
-    gc.collect()
+
+    # for IGBP_type in IGBP_types:
+    for clim_type in clim_types:
+        write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                      outlier_method=outlier_method,
+                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+        gc.collect()

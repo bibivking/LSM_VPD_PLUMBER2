@@ -8,10 +8,39 @@ import codecs
 import numpy as np
 import xarray as xr
 import pandas as pd
+from scipy.interpolate import griddata
 from pygam import LinearGAM, PoissonGAM
 from scipy import stats, interpolate
 from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
+
+
+def calculate_VPD_by_RH(rh, tair):
+
+    '''
+    calculate vpd
+    '''
+    print('calculating VPD')
+    # set nan values
+    rh   = np.where(rh<-1.,np.nan,rh)
+    tair = np.where(tair<-100.,np.nan,tair)
+
+    DEG_2_KELVIN = 273.15
+    PA_TO_KPA    = 0.001
+
+    # convert back to Pa
+    # tair         -= DEG_2_KELVIN
+
+    # saturation vapor pressure
+    es = 100.0 * 6.112 * np.exp((17.67 * tair) / (243.5 + tair))
+
+    # actual vapor pressure
+    ea = rh/100. * es
+
+    vpd = (es - ea) * PA_TO_KPA
+    # vpd = np.where(vpd < 0.05, 0.05, vpd)
+
+    return vpd
 
 def load_default_list():
 
@@ -63,7 +92,6 @@ def load_default_list():
                         'ecosystem_model':ecosystem_model}
 
     return site_names, IGBP_types, clim_types, model_names
-
 
 def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
 
@@ -136,7 +164,6 @@ def smooth_vpd_series(values, window_size=11, order=3, smooth_type='S-G_filter',
     #                 vals_smooth[i,j] = np.nanmean(values[i,j-window_half:j+window_half])
 
     return vals_smooth
-
 
 def check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):
 
@@ -314,6 +341,50 @@ def read_climate_class(lat, lon):
 
     return class_name[int(climate_class)-1]
 
+def regrid_data(lat_in, lon_in, lat_out, lon_out, input_data, method='linear',threshold=None):
+
+    if len(np.shape(lat_in)) == 1:
+        lon_in_2D, lat_in_2D = np.meshgrid(lon_in,lat_in)
+        lon_in_1D            = np.reshape(lon_in_2D,-1)
+        lat_in_1D            = np.reshape(lat_in_2D,-1)
+    elif len(np.shape(lat_in)) == 2:
+        lon_in_1D            = np.reshape(lon_in,-1)
+        lat_in_1D            = np.reshape(lat_in,-1)
+    else:
+        print("ERROR: lon_in has ", len(np.shape(lat_in)), "dimensions")
+
+    if len(np.shape(lat_out)) == 1:
+        lon_out_2D, lat_out_2D = np.meshgrid(lon_out,lat_out)
+    elif len(np.shape(lat_out)) == 2:
+        lon_out_2D            = lon_out
+        lat_out_2D            = lat_out
+    else:
+        print("ERROR: lon_out has ", len(np.shape(lat_in)), "dimensions")
+
+    value_tmp = np.reshape(input_data,-1)
+
+    # Check NaN - input array shouldn't have NaN
+    if threshold is None:
+        mask_values     = ~np.isnan(value_tmp)
+    else:
+        #print("np.all([~np.isnan(value_tmp),value_tmp>threshold],axis=0) ",np.all([~np.isnan(value_tmp),value_tmp>threshold],axis=0))
+        mask_values     = np.all([~np.isnan(value_tmp),value_tmp>threshold],axis=0)
+
+    value     = value_tmp[mask_values]
+    # ======= CAUTION =======
+    lat_in_1D = lat_in_1D[mask_values]  # here I make nan in values as the standard
+    lon_in_1D = lon_in_1D[mask_values]
+    #print("shape value = ", np.shape(value))
+    #print("shape lat_in_1D = ", np.shape(lat_in_1D))
+    #print("shape lon_in_1D = ", np.shape(lon_in_1D))
+    # =======================
+    #print("value =",value)
+    #print("lat_in_1D =",lat_in_1D)
+    #print("lon_in_1D =",lon_in_1D)
+    Value = griddata((lon_in_1D, lat_in_1D), value, (lon_out_2D, lat_out_2D), method=method)
+
+    return Value
+
 def set_model_colors():
 
     # file path
@@ -325,9 +396,9 @@ def set_model_colors():
                     'CHTESSEL_Ref_exp1':'c',
                     'CLM5a':'deepskyblue',
                     'GFDL':'aquamarine',
-                    'JULES_GL9_withLAI':'lightseagreen',
-                    'JULES_test':'darkolivegreen',
-                    'LPJ-GUESS':'forestgreen',
+                    'JULES_GL9_withLAI':'lime',
+                    'JULES_test':'forestgreen',
+                    'LPJ-GUESS':'darkolivegreen',
                     'MATSIRO':'limegreen',
                     'MuSICA':'yellowgreen',
                     'NASAEnt':'yellow'  ,
@@ -339,7 +410,7 @@ def set_model_colors():
                     'QUINCY':'deeppink',
                     'SDGVM':'violet' ,
                     'STEMMUS-SCOPE':'darkviolet' ,
-                    }    
+                    }
 
     # model_colors = {
     #                 'obs': 'black',
