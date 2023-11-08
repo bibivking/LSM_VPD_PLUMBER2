@@ -202,5 +202,5 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'NEE'
+    var_name          = 'Qle'
     write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path)

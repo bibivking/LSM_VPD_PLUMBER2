@@ -415,7 +415,7 @@ if __name__ == "__main__":
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
 
-    var_name       = 'NEE'  #'TVeg'
+    var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
