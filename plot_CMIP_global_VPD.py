@@ -182,13 +182,115 @@ def calculate_model_mean_land_VPD(CMIP6_data_path, CMIP6_out_path, scenario, mod
         data_out['VPD_top']   = VPD_top
         data_out['VPD_bot']   = VPD_bot
 
-        data_out.to_csv(f'./txt/{model_name}_VPD_{scenario}_global_land.csv')
+        data_out.to_csv(f'./txt/CMIP6/{model_name}_VPD_{scenario}_global_land.csv')
 
         f_hurs.close()
         f_tas.close()
         f_mask.close()
 
         gc.collect()
+    return
+
+def calculate_model_VPD_metrics(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list, time_s, time_e,
+                                region=None, region_name='AU'):
+
+    # select the site information from each CMIP6 file
+    for j, model_name in enumerate(model_out_list):
+        print('model_name',model_name)
+
+        file_hurs   = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hurs/{model_name}/*/*.nc'))[0]
+        file_tas    = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/tas/{model_name}/*/*.nc'))[0]
+        file_mask   = CMIP6_out_path + model_name + '_landsea_mask.nc'
+
+        # Get model name
+        f_hurs   = nc.Dataset(file_hurs, mode='r')
+        f_tas    = nc.Dataset(file_tas, mode='r')
+
+        rh       = f_hurs.variables['hurs'][:]
+        tair     = f_tas.variables['tas'][:]
+        VPD_tmp  = calculate_VPD_by_RH(rh, tair)
+
+        # Read lat and lon
+        try:
+            latitude  = f_hurs.variables['lat'][:]
+            longitude = f_hurs.variables['lon'][:]
+        except:
+            latitude  = f_hurs.variables['latitude'][:]
+            longitude = f_hurs.variables['longitude'][:]
+
+        # Get land sea mask
+        f_mask          = nc.Dataset(file_mask, mode='r')
+        landsea         = f_mask.variables['landsea'][:]
+
+        # Read time
+        time_tmp  = nc.num2date(f_hurs.variables['time'][:],f_hurs.variables['time'].units,
+                    only_use_cftime_datetimes=False, calendar=f_hurs.variables['time'].calendar) # only_use_python_datetimes=True,
+
+        f_hurs.close()
+        f_tas.close()
+        f_mask.close()
+
+        # To solve the inconsistancy in time coordinate
+        for i, t in enumerate(time_tmp):
+            year   = t.year
+            month  = t.month
+            day    = t.day
+            hour   = t.hour
+            minute = t.minute
+            second = t.second
+            microsecond    = t.microsecond
+            time_tmp[i]    = datetime(year, month, day, hour, minute, second, microsecond)
+            VPD_tmp[i,:,:] = np.where(landsea == 0, VPD_tmp[i,:,:], np.nan)
+
+        # select time periods
+        time_cood = time_mask(time_tmp, time_s, time_e)
+
+        # make new time cooridate
+        time      = time_tmp[time_cood]
+
+        # select region
+        if region != None:
+            lat_mask  = (latitude > region[0][0]) & (latitude < region[0][1])
+            lon_mask  = (longitude > region[1][0]) & (longitude < region[1][1])
+
+            lon_mask_2D, lat_mask_2D = np.meshgrid(lon_mask,lat_mask)
+            # Read variable
+            lat_lon_mask = lon_mask_2D & lat_mask_2D
+            VPD          = VPD_tmp[time_cood]
+            ntime        = len(VPD[:,0,0])
+            for t in np.arange(ntime):
+                VPD[t,:,:]=np.where(lat_lon_mask,VPD[t,:,:],np.nan)
+        else:
+            VPD       = VPD_tmp[time_cood,:,:]
+
+        if j == 0:
+            VPD_all = np.zeros((len(model_out_list)+1,len(time)))
+        VPD_all[j,:]= np.nanmean(VPD, axis=(1,2))
+
+        mask_temp = ~ np.isnan(VPD)
+        VPD_mean  = np.nanmean(VPD)
+        VPD_std   = np.nanstd(VPD)
+        VPD_5     = np.percentile(VPD[mask_temp], 5)
+        VPD_25    = np.percentile(VPD[mask_temp], 25)
+        VPD_75    = np.percentile(VPD[mask_temp], 75)
+        VPD_95    = np.percentile(VPD[mask_temp], 95)
+        if j ==0:
+            VPD_metrics = pd.DataFrame({model_name: np.array([VPD_mean, VPD_std, VPD_5, VPD_25, VPD_75, VPD_95])})
+        else:
+            VPD_metrics[model_name] = np.array([VPD_mean, VPD_std, VPD_5, VPD_25, VPD_75, VPD_95])
+
+    # Calculate global mean
+    VPD_mean  = np.nanmean(VPD_all)
+    VPD_std   = np.nanstd(VPD_all)
+    VPD_5     = np.percentile(VPD_all, 5)
+    VPD_25    = np.percentile(VPD_all, 25)
+    VPD_75    = np.percentile(VPD_all, 75)
+    VPD_95    = np.percentile(VPD_all, 95)
+    VPD_metrics['all_model'] = np.array([VPD_mean, VPD_std, VPD_5, VPD_25, VPD_75, VPD_95])
+    if region_name!=None:
+        VPD_metrics.to_csv(f'./txt/CMIP6/VPD_{scenario}_global_land_metrics_'+region_name+'.csv')
+    else:
+        VPD_metrics.to_csv(f'./txt/CMIP6/VPD_{scenario}_global_land_metrics.csv')
     return
 
 def calculate_future_VPD_warming_level(CMIP6_out_path):
@@ -256,7 +358,7 @@ def calculate_future_VPD_warming_level(CMIP6_out_path):
         else:
             metrics[warming_level] = [Mean,Percentile_75,Percentile_25, Percentile_95, Percentile_5]
 
-    metrics.to_csv('./txt/metrics_land_VPD_at_different_warming_levels.csv')
+    metrics.to_csv('./txt/CMIP6/metrics_land_VPD_at_different_warming_levels.csv')
 
     return
 
@@ -265,7 +367,7 @@ def plot_VPD_time_series(model_out_list, scenarios):
     # ============ Setting for plotting ============
     cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
 
-    fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[10,6],sharex=False, sharey=False, squeeze=True) #
+    fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[6,4],sharex=False, sharey=False, squeeze=True) #
     # fig, ax = plt.subplots(figsize=[10, 7])
     # plt.subplots_adjust(wspace=0.09, hspace=0.02)
 
@@ -300,14 +402,15 @@ def plot_VPD_time_series(model_out_list, scenarios):
     # ============== read data ==============
     colors       = {'historical':'black', 'ssp126':'forestgreen','ssp245':'orange','ssp585':'darkred'}
 
-    for scenario in scenarios:
+    labels       = ['historical', 'ssp126','ssp245','ssp585']
+    for s, scenario in enumerate(scenarios):
 
         # Set color
         line_color = colors[scenario]
 
         for i, model_name in enumerate(model_out_list):
 
-            VPD_values = pd.read_csv(f'./txt/{model_name}_VPD_{scenario}_global_land.csv')
+            VPD_values = pd.read_csv(f'./txt/CMIP6/{model_name}_VPD_{scenario}_global_land.csv')
 
             ntime      = len(VPD_values)
             nyear      = int(ntime/12)
@@ -332,13 +435,13 @@ def plot_VPD_time_series(model_out_list, scenarios):
             vpd_all_models[i,:] = vpd
 
         # plot the model emsemble
-        plot = ax.plot(time_series, np.mean(vpd_all_models,axis=0), lw=2.0, color=line_color, alpha=1.0)
+        plot = ax.plot(time_series, np.mean(vpd_all_models,axis=0), lw=2.0, color=line_color, alpha=1.0, label=labels[s])
 
         # ===== Drawing the box whisker =====
         if 1:
             warming_levels = ['baseline_1990_2019','1deg','2deg']
             line_colors    = ['black','tomato','firebrick']
-            metric_file    = './txt/metrics_land_VPD_at_different_warming_levels.csv'
+            metric_file    = './txt/CMIP6/metrics_land_VPD_at_different_warming_levels.csv'
 
             box_metrics    = pd.read_csv(metric_file)
 
@@ -368,8 +471,7 @@ def plot_VPD_time_series(model_out_list, scenarios):
                 ax.plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p75, maximum], color = almost_black, linewidth=0.5)
                 ax.plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p25, minimum], color = almost_black, linewidth=0.5)
 
-        # ax.legend(fontsize=8, frameon=False, ncol=3)
-
+    ax.legend(fontsize=10, frameon=False)
     ax.set_xticks([1900,1910,1920,1930,1940,1950,1960,1970,1980, 1990,2000,2010,2020,2030,2040,2050,2060,2070,2080,2090,2100, 2105, 2115, 2125])
     ax.set_xticklabels(['1900','1910','1920','1930','1940','1950','1960','1970','1980', '1990','2000',
                         '2010','2020','2030','2040','2050','2060','2070','2080','2090','2100',
@@ -390,20 +492,48 @@ if __name__ == "__main__":
     CMIP6_data_path   = "/g/data/w97/amu561/CMIP6_for_Mengyuan/Processed_CMIP6_data/"
     CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6/"
     scenarios         = ['historical','ssp126','ssp245','ssp585']
-
+    region            = [[-44,-10], [112,154]]
+    region_name       = 'AU'
     # get file names
     file_names           = {}
     file_names_scenario  = {}
 
 
+    # # read CMIP6 data
+    # for scenario in scenarios:
+    #
+    #     if scenario == 'historical':
+    #         time_s             = datetime(1900,1,1,0,0,0)
+    #         time_e             = datetime(2015,1,1,0,0,0)
+    #     else:
+    #         time_s             = datetime(2015,1,1,0,0,0)
+    #         time_e             = datetime(2100,1,1,0,0,0)
+
+    #     file_names_scenario = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hurs/*/*/*.nc'))
+    #
+    #     model_out_list      = []
+    #     for file_name in file_names_scenario:
+    #         model_out_name = file_name.split("/")[9]
+    #         if model_out_name in ['NorESM2-LM','CESM2-WACCM']:
+    #             print('Ignore ',model_out_name,'since different time cooridate in Tair and RH')
+    #         else:
+    #             model_out_list.append(model_out_name)
+    #
+    #     # make_landsea_mask_file(CMIP6_data_path, CMIP6_out_path, model_out_list)
+    #     # calculate_model_mean_land_VPD(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list)
+    #
+    # calculate_future_VPD_warming_level(CMIP6_out_path)
+    # plot_VPD_time_series(model_out_list, scenarios)
+    #
+
     # read CMIP6 data
     for scenario in scenarios:
 
         if scenario == 'historical':
-            time_s             = datetime(1900,1,1,0,0,0)
+            time_s             = datetime(1985,1,1,0,0,0)
             time_e             = datetime(2015,1,1,0,0,0)
         else:
-            time_s             = datetime(2015,1,1,0,0,0)
+            time_s             = datetime(2070,1,1,0,0,0)
             time_e             = datetime(2100,1,1,0,0,0)
 
         file_names_scenario = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hurs/*/*/*.nc'))
@@ -415,9 +545,6 @@ if __name__ == "__main__":
                 print('Ignore ',model_out_name,'since different time cooridate in Tair and RH')
             else:
                 model_out_list.append(model_out_name)
-
-        # make_landsea_mask_file(CMIP6_data_path, CMIP6_out_path, model_out_list)
-        # calculate_model_mean_land_VPD(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list)
-
-    calculate_future_VPD_warming_level(CMIP6_out_path)
-    plot_VPD_time_series(model_out_list, scenarios)
+        print('model_out_list',model_out_list)
+        calculate_model_VPD_metrics(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list, time_s, time_e,
+                                    region=region, region_name=region_name)

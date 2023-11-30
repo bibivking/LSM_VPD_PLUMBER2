@@ -52,6 +52,8 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
                   outlier_method='IQR', min_percentile=0.05, max_percentile=0.95,
                   day_time=False, summer_time=False, IGBP_type=None,
                   clim_type=None, energy_cor=False,
+                  clarify_site={'opt':False,'remove_site':None}, standardize=None,
+                  remove_strange_values=True,
                   hours_precip_free=None):
 
     '''
@@ -61,7 +63,7 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
     '''
 
     # ========== read the data ==========
-    var_output    = pd.read_csv(f'./txt/{var_name}_all_sites.csv',na_values=[''])
+    var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv',na_values=[''])
 
     # Using AR-SLu.nc file to get the model namelist
     f             = nc.Dataset(PLUMBER2_path+"/AR-SLu.nc", mode='r')
@@ -92,6 +94,18 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
 
         cor_notNan_mask = ~ np.isnan(var_output['obs_cor'])
         var_output      = var_output[cor_notNan_mask]
+
+    if remove_strange_values:
+        for model_out_name in model_out_list:
+            print('Checking strange values in', model_out_name)
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            var_output[head+model_out_name] = np.where(np.any([var_output[head+model_out_name]>999.,
+                                                       var_output[head+model_out_name]<-999.],axis=0),
+                                                       np.nan, var_output[head+model_out_name])
+            print('np.any(np.isnan(var_output[head+model_out_name]))',np.any(np.isnan(var_output[head+model_out_name])))
 
     # whether only considers day time
     if day_time:
@@ -132,6 +146,85 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
         print('Point 6, site_num=',site_num)
 
     print('Finish selecting data')
+
+    # To exclude the sites have rainfall input problems
+    if clarify_site['opt']:
+
+        length    = len(var_output)
+        site_mask = np.full(length,True)
+
+        for site_remove in clarify_site['remove_site']:
+            site_mask = np.where(var_output['site_name'] == site_remove, False, site_mask)
+        print('site_mask',site_mask)
+
+        # site_mask = ~(var_output['site_name'] in clarify_site['remove_site'])
+        var_output  = var_output[site_mask]
+        site_num    = len(np.unique(var_output["site_name"]))
+        print('Point 7, site_num=',site_num)
+
+    print( 'Check point 4, np.any(~np.isnan(var_output["model_CABLE"]))=',
+           np.any(~np.isnan(var_output["model_CABLE"])) )
+
+    print('Finish selecting data')
+
+    if var_name == 'NEE':
+        for model_out_name in model_out_list:
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            if (model_out_name == 'GFDL') | (model_out_name == 'NoahMPv401') | (model_out_name =='STEMMUS-SCOPE') | (model_out_name =='ACASA'):
+                print('model_out_name=',model_out_name,'in GFDL, NoahMPv401, STEMMUS-SCOPE,ACASA')
+                values = var_output[head+model_out_name]
+            else:
+                values = var_output[head+model_out_name]*(-1)
+            var_output[head+model_out_name] = values
+
+    if standardize == 'by_obs_mean':
+
+        print('standardized_by_obs_mean')
+
+        # Get all sites left
+        sites_left    = np.unique(var_output["site_name"])
+
+        # Initialize the variable of the mean of the left observation for each left site
+        site_obs_mean = {}
+
+        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+        for site in sites_left:
+
+            # Get the mask of this site
+            site_mask_tmp       = (var_output['site_name'] == site)
+
+            # Mask the dataframe to get slide of the dataframe for this site
+            var_tmp             = var_output[site_mask_tmp]
+
+            # Calculate site obs mean
+            site_obs_mean[site] = np.nanmean(var_tmp['obs'])
+
+            # Standardize the different model's values by the obs mean for this site
+            for i, model_out_name in enumerate(model_out_list):
+                if 'obs' in model_out_name:
+                    head = ''
+                else:
+                    head = 'model_'
+                var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_mean[site]
+
+        print('site_obs_mean',site_obs_mean)
+
+    elif standardize == 'by_LAI':
+
+        print('standardized_by_LAI')
+
+        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+        for i, model_out_name in enumerate(model_out_list):
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            var_output[head+model_out_name] = np.where( var_output['obs_LAI'] != 0 ,
+                                                        var_output[head+model_out_name]/var_output['obs_LAI'],
+                                                        np.nan )
 
     # ========== Divide dry and wet periods ==========
 
@@ -221,11 +314,31 @@ def write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=None, 
     if clim_type !=None:
         message = message + '_clim='+clim_type
 
+    if standardize != None:
+        message = message + '_standardized_'+standardize
+
+    if clarify_site['opt']:
+        message = message + '_clarify_site'
+
+    # save data
+    if var_name == 'NEE':
+        var_name = 'NEP'
+
+    folder_name='original'
+
+    if standardize != None:
+        folder_name='standardized_'+standardize
+
+    if clarify_site['opt']:
+        folder_name = folder_name+'_clarify_site'
+
     # save data
     if bounds[1] > 1:
-        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
+        box_metrics.to_csv(f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/boxplot_metrics_{var_name}_VPD'
+                            +message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'th_coarse.csv')
     else:
-        box_metrics.to_csv(f'./txt/boxplot_metrics_{var_name}_VPD'+message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
+        box_metrics.to_csv(f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/boxplot_metrics_{var_name}_VPD'
+                            +message+'_'+bin_by+'_outlier_by_'+outlier_method+'_'+str(bounds[0])+'-'+str(bounds[1])+'_coarse.csv')
 
     return
 
@@ -233,12 +346,18 @@ if __name__ == '__main__':
 
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
- 
+
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     site_names, IGBP_types, clim_types, model_names = load_default_list()
     outlier_method ='percentile'
     day_time       = True
     energy_cor     = False
+
+    clarify_site   = {'opt': True,
+                     'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                     'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+    standardize    = 'by_LAI'#'by_obs_mean'
+
 
     # if var_name == 'NEE':
     #     energy_cor     = False
@@ -246,40 +365,52 @@ if __name__ == '__main__':
     # ================== 0-0.4 ==================
     var_name    = 'Qle'  #'TVeg'
     bounds      = [0,0.2] #30
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                  day_time=day_time, energy_cor=energy_cor) #IGBP_type=IGBP_type)
+    gc.collect()
 
-    # for IGBP_type in IGBP_types:
-    for clim_type in clim_types:
+    for IGBP_type in IGBP_types:
         write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                      outlier_method=outlier_method,
-                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+                      outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                      day_time=day_time, energy_cor=energy_cor,IGBP_type=IGBP_type)
         gc.collect()
 
     var_name    = 'NEE'  #'TVeg'
     bounds      = [0,0.2] #30
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                  day_time=day_time, energy_cor=energy_cor) #IGBP_type=IGBP_type)
+    gc.collect()
 
-    # for IGBP_type in IGBP_types:
-    for clim_type in clim_types:
+    for IGBP_type in IGBP_types:
         write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                      outlier_method=outlier_method,
-                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+                      outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                      day_time=day_time, energy_cor=energy_cor,IGBP_type=IGBP_type)
         gc.collect()
+
 
     var_name    = 'Qle'  #'TVeg'
     bounds      = [0.8,1.0] #30
-
-    # for IGBP_type in IGBP_types:
-    for clim_type in clim_types:
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                  day_time=day_time, energy_cor=energy_cor) #IGBP_type=IGBP_type)
+    gc.collect()
+    for IGBP_type in IGBP_types:
         write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                      outlier_method=outlier_method,
-                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+                      outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                      day_time=day_time, energy_cor=energy_cor,IGBP_type=IGBP_type)
         gc.collect()
 
     var_name    = 'NEE'  #'TVeg'
     bounds      = [0.8,1.0] #30
 
-    # for IGBP_type in IGBP_types:
-    for clim_type in clim_types:
+    write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
+                  outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                  day_time=day_time, energy_cor=energy_cor) #IGBP_type=IGBP_type)
+    gc.collect()
+    for IGBP_type in IGBP_types:
         write_var_boxplot_metrics(var_name, site_names, PLUMBER2_path, bin_by=bin_by, bounds=bounds,
-                      outlier_method=outlier_method,
-                      day_time=day_time, energy_cor=energy_cor,clim_type=clim_type) #IGBP_type=IGBP_type)
+                      outlier_method=outlier_method,clarify_site=clarify_site,standardize=standardize,
+                      day_time=day_time, energy_cor=energy_cor,IGBP_type=IGBP_type)
         gc.collect()

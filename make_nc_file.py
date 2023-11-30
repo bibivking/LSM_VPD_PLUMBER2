@@ -46,11 +46,12 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # Set input file path
             file_path      = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
             # print('j=',j, "model_name=",model_name, 'file_path=',file_path)
-
+            # print('file_path==None 1',file_path==None)
             # Change var_name for the different models
             var_name_tmp   = var_name_dict[model_name]
             # print('len(var_name_tmp)',len(var_name_tmp))
 
+            # if the input file exist
             # Open input file
             f = nc.Dataset(file_path[0])
 
@@ -101,12 +102,12 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                     # initlize Var_tmp_tmp
                     Var_tmp_tmp = Var_tmp[:,0]*patchfrac[0]
 
-                    # calculate the patch fraction weighted pixel value
+                    # calculate the patch fractioqn weighted pixel value
                     for i in np.arange(1,patch):
                         Var_tmp_tmp = Var_tmp_tmp + Var_tmp[:,i]*patchfrac[i]
                 else:
                     # if model doesn't use patches
-                     Var_tmp_tmp = Var_tmp.reshape(-1)
+                        Var_tmp_tmp = Var_tmp.reshape(-1)
 
             if veget is not None:
                 if veget > 1:
@@ -125,12 +126,11 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
                 else:
                     # if model doesn't use patches
-                     Var_tmp_tmp = Var_tmp.reshape(-1)
+                        Var_tmp_tmp = Var_tmp.reshape(-1)
 
             if patch == None and veget == None:
                 # if model doesn't use patches
                 Var_tmp_tmp = Var_tmp.reshape(-1)
-
 
             # Read variable units
             model_var_units[model_name] = f.variables[var_name_tmp].units
@@ -150,7 +150,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
                 # unify units
                 model_var_units[model_name] = "kg/m^2/s"
 
-            if varname == 'NEE':
+            if varname == 'NEE' or varname == 'GPP':
                 if 'umol' in model_var_units[model_name]:
                     # from umol/m2/s to gC/m2/s
                     # print('model_var_units[model_name]',model_var_units[model_name])
@@ -183,6 +183,8 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             f.close()
             var_FillValue = None
             Var_tmp       = None
+
+
 
     # Form the model names array
     model_names_array = np.array(model_out_names, dtype="S20")
@@ -399,25 +401,34 @@ def add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     return
 
-def add_SM_50cm_CABLE_to_nc_file(PLUMBER2_path, site_name, output_file):
+def add_GPP_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
+    '''
+    Add each model's GPP to the netcdf file by looping this function
+    '''
     # Set input file path
-    file_path          = glob.glob(PLUMBER2_path +"CABLE/*"+site_name+"*.nc")
+    file_path          = glob.glob(PLUMBER2_flux_path +"/*"+site_name+"*.nc")
     # print('file_path', file_path)
 
     f_in               = nc.Dataset(file_path[0])
-    SM                 = f_in.variables['SoilMoist'][:]
-    SM                 = np.where(SM < 0., np.nan, SM)
+    GPP                = f_in.variables['GPP'][:]
+    GPP                = np.where(GPP == -9999., np.nan, GPP)
+    GPP                = convert_from_umol_m2_s_into_gC_m2_s(GPP,"umol/m2/s")
+    f_out              = nc.Dataset(output_file,'r+', format='NETCDF4')
+
+    if 'obs_GPP' not in f_out.variables:
+        obs                = f_out.createVariable('obs_GPP', 'f4', ('CABLE_time'))
+        obs.standard_name  = "Gross primary production"
+        obs.long_name      = "Gross primary production"
+        obs.units          = "gC/m2/s"
+        obs[:]             = GPP
+    else:
+        # print('GPP has existed ')
+        # print("f_out.variables['obs_GPP']",f_out.variables['obs_GPP'])
+        f_out.variables['obs_GPP'].units = "gC/m2/s"
+        f_out.variables['obs_GPP'][:]    = GPP
+
     f_in.close()
-
-    SM_50cm            = (SM[:,0,:,:]*0.022 + SM[:,1,:,:]*0.058 + SM[:,2,:,:]*0.154 + SM[:,3,:,:]*0.266)/0.5
-    f_out              = nc.Dataset(output_file,'r+')
-    obs                = f_out.createVariable('obs_SM50cm', 'f4', ('CABLE_time'))
-    obs.standard_name  = "obs_SM50cm"
-    obs.long_name      = "Soil moisture in the top 50 cm"
-    obs.units          = "m^3/m^3"
-    obs[:]             = SM_50cm
-
     f_out.close()
 
     return
@@ -512,8 +523,6 @@ def add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     return
 
-
-
 def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
 
     # Set input file path
@@ -596,6 +605,183 @@ def add_EF_to_nc_file(output_file, zscore_threshold=2, Qle_Qh_threshold=10):
 
     return
 
+def add_SM_top1m_to_nc_file(PLUMBER2_path, output_file, site_name, SM_names, soil_thicknesses):
+
+    '''
+    Give the soil moisture in the top 1 m to every model. For the models have simulated soil
+    moisture, use their simulated SM; for the models without SM, use the mean of the simulated
+    SM.
+    '''
+
+    # Read the full namelist
+    f_out        = nc.Dataset(output_file,'r+')
+    full_models  = f_out.variables['Qle_models'][:]
+    ntime        = len(f_out.variables['obs_Qle'][:])
+
+    # Get model names with soil moisture
+    model_names  = list(SM_names.keys())
+    SM_model_tot = len(model_names)
+
+    # Initilize SM_1D_all
+    SM_1D_all = np.zeros((len(model_names),ntime))
+    SM_1D_all[:,:] = np.nan
+
+    # Loop all the models with soil moisture data
+    for n, model_name in enumerate(model_names):
+
+        # Get the name of variables
+        var_name_tmp   = SM_names[model_name]
+        soil_thickness = soil_thicknesses[model_name]
+
+        # Set input file path
+        file_path = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
+
+        # print('file_path==None 3',file_path==None)
+
+        if not file_path:
+            # Calculate mean soil moisture
+            SM_1D_all[n,:]   = np.nan
+        else:
+            # Open input file
+            f         = nc.Dataset(file_path[0])
+
+            # Read variable attributions info from input
+            var_long_name = f.variables[var_name_tmp].long_name
+            print('var_long_name',var_long_name)
+
+            var_unit_name = f.variables[var_name_tmp].units
+            print('units',var_unit_name)
+
+            # Read SM from input
+            Var_tmp = f.variables[var_name_tmp][:]
+
+            # Reset missing value
+            for attr in ['_FillValue', '_fillValue', 'missing_value']:
+                if hasattr(f.variables[var_name_tmp], attr):
+                    var_FillValue = getattr(f.variables[var_name_tmp], attr)
+                    break
+            else:
+                var_FillValue = None
+
+            # set missing values as nan
+            if var_FillValue is not None:
+                Var_tmp = np.where(Var_tmp == var_FillValue, np.nan, Var_tmp)
+
+
+            #  ==== check whether the model use patches ====
+            # Check if the variable has patch dimensions (coordinates)
+            # Actually only CABLE-POP-CN has patch in the simulated soil moisture, and its dimensions are
+            # (time, soil, patch, land=1)
+
+            if model_name == 'CABLE-POP-CN':
+                print(model_name,'has patch')
+                patch = f.dimensions['patch'].size
+
+                if patch > 1:
+                    # if model uses patches
+                    # read patch fraction
+                    patchfrac   = f.variables['patchfrac']
+
+                    # initlize Var_tmp_tmp
+                    Var_tmp_tmp = Var_tmp[:,:,0]*patchfrac[0]
+
+                    # calculate the patch fraction weighted pixel value
+                    for i in np.arange(1,patch):
+                        Var_tmp_tmp = Var_tmp_tmp + Var_tmp[:,:,i]*patchfrac[i]
+            else:
+                Var_tmp_tmp = Var_tmp
+
+            # Check units from kg/m2 to m3/m3
+            if 'kg' in var_unit_name:
+                print('model_name',model_name,'units is',var_unit_name)
+                units_kg_m_2 = True
+            elif 'm3' in var_unit_name or 'm^3' in var_unit_name:
+                print('model_name',model_name,'units is',var_unit_name)
+                units_kg_m_2 = False
+            else:
+                raise Exception('Please check the units of model_name',model_name,'which is',var_unit_name)
+
+            # acumulated soil thickness
+            soil_thickness_acl = np.cumsum(soil_thickness)
+            print('soil_thickness_acl',soil_thickness_acl)
+
+            # Calculate SM in the top 1m
+            i      = 0
+            SM_tmp = 0
+
+            while soil_thickness_acl[i] <= 1.:
+                if model_name == 'MuSICA' or model_name == 'STEMMUS-SCOPE':
+                    # for the models with (time, lat, lon, nsoil)
+                    if units_kg_m_2:
+                        try:
+                            print('if Var_tmp_tmp[:,0,0,i], site_name=',site_name)
+                            SM_tmp = SM_tmp + Var_tmp_tmp[:,0,0,i]
+                        except:
+                            # CA-NS1 and AR-SLu in STEMMUS-SCOPE has different dimension setting than other sites
+                            print('if Var_tmp_tmp[:,i,0,0], site_name=',site_name)
+                            SM_tmp = SM_tmp + Var_tmp_tmp[:,i,0,0]
+                    else:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,0,0,i]*soil_thickness[i]
+                else:
+                    # for the models with (time, nsoil, ...)
+                    if units_kg_m_2:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,i]
+                    else:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,i]*soil_thickness[i]
+                i = i + 1
+
+            # Check the last soil layer
+            if soil_thickness_acl[i-1] < 1. and soil_thickness_acl[i] > 1.:
+                if model_name == 'MuSICA' or model_name == 'STEMMUS-SCOPE':
+                    if units_kg_m_2:
+                        try:
+                            print('if Var_tmp_tmp[:,0,0,i], site_name=',site_name)
+                            SM_tmp = SM_tmp + Var_tmp_tmp[:,0,0,i]*(1-soil_thickness_acl[i-1])/soil_thickness[i]
+                        except:
+                            # CA-NS1 and AR-SLu in STEMMUS-SCOPE has different dimension setting than other sites
+                            print('if Var_tmp_tmp[:,i,0,0], site_name=',site_name)
+                            SM_tmp = SM_tmp + Var_tmp_tmp[:,i]*(1-soil_thickness_acl[i-1])/soil_thickness[i]
+                    else:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,0,0,i]*(1-soil_thickness_acl[i-1])
+                else:
+                    if units_kg_m_2:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,i]*(1-soil_thickness_acl[i-1])/soil_thickness[i]
+                    else:
+                        SM_tmp = SM_tmp + Var_tmp_tmp[:,i]*(1-soil_thickness_acl[i-1])
+
+            # Change from mm*m2/m3 to m3/m3
+            if units_kg_m_2:
+                SM_tmp = SM_tmp/1000.
+            print('np.shape(SM_tmp)',np.shape(SM_tmp))
+
+            # Translate to 1 dimension data
+            SM_tmp_1D = SM_tmp.reshape(-1)
+            print('np.shape(SM_tmp_1D)',np.shape(SM_tmp_1D))
+
+            # Add the soil moisture values to the output nc file
+            SM               = f_out.createVariable(model_name+'_SMtop1m', 'f4', (model_name+'_time'))
+            SM.standard_name = "Soil moisture in the top 1 m (root zone moisture)"
+            SM.long_name     = "Soil moisture in the top 1 m (root zone moisture)"
+            SM.units         = "m3/m3"
+            SM[:]            = SM_tmp_1D
+
+            # Calculate mean soil moisture
+            SM_1D_all[n,:]   = SM_tmp_1D
+
+
+    # Calculate mean soil moisture
+    SM_mean = np.nanmean(SM_1D_all,axis=0)
+
+    # Add the soil moisture values to the output nc file
+    SM               = f_out.createVariable('model_mean_SMtop1m', 'f4', ('CABLE_time'))
+    SM.standard_name = "Mean soil moisture in the top 1 m (root zone moisture)"
+    SM.long_name     = "Mean soil moisture in the top 1 m (root zone moisture)"
+    SM.units         = "m3/m3"
+    SM[:]            = SM_mean
+    f_out.close()
+
+    return
+
 if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
@@ -603,6 +789,7 @@ if __name__ == "__main__":
 
     PLUMBER2_flux_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Flux/"
     PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+    SM_names, soil_thicknesses = get_model_soil_moisture_info()
 
     # The name of models
     model_names   = [   "1lin","3km27", "6km729","6km729lag",
@@ -614,72 +801,93 @@ if __name__ == "__main__":
                         "NoahMPv401","ORC2_r6593" ,  "ORC2_r6593_CO2",
                         "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
                         "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
+
     # model_names    = ["RF_eb"] #"BEPS"
 
     # The site names
-    all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
-    site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    # site_names     = ['US-Syv']
-    #['AR-SLu']# 'AU-Tum',
-
-    # print(site_names)
-
+    # all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
+    # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
+    site_names     = ['AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7', 'CN-Din', 'US-WCr', 'ZM-Mon',]
+                    # ['CA-NS1', 'AR-SLu']
+    # 'AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7', 
+    #                       'CN-Din', 'US-WCr', 'ZM-Mon',
     for site_name in site_names:
         print('site_name',site_name)
         output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
 
-        # varname       = "TVeg"
-        # key_word      = "trans"
-        # key_word_not  = ["evap","transmission","pedo","electron",]
-        # trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # # print(trans_dict)
-        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        varname       = "TVeg"
+        key_word      = "trans"
+        key_word_not  = ["evap","transmission","pedo","electron",]
+        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # varname       = "Qle"
-        # key_word      = 'latent'
-        # key_word_not  = ['None']
-        # qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # # print(qle_dict)
-        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        varname       = "Qle"
+        key_word      = 'latent'
+        key_word_not  = ['None']
+        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # varname       = "Qh"
-        # key_word      = 'sensible'
-        # key_word_not  = ['vegetation','soil',] # 'corrected'
-        # qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # # print(qh_dict)
-        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        varname       = "Qh"
+        key_word      = 'sensible'
+        key_word_not  = ['vegetation','soil',] # 'corrected'
+        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # varname       = "NEE"
-        # key_word      = 'exchange'
-        # key_word_not  = ['None']
-        # nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
-        # # print(nee_dict)
-        # make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        # gc.collect()
+        varname       = "NEE"
+        key_word      = 'exchange'
+        key_word_not  = ['None']
+        nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not)
+        make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        # gc.collect()
+        varname       = "GPP"
+        key_word      = "gross primary"
+        key_word_not  = ['wrt','from']
+        gpp_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=key_word_not)
+        make_nc_file(PLUMBER2_path, gpp_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        gc.collect()
 
-        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        # gc.collect()
+        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
 
-        # add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        # gc.collect()
+        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
 
-        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        # gc.collect()
+        add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
 
-        # Qle_Qh_threshold=10
-        # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
-        # gc.collect()
+        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        gc.collect()
 
-        # add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        # gc.collect()
+        Qle_Qh_threshold=10
+        add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        gc.collect()
+
+        add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        gc.collect()
 
         add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file)
         gc.collect()
+
+        add_GPP_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        gc.collect()
+
+        add_SM_top1m_to_nc_file(PLUMBER2_path,output_file,site_name,SM_names,soil_thicknesses)
+        gc.collect()
+
+
+
+    # SM_var_dimensions= {'CABLE':'(time, soil, y, x)', 'CABLE-POP-CN':'(time, soil, patch, land)',
+    #                     'CHTESSEL_ERA5_3':'(time, level)', 'CHTESSEL_Ref_exp1':'(time, level)',
+    #                     'CLM5a':'(time, levsoi, lndgrid)', 'GFDL':'(time, zfull_soil, lat, lon)',
+    #                     'JULES_GL9_withLAI':'(time, soil, y, x)',
+    #                     'JULES_test':'(time, soil, y, x)', 'MATSIRO':'(time, depth, latitude, longitude)',
+    #                     'MuSICA':'(time, y, x, nsoil)',
+    #                     'NoahMPv401':'(time, lev, y, x)', 'ORC2_r6593':'(time_counter, solay, lat, lon)',
+    #                     'ORC3_r7245_NEE':'(time_counter, solay, lat, lon)',
+    #                     'ORC3_r8120':'(time_counter, solay, lat, lon)','STEMMUS-SCOPE':'(time, y, x, z)'} #  'SDGVM':'RootMoist',

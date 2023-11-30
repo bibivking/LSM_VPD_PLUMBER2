@@ -93,6 +93,17 @@ def load_default_list():
 
     return site_names, IGBP_types, clim_types, model_names
 
+
+
+def load_sites_in_country_list(country_code):
+
+    # The site names
+    PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    all_site_path  = sorted(glob.glob(PLUMBER2_path+"/*"+country_code+"*.nc"))
+    site_names     = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
+
+    return site_names
+
 def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
 
     x_series   = np.arange(x_bot, x_top, x_interval)
@@ -179,10 +190,16 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_wo
         try:
             with nc.Dataset(file_path[0], 'r') as dataset:
                 for var_name in dataset.variables:
-                    # print(var_name)
                     if varname.lower() in var_name.lower():
-                        my_dict[model_name] = var_name
-                        var_exist = True
+                        variable  = dataset.variables[var_name]
+                        if hasattr(variable, 'long_name'):
+                            long_name = variable.long_name.lower()
+                            if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
+                                my_dict[model_name] = var_name
+                                var_exist = True
+                        else:
+                            my_dict[model_name] = var_name
+                            var_exist = True
                     else:
                         variable  = dataset.variables[var_name]
 
@@ -505,3 +522,44 @@ def convert_from_umol_m2_s_into_gC_m2_s(data_input, var_units):
     data_output = data_input*umol_2_mol*mol_2_gC
 
     return data_output
+
+def get_model_soil_moisture_info():
+
+    # Set models with simulated soil mositure
+    SM_names      = { 'CABLE':'SoilMoist', 'CABLE-POP-CN':'SoilMoist',
+                      'CHTESSEL_ERA5_3':'SoilMoist', 'CHTESSEL_Ref_exp1':'SoilMoist',
+                      'CLM5a':'mrlsl', 'GFDL':'SoilMoist', 'JULES_GL9_withLAI':'SoilMoist',
+                      'JULES_test':'SoilMoist', 'MATSIRO':'SoilMoistV', 'MuSICA':'SoilMoist',
+                      'NoahMPv401':'SoilMoist', 'ORC2_r6593':'SoilMoist','ORC3_r7245_NEE':'SoilMoist',
+                      'ORC3_r8120':'SoilMoist','STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
+
+    # Set soil layer thickness
+    soil_thicknesses = {'CABLE':[0.022,0.058, 0.154, 0.409, 1.085, 2.872],
+                        'CABLE-POP-CN':[0.022,0.058, 0.154, 0.409, 1.085, 2.872],
+                        'CHTESSEL_ERA5_3':[0.07, 0.21, 0.72, 1.89],
+                        'CHTESSEL_Ref_exp1':[0.07, 0.21, 0.72, 1.89],
+                        'JULES_test': [0.1, 0.25, 0.65, 2.0],
+                        'JULES_GL9_withLAI': [0.1, 0.25, 0.65, 2.0],
+                        'MATSIRO': [0.05, 0.2, 0.75, 1., 2.],
+                        'NoahMPv401': [0.10, 0.30, 0.60,1.],
+                        'CLM5a':[0.02, 0.04, 0.06, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.36, 0.4,
+                                 0.44, 0.54, 0.64, 0.74, 0.84, 0.94, 1.04, 1.14, 2.39, 4.675534, 7.63519,
+                                 11.14, 15.11543],
+                        'GFDL': [0.02,0.04,0.04,0.05,0.05,0.1,0.1,0.2,0.2,0.2,
+                                  0.4,0.4,0.4,0.4,0.4,1,1,1,1.5,2.5],
+                        'MuSICA': [0.01695884, 0.01970336, 0.02289203, 0.02659675, 0.03090101,
+                                    0.03590186, 0.041712, 0.04846244, 0.05630532, 0.06541745, 0.07600423,
+                                    0.08830432, 0.102595, 0.1191984, 0.1384887, 0.160901, 0.1869402,
+                                    0.2171936, 0.2523429, 0.2931806],
+                        'ORC2_r6593':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
+                                      0.09188661, 0.1857283, 0.3734115, 0.7487781, 1.499511, 2],
+                        'ORC3_r7245_NEE':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
+                                          0.09188661, 0.1857283, 0.3734115, 0.7487781, 1.499511, 2],
+                        'ORC3_r8120':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
+                                      0.09188661, 0.1857283, 0.3734115, 0.7487781, 1.499511, 2],
+                        'STEMMUS-SCOPE':[ 0.01, 0.01, 0.01, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02,
+                                        0.02, 0.02, 0.02, 0.02, 0.02, 0.025, 0.025, 0.025, 0.025, 0.05, 0.05,
+                                        0.05, 0.05, 0.05, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10,
+                                        0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.15, 0.15,
+                                        0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]}
+    return SM_names, soil_thicknesses
