@@ -40,7 +40,7 @@ def read_data(var_name, site_name, input_file):
             model_out_list.append(model_in)
             if var_name == 'TVeg':
                 var_output['model_'+model_in] = f.variables[model_var_name][:]*3600
-            elif var_name == 'NEE':
+            elif var_name == 'NEE' or var_name == 'GPP':
                 # convert from umol/m2/s to g C/h
                 s2h = 3600.              # s-1 to h-1
                 var_output['model_'+model_in] = f.variables[model_var_name][:]*s2h
@@ -51,6 +51,34 @@ def read_data(var_name, site_name, input_file):
             model_bin_name             = f"{model_in}_EF"
             try:
                 var_output[model_in+'_EF'] = f.variables[model_bin_name][:]
+            except:
+                var_output[model_in+'_EF'] = np.nan
+        elif model_ntime == int(ntime/2):
+            print('model ', model_in, ' is hourly, model_ntime is', model_ntime, ' ntime is', ntime)
+            model_out_list.append(model_in)
+
+            # put the value of hourly data to the first half hour
+            hourly_mask = np.full(ntime,False)
+            for t in ntime:
+                if t % 2 == 0:
+                    hourly_mask[t] = True
+            if var_name == 'TVeg':
+                var_output['model_'+model_in] = np.nan
+                var_output.loc[hourly_mask,'model_'+model_in] =f.variables[model_var_name][:]*3600
+            elif var_name == 'NEE' or var_name == 'GPP':
+                # convert from umol/m2/s to g C/h
+                s2h = 3600.              # s-1 to h-1
+                var_output['model_'+model_in] = np.nan
+                var_output.loc[hourly_mask,'model_'+model_in] =f.variables[model_var_name][:]*s2h
+            else:
+                var_output['model_'+model_in] = np.nan
+                var_output.loc[hourly_mask,'model_'+model_in] =f.variables[model_var_name][:]
+
+            # read model EF
+            model_bin_name             = f"{model_in}_EF"
+            try:
+                var_output[model_in+'_EF']                  = np.nan
+                var_output.loc[hourly_mask, model_in+'_EF'] = f.variables[model_bin_name][:]
             except:
                 var_output[model_in+'_EF'] = np.nan
 
@@ -64,7 +92,7 @@ def read_data(var_name, site_name, input_file):
             var_output['obs_cor'] = np.nan
         model_out_list.append('obs_cor')
 
-    if var_name == 'NEE':
+    if var_name == 'NEE' or var_name == 'GPP':
         s2h               = 3600.              # s-1 to h-1
         var_output['obs'] = f.variables[f"obs_{var_name}"][:]*s2h
 
@@ -77,8 +105,13 @@ def read_data(var_name, site_name, input_file):
     var_output['obs_Precip'] = f.variables['obs_Precip'][:]
     var_output['obs_SWdown'] = f.variables['obs_SWdown'][:]
 
+    greenness_file = '/g/data/w97/mm3972/data/PLUMBER2/NoahMPv401/NoahMPv401_UAlb_r1a_'+site_name+'.nc'
+    f_green        = nc.Dataset(greenness_file, mode='r')
+    var_output['NoahMPv401_greenness'] = f_green.variables['Greenness'][:,0,0]
+
     # close the file
     f.close()
+    f_green.close()
 
     ntime      = len(var_output)
     month      = np.zeros(ntime)
@@ -106,6 +139,55 @@ def read_LAI_obs(site_name, PLUMBER2_met_path):
     print('LAI_obs',LAI_obs)
 
     return LAI_obs
+
+def read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input):
+
+    file_path      = glob.glob(PLUMBER2_path_input + model_with_LAI +"/*"+site_name+"*.nc")
+    if not file_path:
+        LAI_model  = np.nan
+    else:
+        f              = nc.Dataset(file_path[0])
+        LAI_model_tmp  = f.variables[model_LAI_name][:]
+        veget          = None
+
+        # Reset missing value
+        for attr in ['_FillValue', '_fillValue', 'missing_value']:
+            if hasattr(f.variables[model_LAI_name], attr):
+                var_FillValue = getattr(f.variables[model_LAI_name], attr)
+                LAI_model_tmp = np.where(LAI_model_tmp==var_FillValue, np.nan, LAI_model_tmp)
+                break
+
+        if hasattr(f.variables[model_LAI_name], 'dimensions'):
+            if 'veget' in f.variables[model_LAI_name].dimensions:
+                # print('model_name', model_name, 'site_name', site_name,'has veget demension' )
+                veget = f.dimensions['veget'].size
+
+        if veget is not None:
+            if veget > 1:
+                # if model uses patches
+                # read veget fraction
+                vegetfrac   = f.variables['vegetfrac']
+                # print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
+
+                # initlize Var_tmp_tmp
+                ntime     = len(LAI_model_tmp[:,0,0,0])
+                LAI_model = np.zeros(ntime)
+
+                # calculate the veget fraction weighted pixel value for each time step
+                for i in np.arange(ntime):
+                    for j in np.arange(0,veget):
+                        LAI_model[i] = LAI_model[i] + LAI_model_tmp[i,j]*vegetfrac[i,j]
+            else:
+                # if patch == 1
+                LAI_model = LAI_model_tmp.reshape(-1)
+        else:
+            # if model doesn't use patches
+            LAI_model = LAI_model_tmp.reshape(-1)
+        f.close()
+        
+    print('LAI_model',LAI_model)
+    
+    return LAI_model
 
 def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
 
@@ -143,7 +225,7 @@ def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
 
     return half_hrs_after_precip
 
-def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI=False):
+def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI=False, country_code=None):
 
     # ============= read all sites data ================
     # get veg type info
@@ -201,14 +283,23 @@ def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_pa
         var_output_tmp=None
         gc.collect()
 
+
     if add_LAI:
-        var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv') # , mode='a', index=False
+        if country_code !=None:
+            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI_'+country_code+'.csv') # , mode='a', index=False
+        else:
+            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv') # , mode='a', index=False
     else:
-        var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites.csv') # , mode='a', index=False
+        if country_code !=None:
+            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_'+country_code+'.csv') # , mode='a', index=False
+        else:
+            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites.csv') # , mode='a', index=False
 
-def add_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path):
+def add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path):
 
-    var_output   = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',na_values=[''])
+    var_output   = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',usecols=['time','month',
+                               'hour','site_name','IGBP_type','climate_type','half_hrs_after_precip'],
+                               na_values=[''])
     ntime        = len(var_output)
 
     var_output['obs_LAI'] = np.nan
@@ -218,12 +309,104 @@ def add_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path):
         LAI_tmp =  read_LAI_obs(site_name, PLUMBER2_met_path)
         var_output.loc[site_mask,'obs_LAI'] = LAI_tmp
 
-    var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv')
+    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
+    return
+
+def add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input):
+
+    var_output   = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
+    ntime        = len(var_output)
+
+    for model_with_LAI in models_calc_LAI:
+        var_output[model_with_LAI+'_LAI'] = np.nan
+
+    for i, site_name in enumerate(site_names):
+        site_mask = (var_output['site_name'] == site_name)
+
+        for model_with_LAI in models_calc_LAI:
+            model_LAI_name = model_LAI_names[model_with_LAI]
+
+            LAI_tmp =  read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input)
+            model_ntime = len(LAI_tmp)
+
+            if model_ntime == ntime:
+                # if the model output is half-hourly
+                var_output.loc[site_mask, model_with_LAI+'_LAI'] = LAI_tmp
+            elif model_ntime == int(ntime/2):
+                print('model ', model_in, ' is hourly, model_ntime is', model_ntime, ' ntime is', ntime)
+
+                # put the value of hourly data to the first half hour
+                LAI_new = np.full(ntime,np.nan)
+                for t in ntime:
+                    if t % 2 == 0:
+                        try:
+                            LAI_new[t] = LAI_tmp[int(t/2.)]
+                        except:
+                            # in case, the site misses LAI data and it is set as np.nan
+                            LAI_new[t] = LAI_tmp
+                var_output.loc[site_mask, model_with_LAI+'_LAI'] =LAI_new
+        gc.collect()
+    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
+    return
+
+def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path):
+
+    # read the variables
+    var_output   = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',usecols=['time','month',
+                               'hour','site_name','IGBP_type','climate_type','half_hrs_after_precip'],
+                               na_values=[''])
+
+    #
+    # ntime        = len(var_output)
+
+    # Initlize the model SMtop1m
+    for model_name in SM_names:
+        var_output[model_name+'_SMtop1m'] = np.nan
+
+    # Loop accross all sites
+    for i, site_name in enumerate(site_names):
+        # Get site mask
+        site_mask = (var_output['site_name'] == site_name)
+
+        # Read site nc file
+        file_path      = glob.glob(PLUMBER2_path + "*"+site_name+"*.nc")
+        f_in           = nc.Dataset(file_path[0])
+
+        for model_name in SM_names:
+            # if the model output is half-hourly
+            try:
+                var_output.loc[site_mask, model_name+'_SMtop1m'] = f_in.variables[model_name+'_SMtop1m'][:]
+            except:
+                # for the few sites missing some models simulations
+                var_output.loc[site_mask, model_name+'_SMtop1m'] = f_in.variables['model_mean_SMtop1m'][:]
+
+        var_output.loc[site_mask, 'model_mean_SMtop1m'] = f_in.variables['model_mean_SMtop1m'][:]
+
+    var_output.to_csv(f'./txt/all_sites/SMtop1m_all_sites.csv')
+    return
+
+def add_greenness_to_write_spatial_land_days(var_name, site_names):
+
+    var_output   = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
+    ntime        = len(var_output)
+    var_output['NoahMPv401_greenness'] = np.nan
+
+    # total_length = 17137992
+    # green_frac   = np.zeros(total_length)
+    for i, site_name in enumerate(site_names):
+
+        site_mask      = (var_output['site_name'] == site_name)
+        greenness_file = '/g/data/w97/mm3972/data/PLUMBER2/NoahMPv401/NoahMPv401_UAlb_r1a_'+site_name+'.nc'
+        f_green        = nc.Dataset(greenness_file, mode='r')
+        var_output.loc[site_mask,'NoahMPv401_greenness'] = f_green.variables['Greenness'][:,0,0]
+
+    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
+
     return
 
 def check_LAI(var_name, site_names, PLUMBER2_met_path):
 
-    var_output            = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv',na_values=[''])
+    var_output            = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
     ntime                 = len(var_output)
 
     print("np.any(var_output['obs_LAI'] !=0)",np.any(var_output['obs_LAI'] !=0))
@@ -233,8 +416,9 @@ def check_LAI(var_name, site_names, PLUMBER2_met_path):
 if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
-    PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
-    PLUMBER2_path     = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    PLUMBER2_met_path   = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+    PLUMBER2_path       = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    PLUMBER2_path_input = "/g/data/w97/mm3972/data/PLUMBER2/"
 
     # The site names
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
@@ -242,9 +426,23 @@ if __name__ == "__main__":
     # site_names      = ["AU-How","AU-Tum"]
 
     var_name          = 'TVeg'
-    add_LAI           = True
+    add_LAI           = False
+    models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','Noah-MP']
+    model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',
+                         'GFDL':'lai', 'SDGVM':'lai','QUINCY':'LAI','Noah-MP':'LAI'} #
 
-    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    SM_names, soil_thicknesses = get_model_soil_moisture_info()
 
-    add_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path)
+    country_code      = None #'AU'
+    # site_names  = load_sites_in_country_list(country_code)
+    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+
+    # add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
+
+    # # === Together ===
+    # add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path)
+    # add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
+    # add_greenness_to_write_spatial_land_days(var_name, site_names)
+    # # ================
+
     # check_LAI(var_name, site_names, PLUMBER2_met_path)

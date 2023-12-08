@@ -87,7 +87,7 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
                   error_type='percentile', models_calc_LAI=None, veg_fraction=None,
                   clarify_site={'opt':False,'remove_site':None}, standardize=None,
                   remove_strange_values=True, country_code=None,
-                  hours_precip_free=None, method='GAM'):
+                  hours_precip_free=None, method='GAM', selected_raw_data=True):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -99,7 +99,7 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
     if country_code!=None:
         var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI_'+country_code+'.csv',na_values=[''])
     else:
-        var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv',na_values=[''])
+        var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',na_values=[''])
     print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
            np.any(~np.isnan(var_output["model_CABLE"])) )
 
@@ -400,6 +400,62 @@ def write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low_bound=30
 
     print('Finish dividing dry and wet periods')
 
+    if selected_raw_data:
+        mask_VPD           = (var_output_dry['VPD'] != np.nan)
+        var_select_dry_tmp = var_output_dry[['VPD','obs','model_CABLE','model_STEMMUS-SCOPE']]
+        var_select_dry     = var_select_dry_tmp[mask_VPD]
+            
+        # file name 
+        message = ''
+
+        if day_time:
+            message = message + '_daytime'
+
+        if IGBP_type != None:
+            message = message + '_IGBP='+IGBP_type
+
+        if clim_type != None:
+            message = message + '_clim='+clim_type
+
+        if standardize != None:
+            message = message + '_standardized_'+standardize
+
+        if clarify_site['opt']:
+            message = message + '_clarify_site'
+
+        if error_type !=None:
+            message = message + '_error_type='+error_type
+
+        if veg_fraction !=None:
+            message = message + '_veg_frac='+str(veg_fraction[0])+'-'+str(veg_fraction[1])
+
+        if country_code !=None:
+            message = message +'_'+country_code
+
+        # save data
+        if var_name == 'NEE':
+            var_name = 'NEP'
+
+        folder_name = 'original'
+
+        if standardize != None:
+            folder_name = 'standardized_'+standardize
+
+        if clarify_site['opt']:
+            folder_name = folder_name+'_clarify_site'
+
+        if len(low_bound) >1 and len(high_bound) >1:
+            if low_bound[1] > 1:
+                var_select_dry.to_csv(f'./txt/test/raw_data_{var_name}_VPD'+message+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'th_coarse.csv')
+            else:
+                var_select_dry.to_csv(f'./txt/test/raw_data_{var_name}_VPD'+message+'_'+bin_by+'_'+str(low_bound[0])+'-'+str(low_bound[1])+'_coarse.csv')
+        elif len(low_bound) == 1 and len(high_bound) == 1:
+            if low_bound > 1:
+                var_select_dry.to_csv(f'./txt/test/raw_data_{var_name}_VPD'+message+'_'+bin_by+'_'+str(low_bound)+'th_coarse.csv')
+            else:
+                var_select_dry.to_csv(f'./txt/test/raw_data_{var_name}_VPD'+message+'_'+bin_by+'_'+str(low_bound)+'_coarse.csv')
+        raise KeyboardInterrupt
+
     # ============ Choosing fitting or binning ============
 
     if method == 'bin_by_vpd':
@@ -558,6 +614,7 @@ if __name__ == "__main__":
 
     day_time       = True
     energy_cor     = False
+    selected_raw_data = True
 
     clarify_site   = {'opt': True,
                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
@@ -568,18 +625,19 @@ if __name__ == "__main__":
         energy_cor = False
 
     # ================== dry_wet ==================
-    country_code   = 'AU'
-    site_names_AU  = load_sites_in_country_list(country_code)
+    country_code   = None#'AU'
+    if country_code != None:
+        site_names = load_sites_in_country_list(country_code)
 
-    low_bound      = [0,1.] #30
+    low_bound      = [0,0.2] #30
     high_bound     = [0.8,1.] #70
     veg_fraction   = None #[0.7,1]
 
-    write_var_VPD(var_name, site_names_AU, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
+    write_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=bin_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     error_type=error_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
                     country_code=country_code,
-                    energy_cor=energy_cor, method=method)
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
     gc.collect()
 
     # for IGBP_type in IGBP_types:

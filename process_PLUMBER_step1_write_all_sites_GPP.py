@@ -143,44 +143,50 @@ def read_LAI_obs(site_name, PLUMBER2_met_path):
 def read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input):
 
     file_path      = glob.glob(PLUMBER2_path_input + model_with_LAI +"/*"+site_name+"*.nc")
-    f              = nc.Dataset(file_path[0])
-    LAI_model_tmp  = f.variables[model_LAI_name][:]
-    veget          = None
+    if not file_path:
+        LAI_model  = np.nan
+    else:
+        f              = nc.Dataset(file_path[0])
+        LAI_model_tmp  = f.variables[model_LAI_name][:]
+        veget          = None
 
-    # Reset missing value
-    for attr in ['_FillValue', '_fillValue', 'missing_value']:
-        if hasattr(f.variables[model_LAI_name], attr):
-            var_FillValue = getattr(f.variables[model_LAI_name], attr)
-            LAI_model_tmp = np.where(LAI_model_tmp==var_FillValue, np.nan, LAI_model_tmp)
-            break
+        # Reset missing value
+        for attr in ['_FillValue', '_fillValue', 'missing_value']:
+            if hasattr(f.variables[model_LAI_name], attr):
+                var_FillValue = getattr(f.variables[model_LAI_name], attr)
+                LAI_model_tmp = np.where(LAI_model_tmp==var_FillValue, np.nan, LAI_model_tmp)
+                break
 
-    if hasattr(f.variables[model_LAI_name], 'dimensions'):
-        if 'veget' in f.variables[model_LAI_name].dimensions:
-            # print('model_name', model_name, 'site_name', site_name,'has veget demension' )
-            veget = f.dimensions['veget'].size
+        if hasattr(f.variables[model_LAI_name], 'dimensions'):
+            if 'veget' in f.variables[model_LAI_name].dimensions:
+                # print('model_name', model_name, 'site_name', site_name,'has veget demension' )
+                veget = f.dimensions['veget'].size
 
-    if veget is not None:
-        if veget > 1:
-            # if model uses patches
-            # read veget fraction
-            vegetfrac   = f.variables['vegetfrac']
-            # print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
+        if veget is not None:
+            if veget > 1:
+                # if model uses patches
+                # read veget fraction
+                vegetfrac   = f.variables['vegetfrac']
+                # print('model_name', model_name, 'site_name', site_name, 'veget = ', veget, 'vegetfrac =', vegetfrac )
 
-            # initlize Var_tmp_tmp
-            ntime     = len(LAI_model_tmp[:,0,0,0])
-            LAI_model = np.zeros(ntime)
+                # initlize Var_tmp_tmp
+                ntime     = len(LAI_model_tmp[:,0,0,0])
+                LAI_model = np.zeros(ntime)
 
-            # calculate the veget fraction weighted pixel value for each time step
-            for i in np.arange(ntime):
-                for j in np.arange(0,veget):
-                    LAI_model[i] = LAI_model[i] + LAI_model_tmp[i,j]*vegetfrac[i,j]
-
+                # calculate the veget fraction weighted pixel value for each time step
+                for i in np.arange(ntime):
+                    for j in np.arange(0,veget):
+                        LAI_model[i] = LAI_model[i] + LAI_model_tmp[i,j]*vegetfrac[i,j]
+            else:
+                # if patch == 1
+                LAI_model = LAI_model_tmp.reshape(-1)
         else:
             # if model doesn't use patches
-             LAI_model = LAI_model_tmp.reshape(-1)
-
+            LAI_model = LAI_model_tmp.reshape(-1)
+        f.close()
+        
     print('LAI_model',LAI_model)
-    f.close()
+    
     return LAI_model
 
 def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
@@ -333,7 +339,11 @@ def add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_L
                 LAI_new = np.full(ntime,np.nan)
                 for t in ntime:
                     if t % 2 == 0:
-                        LAI_new[t] = LAI_tmp[int(t/2.)]
+                        try:
+                            LAI_new[t] = LAI_tmp[int(t/2.)]
+                        except:
+                            # in case, the site misses LAI data and it is set as np.nan
+                            LAI_new[t] = LAI_tmp
                 var_output.loc[site_mask, model_with_LAI+'_LAI'] =LAI_new
         gc.collect()
     var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
@@ -360,7 +370,7 @@ def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names,
 
         # Read site nc file
         file_path      = glob.glob(PLUMBER2_path + "*"+site_name+"*.nc")
-        f_in           = nc.Dataset(file_path)
+        f_in           = nc.Dataset(file_path[0])
 
         for model_name in SM_names:
             # if the model output is half-hourly
@@ -425,11 +435,14 @@ if __name__ == "__main__":
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
 
-    add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
+    # add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
 
+    # # === Together ===
     # add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path)
     # add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
     # add_greenness_to_write_spatial_land_days(var_name, site_names)
+    # # ================
+
     # check_LAI(var_name, site_names, PLUMBER2_met_path)

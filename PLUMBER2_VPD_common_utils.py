@@ -98,10 +98,12 @@ def load_default_list():
 def load_sites_in_country_list(country_code):
 
     # The site names
-    PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
-    all_site_path  = sorted(glob.glob(PLUMBER2_path+"/*"+country_code+"*.nc"))
-    site_names     = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
-
+    if country_code != None:
+        PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+        all_site_path  = sorted(glob.glob(PLUMBER2_path+"/*"+country_code+"*.nc"))
+        site_names     = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
+    else:
+        site_names     = None
     return site_names
 
 def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
