@@ -57,7 +57,7 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
     props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
     # ============== read data ==============
-    message = ''
+    message   = ''
     subfolder = ''
 
     if day_time:
@@ -73,7 +73,6 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
 
     if clarify_site['opt']:
         message = message + '_clarify_site'
-
 
     if error_type !=None:
         message = message + '_error_type='+error_type

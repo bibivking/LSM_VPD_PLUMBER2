@@ -39,6 +39,7 @@ def read_data(var_name, site_name, input_file):
         if model_ntime == ntime:
             model_out_list.append(model_in)
             if var_name == 'TVeg':
+                # convert from per s to per h
                 var_output['model_'+model_in] = f.variables[model_var_name][:]*3600
             elif var_name == 'NEE' or var_name == 'GPP':
                 # convert from umol/m2/s to g C/h
@@ -184,9 +185,9 @@ def read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_inpu
             # if model doesn't use patches
             LAI_model = LAI_model_tmp.reshape(-1)
         f.close()
-        
+
     print('LAI_model',LAI_model)
-    
+
     return LAI_model
 
 def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
@@ -425,7 +426,7 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'NEE'
+    var_name          = 'Qle'
     add_LAI           = False
     models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','Noah-MP']
     model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',

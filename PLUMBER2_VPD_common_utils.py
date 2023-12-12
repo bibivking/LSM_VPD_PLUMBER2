@@ -93,8 +93,6 @@ def load_default_list():
 
     return site_names, IGBP_types, clim_types, model_names
 
-
-
 def load_sites_in_country_list(country_code):
 
     # The site names
@@ -565,3 +563,38 @@ def get_model_soil_moisture_info():
                                         0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.15, 0.15,
                                         0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]}
     return SM_names, soil_thicknesses
+
+def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
+
+    """
+    Purpose calculate confidence interval by bootstrap method
+    Code source: https://stackoverflow.com/questions/44392978/compute-a-confidence-interval-from-sample-data-assuming-unknown-distribution/66008548#66008548
+    """
+    
+    import warnings
+
+    def bootstrap_ids(data, n_samples=100):
+        for _ in range(n_samples):
+            yield np.random.randint(data.shape[0], size=(data.shape[0],))    
+    
+    alphas = np.array([alpha/2, 1 - alpha/2])
+    nvals  = np.round((n_samples - 1) * alphas).astype(int)
+    if np.any(nvals < 10) or np.any(nvals >= n_samples-10):
+        warnings.warn("Some values used extremal samples; results are probably unstable. "
+                      "Try to increase n_samples")
+
+    data = np.array(data)
+    if np.prod(data.shape) != max(data.shape):
+        raise ValueError("Data must be 1D")
+    data = data.ravel()
+    
+    boot_indexes = bootstrap_ids(data, n_samples)
+    print('boot_indexes',boot_indexes)
+    stat         = np.asarray([statfunction(data[_ids]) for _ids in boot_indexes])
+    print('stat',stat)
+    stat.sort(axis=0)
+
+    return stat[nvals]
+
+
+
