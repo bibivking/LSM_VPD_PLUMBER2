@@ -1,3 +1,15 @@
+'''
+
+
+
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
 import os
 import gc
 import sys
@@ -30,9 +42,16 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low
 
     # ========== read the data ==========
     if country_code!=None:
-        var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI_'+country_code+'.csv',na_values=[''])
+        if standardize == 'by_daily_obs_mean':
+            var_output = pd.read_csv(f'./txt/process2_output/daily/{var_name}_all_sites_'+country_code+'_daily.csv',na_values=[''])
+        else:
+            var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites_'+country_code+'.csv',na_values=[''])
     else:
-        var_output    = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',na_values=[''])
+        if standardize == 'by_daily_obs_mean':
+            var_output = pd.read_csv(f'./txt/process2_output/daily/{var_name}_all_sites_daily.csv',na_values=[''])
+        else:
+            var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',na_values=[''])
+
     print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
            np.any(~np.isnan(var_output["model_CABLE"])) )
 
@@ -302,6 +321,22 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, bin_by=None, low
                         site_model_month      = var_monthly_input.loc[site_mask_month][head+model_out_name].values
                         var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_month
 
+    elif standardize == 'by_daily_obs_mean':
+
+        print('standardized_by_daily_obs_mean')
+        obs_daily = var_output['obs']
+
+        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+        for i, model_out_name in enumerate(model_out_list):
+
+            # check whether the model has calculated LAI
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+  
+            var_output[head+model_out_name] = np.where( obs_daily != 0 ,var_output[head+model_out_name]/obs_daily,
+                                                        np.nan )
 
     if selected_raw_data:
         mask_VPD_tmp       = (var_output['VPD'] != np.nan)
@@ -520,13 +555,14 @@ if __name__ == "__main__":
     var_name       = 'Qle'  #'TVeg'
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     method         = 'bin_by_vpd' #'GAM'
-    standardize    = 'None' # 'None'
+    standardize    = 'by_daily_obs_mean' # 'None'
                                    # 'by_obs_mean'
                                    # 'by_LAI'
                                    # 'by_monthly_obs_mean'
                                    # 'by_monthly_model_mean'
+                                   # 'by_daily_obs_mean'
 
-    day_time       = True
+    day_time       = False
     energy_cor     = False
     selected_raw_data = True
 

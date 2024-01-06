@@ -15,78 +15,30 @@ import matplotlib.ticker as mticker
 from calc_turning_points import *
 from PLUMBER2_VPD_common_utils import *
 
-def plot_EF_VPD_2d_grid(var_name, model_out_list, day_time=False, error_type='percentile',  veg_fraction=None,
-                        IGBP_type=None, clim_type=None, country_code=None, message=None,
+def plot_EF_VPD_2d_grid(var_name, model_out_list, day_time=False, uncertain_type='UCRTN_percentile', veg_fraction=None,
+                        IGBP_type=None, clim_type=None, country_code=None, message=None, time_scale=None, method=None,
                         clarify_site={'opt':False,'remove_site':None}, standardize=None):
 
     # ========= Get input file name =========
-    message = ''
-
-    if day_time:
-        message = message + '_daytime'
-
-    if IGBP_type != None:
-        message = message + '_IGBP='+IGBP_type
-
-    if clim_type != None:
-        message = message + '_clim='+clim_type
-
-    if standardize != None:
-        message = message + '_standardized_'+standardize
-
-    if clarify_site['opt']:
-        message = message + '_clarify_site'
-
-    if error_type !=None:
-        message = message + '_error_type='+error_type
-
-    if veg_fraction !=None:
-        message = message + '_veg_frac='+str(veg_fraction[0])+'-'+str(veg_fraction[1])
-
-    if country_code !=None:
-        message = message +'_'+country_code
-
-    # save data
-    if var_name == 'NEE':
-        var_name = 'NEP'
-
-    folder_name = 'original'
-
-    # Set folder name
-    if standardize != None:
-        folder_name = 'standardized_'+standardize
-
-    if clarify_site['opt']:
-        folder_name = folder_name+'_clarify_site'
-
+    folder_name, file_message = decide_filename(day_time=day_time, uncertain_type=uncertain_type, time_scale=time_scale,
+                                                standardize=standardize, country_code=country_code, 
+                                                veg_fraction=veg_fraction, method=method,
+                                                clarify_site=clarify_site)
 
     # set color cmap
     cmap     = plt.cm.BrBG
 
     # ========= Read dataset =========
     for i, model_out_name in enumerate(model_out_list):
-
-        vpd_num      = pd.read_csv(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Numbers'
-                                   +message+'_'+model_out_name+'.csv', header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy() #
-        var_vals     = pd.read_csv(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Values'
-                                   +message+'_'+model_out_name+'.csv', header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy() # na_values=['nan']
-        var_vals_top = pd.read_csv(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Top_bounds'
-                                   +message+'_'+model_out_name+'.csv', header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy()
-        var_vals_bot = pd.read_csv(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Bot_bounds'
-                                   +message+'_'+model_out_name+'.csv',header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy()
-
-        # vpd_num        = np.loadtxt(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Numbers'
-        #                             +message+'_'+model_out_name+'.csv', delimiter=',')
-        # var_vals       = np.loadtxt(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Values'
-        #                             +message+'_'+model_out_name+'.csv', delimiter=',')
-        # var_vals_top   = np.loadtxt(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Top_bounds'
-        #                             +message+'_'+model_out_name+'.csv', delimiter=',')
-        # var_vals_bot   = np.loadtxt(f'./txt/VPD_curve/{folder_name}/{var_name}_bin_by_VPD_EF_Bot_bounds'
-        #                             +message+'_'+model_out_name+'.csv', delimiter=',')
-
-        # Check read data
-        print('var_vals',var_vals)
-        print('type(var_vals[:,:])',type(var_vals[:,:]))
+                                  
+        vpd_num      = pd.read_csv(f'./txt/process4_output/{folder_name}/{var_name}_Numbers{file_message}_{model_out_name}.csv',
+                                   header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy() #
+        var_vals     = pd.read_csv(f'./txt/process4_output/{folder_name}/{var_name}_Values{file_message}_{model_out_name}.csv',
+                                   header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy() # na_values=['nan']
+        var_vals_top = pd.read_csv(f'./txt/process4_output/{folder_name}/{var_name}_Top_bounds{file_message}_{model_out_name}.csv',
+                                   header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy()
+        var_vals_bot = pd.read_csv(f'./txt/process4_output/{folder_name}/{var_name}_Bot_bounds{file_message}_{model_out_name}.csv',
+                                   header=None, dtype=float, na_values=['nan'], sep=' ').to_numpy()
 
         # Set plots
         fig, ax  = plt.subplots(nrows=2, ncols=2, figsize=[9,9],sharex=False, sharey=False, squeeze=True) #
@@ -167,8 +119,11 @@ def plot_EF_VPD_2d_grid(var_name, model_out_list, day_time=False, error_type='pe
         # ax.set_xticks(ticks=np.arange(len(case_names)), labels=case_names)
 
         # save figures
-        fig.savefig(f"./plots/Fig_{var_name}_EF_VPD_2d_grid_{message}_{model_out_name}.png",bbox_inches='tight',dpi=300)
-
+        if message != None:
+            fig.savefig(f"./plots/Fig_2d_grid_{var_name}_{message}_{model_out_name}.png",bbox_inches='tight',dpi=300)
+        else:
+            fig.savefig(f"./plots/Fig_2d_grid_{var_name}{file_message}_{model_out_name}.png",bbox_inches='tight',dpi=300)
+            
     return
 
 
@@ -180,42 +135,33 @@ if __name__ == "__main__":
     # Read site names, IGBP and clim
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    day_time       = True
+    day_time       = False
     clarify_site   = {'opt': True,
                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
-    error_type     = 'one_std' #'bootstrap'
-    standardize    = 'by_monthly_model_mean' # 'None'
-                                   # 'by_obs_mean'
-                                   # 'by_LAI'
-                                   # 'by_monthly_obs_mean'
-                                   # 'by_monthly_model_mean'
-
+    uncertain_type = 'UCRTN_one_std'# 'UCRTN_bootstrap'
+                    # 'UCRTN_percentile'
+                    # 'UCRTN_one_std'
+    standardize    = None       # 'None'
+                                # 'STD_LAI'
+                                # 'STD_annual_obs'
+                                # 'STD_monthly_obs'
+                                # 'STD_monthly_model'
+                                # 'STD_daily_obs'
+    time_scale     = 'daily'
+    method         = 'CRV_bins' # 'CRV_bins'
+                                # 'CRV_fit_GAM'
 
     # ================ Getting model name list ================
     # Path of PLUMBER 2 dataset
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
 
-    model_out_list = []
+    # Get model lists
+    model_out_list = get_model_out_list(var_name)
 
-    # Using AR-SLu.nc file to get the model namelist
-    f              = nc.Dataset(PLUMBER2_path+"/AR-SLu.nc", mode='r')
-    model_in_list  = f.variables[var_name + '_models']
-    ntime          = len(f.variables['CABLE_time'])
-
-    # Compare each model's output time interval with CABLE hourly interval
-    # If the model has hourly output then use the model simulation
-    for model_in in model_in_list:
-        if len(f.variables[f"{model_in}_time"]) == ntime:
-            model_out_list.append(model_in)
-
-    # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP']:
-        model_out_list.append('obs')
-
-    message = "by_monthly_model_mean"
+    # message = "by_daily_obs_mean"
 
     # ================ Plotting ================
-    plot_EF_VPD_2d_grid(var_name, model_out_list, day_time=day_time,
-                        error_type=error_type, clarify_site=clarify_site,
-                        standardize=standardize,message=message)
+    plot_EF_VPD_2d_grid(var_name, model_out_list, day_time=day_time, uncertain_type=uncertain_type,
+                        time_scale=time_scale, method=method,
+                        clarify_site=clarify_site, standardize=standardize)

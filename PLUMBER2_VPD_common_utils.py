@@ -14,6 +14,94 @@ from scipy import stats, interpolate
 from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
 
+def decide_filename(day_time=False, summer_time=False, energy_cor=False,
+                    IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
+                    country_code=None, selected_by=None, bounds=None, veg_fraction=None,
+                    uncertain_type=None, method=None,
+                    clarify_site={'opt':False,'remove_site':None}):
+
+    # file name
+    file_message = ''
+
+    if time_scale != None:
+        file_message = file_message + '_' + time_scale
+
+    if IGBP_type != None:
+        file_message = file_message + '_PFT='+IGBP_type
+
+    if clim_type != None:
+        file_message = file_message + '_CLIM='+clim_type
+
+    if veg_fraction !=None:
+        # if selected based on vegetation fraction
+        file_message = file_message + '_VF='+str(veg_fraction[0])+'-'+str(veg_fraction[1])
+
+    if country_code !=None:
+        # if for a country/region
+        file_message = file_message +'_'+country_code
+
+    if clarify_site['opt']:
+        # if remove 16 sites with problems in observation
+        file_message = file_message + '_RM16'
+
+    if day_time:
+        # if only daytime
+        file_message = file_message + '_DT'
+
+    if standardize != None:
+        # if the data is standardized
+        file_message = file_message + '_'+standardize
+
+    if selected_by !=None:
+        # which criteria used for binning the data
+        file_message = file_message +'_'+selected_by
+
+        if len(bounds) >1:
+            # percentile
+            if bounds[1] > 1:
+                file_message = file_message + '_'+str(bounds[0])+'-'+str(bounds[1])+'th'
+            else:
+                file_message = file_message + '_'+str(bounds[0])+'-'+str(bounds[1])
+        elif len(bounds) == 1 :
+            # fraction
+            if bounds[1] > 1:
+                file_message = file_message + '_'+str(bounds[0])+'th'
+            else:
+                file_message = file_message + '_'+str(bounds[0])
+
+    if uncertain_type != None:
+        file_message = file_message + '_'+uncertain_type
+
+    folder_name = 'original'
+
+    if standardize != None:
+        folder_name = 'standardized_'+standardize
+
+    if clarify_site['opt']:
+        folder_name = folder_name+'_clarify_site'
+
+    return folder_name, file_message
+
+
+def get_model_out_list(var_name):
+
+    # Using AR-SLu.nc file to get the model namelist
+    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
+    model_in_list = f.variables[var_name + '_models']
+    ntime         = len(f.variables['CABLE_time'])
+    model_out_list= []
+
+    # Compare each model's output time interval with CABLE hourly interval
+    # If the model has hourly output then use the model simulation
+    for model_in in model_in_list:
+        if len(f.variables[f"{model_in}_time"]) == ntime:
+            model_out_list.append(model_in)
+
+    # add obs to draw-out namelist
+    if var_name in ['Qle','Qh','NEE','GPP']:
+        model_out_list.append('obs')
+
+    return model_out_list
 
 def calculate_VPD_by_RH(rh, tair):
 
@@ -64,13 +152,13 @@ def load_default_list():
                         "ACASA","LPJ-GUESS","MuSICA",
                         "NASAEnt","QUINCY", "SDGVM",] #"BEPS"
 
-    model_names_select= ["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                         "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                         "JULES_GL9_withLAI","JULES_test","LPJ-GUESS",
-                         "MATSIRO","MuSICA","NASAEnt",
-                         "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                         "ORC3_r7245_NEE", "ORC3_r8120","QUINCY",
-                         "SDGVM","STEMMUS-SCOPE",] #"BEPS"
+    model_names_select= ['CABLE', 'CABLE-POP-CN', 'CHTESSEL_ERA5_3', 
+                         'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL', 
+                         'JULES_GL9_withLAI', 'JULES_test', 
+                         'MATSIRO', 'MuSICA', 'NASAEnt', 
+                         'NoahMPv401', 'ORC2_r6593', 'ORC2_r6593_CO2', 
+                         'ORC3_r7245_NEE', 'ORC3_r8120', 'QUINCY', 
+                         'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
     empirical_model  = ["1lin","3km27", "6km729","6km729lag",
                         "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",]
@@ -176,57 +264,113 @@ def smooth_vpd_series(values, window_size=11, order=3, smooth_type='S-G_filter',
 
     return vals_smooth
 
-def check_variable_exists(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):
+def get_key_words(varname):
+
+    match varname:
+        case 'TVeg':
+            key_word      = "trans"
+            key_word_not  = ["evap","transmission","pedo","electron",]
+        case 'Qle':
+            key_word      = 'latent'
+            key_word_not  = ['None']
+        case 'Qh':
+            key_word      = 'sensible'
+            key_word_not  = ['vegetation','soil',] # 'corrected'
+        case 'NEE':
+            key_word      = 'exchange'
+            key_word_not  = ['None']
+        case 'GPP':
+            key_word      = "gross primary"
+            key_word_not  = ['wrt','from']
+        case 'Rnet':
+            key_word      = "net radiation"
+            key_word_not  = ['None']
+        case 'SWnet':
+            key_word      = "net shortwave radiation"
+            key_word_not  = ['None']
+        case 'LWnet':
+            key_word      = "net longwave radiation"
+            key_word_not  = ['None']
+
+    return key_word, key_word_not
+
+def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name, 
+                                       key_word, key_word_not=None):
+
+    # Set input file path
+    file_path    = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
+    var_exist    = False
+    try:
+        with nc.Dataset(file_path[0], 'r') as dataset:
+            for var_name in dataset.variables:
+                if varname.lower() in var_name.lower():
+                    variable  = dataset.variables[var_name]
+                    if hasattr(variable, 'long_name'):
+                        long_name = variable.long_name.lower()
+                        if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
+                            var_name_in_model = var_name
+                            var_exist          = True
+                    else:
+                        my_dict = var_name
+                        var_exist = True
+                else:
+                    variable  = dataset.variables[var_name]
+
+                    # Check whether long_name exists
+                    if hasattr(variable, 'long_name'):
+                        long_name = variable.long_name.lower()  # Convert description to lowercase for case-insensitive search
+
+                        # Check whether key_word exists
+                        # make sure key_word in long_name and all key_word_not are not in key_word_not
+                        if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
+                            # print(long_name)
+                            var_name_in_model = var_name
+                            var_exist = True
+                            # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
+                            break  # Exit the loop once a variable is found
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    # variable doesn't exist
+    if not var_exist:
+        var_name_in_model = 'None'
+
+    return var_name_in_model
+
+def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
+
+    # get key words
+    key_word, key_word_not = get_key_words(varname)
 
     # file path
     my_dict      = {}
 
     for j, model_name in enumerate(model_names):
         # print(model_name)
+        var_name_in_model = check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name, 
+                                                               key_word, key_word_not)
+        # if Rnet doesn't exist
+        if var_name_in_model == 'None' and varname == 'Rnet':
+            SWnet_key_word, SWnet_key_word_not = get_key_words('SWnet') 
+            LWnet_key_word, LWnet_key_word_not = get_key_words('LWnet') 
+            SWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'SWnet', site_name, model_name, 
+                                                               SWnet_key_word, SWnet_key_word_not)
+            LWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'LWnet', site_name, model_name, 
+                                                               LWnet_key_word, LWnet_key_word_not) 
 
-        # Set input file path
-        file_path    = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
-        var_exist    = False
-        try:
-            with nc.Dataset(file_path[0], 'r') as dataset:
-                for var_name in dataset.variables:
-                    if varname.lower() in var_name.lower():
-                        variable  = dataset.variables[var_name]
-                        if hasattr(variable, 'long_name'):
-                            long_name = variable.long_name.lower()
-                            if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
-                                my_dict[model_name] = var_name
-                                var_exist = True
-                        else:
-                            my_dict[model_name] = var_name
-                            var_exist = True
-                    else:
-                        variable  = dataset.variables[var_name]
+            if SWnet_in_model == 'SinAng': 
+                # correct the SWnet var name for ORC models
+                SWnet_in_model = 'SWnet' 
 
-                        # Check whether long_name exists
-                        if hasattr(variable, 'long_name'):
-                            long_name = variable.long_name.lower()  # Convert description to lowercase for case-insensitive search
+            if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
+                my_dict[model_name] = 'None'
+            else:
+                my_dict[model_name] = [SWnet_in_model, LWnet_in_model]     
 
-                            # Check whether key_word exists
-                            # make sure key_word in long_name and all key_word_not are not in key_word_not
-                            if key_word in long_name and all(not re.search(key_not, long_name) for key_not in key_word_not):
-                                # print(long_name)
-                                my_dict[model_name] = var_name
-                                var_exist = True
-                                # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
-                                break  # Exit the loop once a variable is found
+        else:
+            my_dict[model_name] = var_name_in_model
 
-
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-        # variable doesn't exist
-        if not var_exist:
-            my_dict[model_name] = 'None'
-    # print(my_dict)
-    # f = open(f"./txt/{site_name}_{key_word}.txt", "w")
-    # f.write(str(my_dict))
-    # f.close()
     return my_dict
 
 def check_variable_units(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):
@@ -570,13 +714,13 @@ def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
     Purpose calculate confidence interval by bootstrap method
     Code source: https://stackoverflow.com/questions/44392978/compute-a-confidence-interval-from-sample-data-assuming-unknown-distribution/66008548#66008548
     """
-    
+
     import warnings
 
     def bootstrap_ids(data, n_samples=100):
         for _ in range(n_samples):
-            yield np.random.randint(data.shape[0], size=(data.shape[0],))    
-    
+            yield np.random.randint(data.shape[0], size=(data.shape[0],))
+
     alphas = np.array([alpha/2, 1 - alpha/2])
     nvals  = np.round((n_samples - 1) * alphas).astype(int)
     if np.any(nvals < 10) or np.any(nvals >= n_samples-10):
@@ -587,7 +731,7 @@ def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
     if np.prod(data.shape) != max(data.shape):
         raise ValueError("Data must be 1D")
     data = data.ravel()
-    
+
     boot_indexes = bootstrap_ids(data, n_samples)
     print('boot_indexes',boot_indexes)
     stat         = np.asarray([statfunction(data[_ids]) for _ids in boot_indexes])
@@ -595,6 +739,3 @@ def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
     stat.sort(axis=0)
 
     return stat[nvals]
-
-
-

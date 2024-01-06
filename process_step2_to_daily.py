@@ -1,3 +1,15 @@
+'''
+
+
+
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
 import os
 import gc
 import sys
@@ -38,12 +50,12 @@ def time_step_2_daily(var_name):
     ###          I filter out some EF values which make no sense,
     ###          which may make the below EF daily average biased.
 
-    if var_name == 'Qle' or var_name == 'Qh' or var_name == 'LAI' :
-        var_out = var_input.groupby(by=['year','day','site_name']).mean()
-    elif var_name == 'GPP' or var_name == 'NEE' or var_name == 'TVeg':
-        var_out = var_input.groupby(by=['year','day','site_name']).sum()
+    # if var_name == 'Qle' or var_name == 'Qh' or var_name == 'LAI' :
+    var_out = var_input.groupby(by=['year','month','day','site_name','IGBP_type','climate_type']).mean()
+    # elif var_name == 'GPP' or var_name == 'NEE' or var_name == 'TVeg':
+    #     var_out = var_input.groupby(by=['year','day','site_name','IGBP_type','climate_type']).sum()
 
-    var_output   = var_out.reset_index(level=['year','day','site_name'])
+    var_output   = var_out.reset_index(level=['year','month','day','site_name','IGBP_type','climate_type'])
     var_output.to_csv(f'./txt/all_sites_daily/{var_name}_all_sites_daily.csv')
 
     return

@@ -36,38 +36,54 @@ from estimate_pressure import estimate_pressure
 def main(fname, hour=False):
 
     site_name = "Alice_Holt"
-    model_out_list
-    for model_name in model_out_list:
-        if model_name != 'obs':
-            varname = 'model_'+model_name
-        else:
-            varname = model_name
 
-    # Check here
     date_parse = lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
     df = pd.read_csv(fname, index_col='DateTime',
                      parse_dates=['DateTime'],
                      date_parser=date_parse)
     df.index.names = ['date']
-    ################ 
-    
-,Unnamed: 0,year,month,day,site_name,IGBP_type,climate_type,Unnamed: 0.1,model_3km27,3km27_EF,model_6km729,6km729_EF,model_6km729lag,6km729lag_EF,model_ACASA,ACASA_EF,model_CABLE,CABLE_EF,model_CABLE-POP-CN,CABLE-POP-CN_EF,model_CHTESSEL_ERA5_3,CHTESSEL_ERA5_3_EF,model_CHTESSEL_Ref_exp1,CHTESSEL_Ref_exp1_EF,model_CLM5a,CLM5a_EF,model_GFDL,GFDL_EF,model_JULES_GL9_withLAI,JULES_GL9_withLAI_EF,model_JULES_test,JULES_test_EF,model_LSTM_eb,LSTM_eb_EF,model_LSTM_raw,LSTM_raw_EF,model_Manabe,Manabe_EF,model_ManabeV2,ManabeV2_EF,model_MATSIRO,MATSIRO_EF,model_MuSICA,MuSICA_EF,model_NASAEnt,NASAEnt_EF,model_NoahMPv401,NoahMPv401_EF,model_ORC2_r6593,ORC2_r6593_EF,model_ORC2_r6593_CO2,ORC2_r6593_CO2_EF,model_ORC3_r7245_NEE,ORC3_r7245_NEE_EF,model_ORC3_r8120,ORC3_r8120_EF,model_PenmanMonteith,PenmanMonteith_EF,model_QUINCY,QUINCY_EF,model_RF_eb,RF_eb_EF,model_RF_raw,RF_raw_EF,model_STEMMUS-SCOPE,STEMMUS-SCOPE_EF,obs,obs_cor,obs_EF,VPD,
-obs_Tair,obs_Qair,obs_Precip,obs_SWdown,NoahMPv401_greenness,hour,half_hrs_after_precip
+
+    """
+    fig, ax1 = plt.subplots()
+
+    ax1.plot(df.VPD, "k-")
+    ax1.set_ylabel("VPD (kPa)")
+    ax2 = ax1.twinx()
+    ax2.plot(df.RH, "g-", alpha=0.8)
+    ax2.set_ylim(0, 100)
+    ax2.set_ylabel("RH (%)")
+
+    plt.show()
+
+    vpd = df.VPD
+    vpd_mean = vpd.groupby(lambda x: (x.month, x.day)).mean().values
+    vpd_max = vpd.groupby(lambda x: (x.month, x.day)).max().values
+    vpd_min = vpd.groupby(lambda x: (x.month, x.day)).min().values
+    fig, ax1 = plt.subplots()
+
+    ax1.plot(vpd_mean, ls="-", color="darkgreen")
+    ax1.fill_between(np.arange(len(vpd_min)), vpd_min, vpd_max, color="green", alpha=.5)
+    ax1.set_ylabel("VPD (kPa)")
+
+
+    plt.show()
+    sys.exit()
+    """
 
     # Convert units ...
-    df.loc[:, 'obs_Tair'] -= 273.15
+    df.loc[:, 'Tair'] -= 273.15
 
     # screen for dew
     #df = df[df['LE'] > 0.0]
 
     # W m-2 to kg m-2 s-1
-    lhv = latent_heat_vapourisation(df['obs_Tair'])
-    df.loc[:, varname] = df[varname] / lhv
+    lhv = latent_heat_vapourisation(df['Tair'])
+    df.loc[:, 'ET'] = df['LE'] / lhv
 
 
     # kg m-2 s-1 to mol m-2 s-1
     conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
-    df.loc[:, varname] *= conv
+    df.loc[:, 'ET'] *= conv
 
     (df, no_G) = filter_dataframe(df, hour)
     if no_G:
@@ -456,5 +472,5 @@ def filter_dataframe(df, hour):
 
 if __name__ == "__main__":
 
-    fname = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process3_output/curves/raw_data_Qle_VPD_daily_RM16_SLCT_EF_model_0-0.2.csv"
+    fname = "/Users/xj21307/research/Alice_Holt/data/alice_holt_met_data_2022.csv"
     main(fname, hour=False)
