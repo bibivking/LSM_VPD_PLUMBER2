@@ -1,7 +1,10 @@
 '''
-
-
-
+Bin the dataset by VPD (and EF) and save in process4_output
+Including:
+    def bin_VPD
+    def bin_VPD_EF
+    def write_var_VPD
+    def write_var_VPD_EF
 '''
 
 __author__  = "Mengyuan Mu"
@@ -292,7 +295,7 @@ def write_var_VPD_EF(var_name, site_names, file_input, PLUMBER2_path, selected_b
     # Read in the selected raw data
     var_input   = pd.read_csv(f'./txt/process3_output/2d_grid/{file_input}',na_values=[''])
     site_num    = len(np.unique(var_input["site_name"]))
-  
+
     # ========= Set output file namte =========
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
                     IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
@@ -331,8 +334,8 @@ if __name__ == "__main__":
 
     var_name       = 'Qle'      #'TVeg'
     time_scale     = 'daily'
-    selected_by    = 'SLCT_EF_model' # 'EF_model' 
-                                # 'EF_obs'
+    selected_by    = 'EF_model' # 'EF_model'
+                                     # 'EF_obs'
     method         = 'CRV_bins' # 'CRV_bins'
                                 # 'CRV_fit_GAM'
     standardize    = None       # 'None'
@@ -342,14 +345,14 @@ if __name__ == "__main__":
                                 # 'STD_monthly_model'
                                 # 'STD_daily_obs'
 
-    veg_fraction   = None #[0.7,1]
+    veg_fraction   = None   #[0.7,1]
     day_time       = False  # False for daily
                             # True for half-hour or hourly
 
     clarify_site   = {'opt': True,
                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
-    models_calc_LAI= ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','Noah-MP']
+    models_calc_LAI= ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
 
     energy_cor     = False
     if var_name == 'NEE':
@@ -365,8 +368,11 @@ if __name__ == "__main__":
     uncertain_type = 'UCRTN_bootstrap'  # 'UCRTN_bootstrap'
                                         # 'UCRTN_percentile'
                                         # 'UCRTN_one_std'
-    selected_by    = 'SLCT_EF_model' # 'EF_model' 
+    selected_by    = 'EF_model' # 'EF_model'
+
+    # EF [0., 0.2]
     bounds         = [0,0.2] #30
+    veg_fraction   = [0,0.3]
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,
                                                 bounds=bounds, veg_fraction=veg_fraction, method=method,
@@ -383,26 +389,115 @@ if __name__ == "__main__":
                     energy_cor=energy_cor, method=method)
     gc.collect()
 
-    # ================ 2D grid ================
-    uncertain_type = 'UCRTN_one_std'# 'UCRTN_bootstrap'
-                    # 'UCRTN_percentile'
-                    # 'UCRTN_one_std'
-
-    selected_by    = None
+    bounds         = [0,0.2] #30
+    veg_fraction   = [0.7,1.]
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,
-                                                veg_fraction=veg_fraction, method=method,
+                                                bounds=bounds, veg_fraction=veg_fraction, method=method,
                                                 clarify_site=clarify_site)
-
     file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-
-    # if the the data point is lower than 10 then the bin's value set as nan
     print('file_input',file_input)
+    write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+                    day_time=day_time,clarify_site=clarify_site,standardize=standardize, time_scale=time_scale,
+                    uncertain_type=uncertain_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+                    country_code=country_code,
+                    energy_cor=energy_cor, method=method)
+    gc.collect()
 
-    VPD_EF_num_threshold = 0
 
-    write_var_VPD_EF(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
-                      time_scale=time_scale,day_time=day_time, energy_cor=energy_cor, 
-                      VPD_EF_num_threshold=VPD_EF_num_threshold, uncertain_type=uncertain_type,
-                       models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
-                      clarify_site=clarify_site, standardize=standardize)
+    bounds         = [0.8,1.] #30
+    veg_fraction   = [0,0.3] 
+    folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                standardize=standardize, country_code=country_code, selected_by=selected_by,
+                                                bounds=bounds, veg_fraction=veg_fraction, method=method,
+                                                clarify_site=clarify_site)
+    file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+    print('file_input',file_input)
+    write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+                    day_time=day_time,clarify_site=clarify_site,standardize=standardize, time_scale=time_scale,
+                    uncertain_type=uncertain_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+                    country_code=country_code,
+                    energy_cor=energy_cor, method=method)
+    gc.collect()
+
+
+    bounds         = [0.8,1.] #30
+    veg_fraction   = [0.7,1.]
+    folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                standardize=standardize, country_code=country_code, selected_by=selected_by,
+                                                bounds=bounds, veg_fraction=veg_fraction, method=method,
+                                                clarify_site=clarify_site)
+    file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+    print('file_input',file_input)
+    write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+                    day_time=day_time,clarify_site=clarify_site,standardize=standardize, time_scale=time_scale,
+                    uncertain_type=uncertain_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+                    country_code=country_code,
+                    energy_cor=energy_cor, method=method)
+    gc.collect()
+
+
+    # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
+
+    # for IGBP_type in IGBP_types:
+        
+    #     # EF [0.8, 1.0]
+    #     bounds         = [0,0.2] #30
+    #     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+    #                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,
+    #                                                 bounds=bounds, veg_fraction=veg_fraction, method=method, IGBP_type=IGBP_type,
+    #                                                 clarify_site=clarify_site)
+
+    #     file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+
+    #     print('file_input',file_input)
+
+    #     write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+    #                     day_time=day_time,clarify_site=clarify_site,standardize=standardize, time_scale=time_scale,
+    #                     uncertain_type=uncertain_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+    #                     country_code=country_code, IGBP_type=IGBP_type,
+    #                     energy_cor=energy_cor, method=method)
+    #     gc.collect()
+
+    #     # EF [0.8, 1.0]
+    #     bounds         = [0.8,1.] #30
+    #     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+    #                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,
+    #                                                 bounds=bounds, veg_fraction=veg_fraction, method=method, IGBP_type=IGBP_type,
+    #                                                 clarify_site=clarify_site)
+
+    #     file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+
+    #     print('file_input',file_input)
+
+    #     write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+    #                     day_time=day_time,clarify_site=clarify_site,standardize=standardize, time_scale=time_scale,
+    #                     uncertain_type=uncertain_type, models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+    #                     country_code=country_code, IGBP_type=IGBP_type,
+    #                     energy_cor=energy_cor, method=method)
+    #     gc.collect()
+
+
+    # # ================ 2D grid ================
+    # uncertain_type = 'UCRTN_one_std'# 'UCRTN_bootstrap'
+    #                 # 'UCRTN_percentile'
+    #                 # 'UCRTN_one_std'
+    #
+    # selected_by    = None
+    # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+    #                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
+    #                                             veg_fraction=veg_fraction, method=method,
+    #                                             clarify_site=clarify_site)
+    #
+    # file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+    #
+    # # if the the data point is lower than 10 then the bin's value set as nan
+    # print('file_input',file_input)
+    #
+    # VPD_EF_num_threshold = 0
+    #
+    # write_var_VPD_EF(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by, bounds=bounds,
+    #                   time_scale=time_scale,day_time=day_time, energy_cor=energy_cor,
+    #                   VPD_EF_num_threshold=VPD_EF_num_threshold, uncertain_type=uncertain_type,
+    #                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction,
+    #                   clarify_site=clarify_site, standardize=standardize)

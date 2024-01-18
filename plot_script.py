@@ -1,3 +1,20 @@
+'''
+A few simple functions to plot anaylsis figures:
+Including:
+    def plot_diurnal_cycle
+    def plot_pdf
+    def plot_scatter
+    def plot_lines
+
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
+
 import os
 import sys
 import glob
@@ -40,7 +57,7 @@ def plot_diurnal_cycle(site_name,var_output,model_out_list):
 def plot_pdf(var_input, model_out_list, message=None, plot_type='fitting_line', density=False, check_factor=None):
 
     '''
-    Plot different pdf 
+    Plot different pdf
     '''
     # Setting plots
     plt.rcParams['text.usetex']     = False
@@ -71,7 +88,7 @@ def plot_pdf(var_input, model_out_list, message=None, plot_type='fitting_line', 
 
     props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
-    if check_factor == None: 
+    if check_factor == None:
 
         # create figure
         fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[10,10],sharex=True, sharey=False, squeeze=True)
@@ -87,18 +104,18 @@ def plot_pdf(var_input, model_out_list, message=None, plot_type='fitting_line', 
                 # Plot the PDF of the normal distribution
                 # read the data for this model
                 var_vals = var_input[varname]
-                    
-                # remove nan values 
+
+                # remove nan values
                 var_vals = np.sort(var_vals[~ np.isnan(var_vals)])
 
                 if np.any(var_vals):
-        
+
                     bandwidth = 0.5
                     # Estimate the probability density function using kernel density estimation.
                     pdf       = gaussian_kde(var_vals, bw_method=bandwidth)
                     # Plot the probability density function.
                     ax.plot(var_vals, pdf(var_vals), color=model_colors[model_name],label=model_name)
-                    
+
             if plot_type == 'hist':
 
                 hist = ax.hist(var_input['VPD'], bins=100, density=density, alpha=0.6, color=model_colors[model_name],
@@ -114,7 +131,7 @@ def plot_pdf(var_input, model_out_list, message=None, plot_type='fitting_line', 
     else:
 
         for model_name in model_out_list:
-            
+
             # create figure
             fig, ax  = plt.subplots(nrows=1, ncols=1, figsize=[8,7],sharex=True, sharey=False, squeeze=True)
 
@@ -122,15 +139,15 @@ def plot_pdf(var_input, model_out_list, message=None, plot_type='fitting_line', 
                 varname  = 'model_'+model_name
             else:
                 varname  = model_name
-            
-            # remove nan values 
+
+            # remove nan values
             model_mask = ~ np.isnan(var_input[varname])
 
             plot1 = sns.histplot(data=var_input[model_mask], x='VPD', hue=check_factor, kde=False,  stat='percent',
                                  element="step", fill=False, ax=ax)
 
             # ax.legend(fontsize=8,frameon=False)
-            
+
             ax.set_ylim(0, 2)
             if message == None:
                 fig.savefig(f"./plots/{var_name}_PDF_{check_factor}_{model_name}.png", bbox_inches='tight',dpi=300)
@@ -284,9 +301,9 @@ if __name__ == "__main__":
     # Get model lists
     model_out_list = model_names['model_select']
 
-    # Setting 
+    # Setting
     time_scale     = 'daily'
-    selected_by    = 'SLCT_EF_model' # 'EF_model' 
+    selected_by    = 'SLCT_EF_model' # 'EF_model'
                                 # 'EF_obs'
     method         = 'CRV_bins' # 'CRV_bins'
                                 # 'CRV_fit_GAM'
@@ -319,7 +336,7 @@ if __name__ == "__main__":
     # uncertain_type = 'UCRTN_bootstrap'  # 'UCRTN_bootstrap'
     #                                     # 'UCRTN_percentile'
     #                                     # 'UCRTN_one_std'
-    # selected_by    = 'SLCT_EF_model' # 'EF_model' 
+    # selected_by    = 'SLCT_EF_model' # 'EF_model'
     # bounds         = [0,0.2] #30
     # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
     #                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
@@ -331,11 +348,11 @@ if __name__ == "__main__":
 
 
     # ================ PDF plot ================
-    selected_by = 'SLCT_EF_model' # 'EF_model' 
+    selected_by = 'SLCT_EF_model' # 'EF_model'
     bounds      = [0,0.2] #30
     plot_type   = 'hist'#'fitting_line'
     density     = True
-    check_factor = 'IGBP_type' #'site_name','IGBP_type','climate_type'
+    check_factor= None #'IGBP_type' #'site_name','IGBP_type','climate_type'
 
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,

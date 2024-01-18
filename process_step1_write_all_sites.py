@@ -1,6 +1,15 @@
 '''
-
-
+Including
+    def read_data
+    def read_LAI_obs
+    def read_LAI_model
+    def calc_hours_after_precip
+    def write_spatial_land_days
+    def add_obs_LAI_to_write_spatial_land_days
+    def add_model_LAI_to_write_spatial_land_days
+    def add_model_SMtop1m_to_write_spatial_land_days
+    def add_greenness_to_write_spatial_land_days
+    def check_LAI
 
 '''
 
@@ -25,6 +34,7 @@ from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 from plot_script import *
+import multiprocessing
 
 def read_data(var_name, site_name, input_file):
 
@@ -290,27 +300,27 @@ def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_pa
                     # var_output_tmp[missed_model+'_EF'] = np.nan
 
             # connect different sites data together
-            var_output = var_output.append(var_output_tmp, ignore_index=True)
+            # var_output = var_output.append(var_output_tmp, ignore_index=True) # AttributeError: 'DataFrame' object has no attribute 'append'. Did you mean: '_append'?
+            var_output = pd.concat([var_output, var_output_tmp], ignore_index=True)
 
         # save the dataframe
         var_output_tmp=None
         gc.collect()
 
-
     if add_LAI:
         if country_code !=None:
-            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI_'+country_code+'.csv') # , mode='a', index=False
+            var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_with_LAI_'+country_code+'.csv') # , mode='a', index=False
         else:
-            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_with_LAI.csv') # , mode='a', index=False
+            var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_with_LAI.csv') # , mode='a', index=False
     else:
         if country_code !=None:
-            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites_'+country_code+'.csv') # , mode='a', index=False
+            var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_'+country_code+'.csv') # , mode='a', index=False
         else:
-            var_output.to_csv(f'./txt/all_sites/{var_name}_all_sites.csv') # , mode='a', index=False
+            var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites.csv') # , mode='a', index=False
 
 def add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path):
 
-    var_output   = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',usecols=['time','month',
+    var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',usecols=['time','month',
                                'hour','site_name','IGBP_type','climate_type','half_hrs_after_precip'],
                                na_values=[''])
     ntime        = len(var_output)
@@ -322,50 +332,117 @@ def add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_pa
         LAI_tmp =  read_LAI_obs(site_name, PLUMBER2_met_path)
         var_output.loc[site_mask,'obs_LAI'] = LAI_tmp
 
-    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
+    var_output.to_csv(f'./txt/process1_output/LAI_all_sites.csv')
     return
 
-def add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input):
+def add_model_LAI_to_write_spatial_land_days(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input):
 
-    var_output   = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
-    ntime        = len(var_output)
+    var_output   = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv',na_values=[''])
+    
 
     for model_with_LAI in models_calc_LAI:
         var_output[model_with_LAI+'_LAI'] = np.nan
 
     for i, site_name in enumerate(site_names):
         site_mask = (var_output['site_name'] == site_name)
+        ntime     = np.sum(site_mask)
+        print('ntime',ntime)
 
         for model_with_LAI in models_calc_LAI:
+
             model_LAI_name = model_LAI_names[model_with_LAI]
 
-            LAI_tmp =  read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input)
+            LAI_tmp     = read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input)
+
+            if np.all(np.isnan(LAI_tmp)):
+                print('model name is ',model_with_LAI, 'site is ', site_name, 'np.all(np.isnan(LAI_tmp))=True')
+            else:
+                model_ntime = len(LAI_tmp)
+                print('model_ntime',model_ntime)
+
+                if model_ntime == ntime:
+                    # if the model output is half-hourly
+                    var_output.loc[site_mask, model_with_LAI+'_LAI'] = LAI_tmp
+                elif model_ntime == int(ntime/2):
+                    print('model ', model_with_LAI, ' is hourly, model_ntime is', model_ntime, ' ntime is', ntime)
+
+                    # put the value of hourly data to the first half hour
+                    LAI_new = np.full(ntime,np.nan)
+                    for t in ntime:
+                        if t % 2 == 0:
+                            try:
+                                LAI_new[t] = LAI_tmp[int(t/2.)]
+                            except:
+                                # in case, the site misses LAI data and it is set as np.nan
+                                LAI_new[t] = LAI_tmp
+                    var_output.loc[site_mask, model_with_LAI+'_LAI'] =LAI_new
+        gc.collect()
+    var_output.to_csv(f'./txt/process1_output/LAI_all_sites.csv')
+
+    return
+
+# ========== Parallelizedly add model LAI to write spatial land days ==========
+def save_model_site_LAI(site_name, models_calc_LAI, model_LAI_names, PLUMBER2_path_input, var_output):
+
+    # , manager
+    print('site_name',site_name)
+    
+    """Processes a single site in parallel."""
+    # manager = multiprocessing.Manager()
+    # lock=manager.Lock()
+
+    site_mask = (var_output['site_name'] == site_name)
+    ntime     = np.sum(site_mask)
+    print('ntime', ntime)
+
+    for model_with_LAI in models_calc_LAI:
+        model_LAI_name = model_LAI_names[model_with_LAI]
+        LAI_tmp = read_LAI_model(site_name, model_with_LAI, model_LAI_name, PLUMBER2_path_input)
+
+        if not np.all(np.isnan(LAI_tmp)):
             model_ntime = len(LAI_tmp)
+            print('model_ntime', model_ntime)
 
             if model_ntime == ntime:
-                # if the model output is half-hourly
+                # with lock:  
                 var_output.loc[site_mask, model_with_LAI+'_LAI'] = LAI_tmp
             elif model_ntime == int(ntime/2):
-                print('model ', model_in, ' is hourly, model_ntime is', model_ntime, ' ntime is', ntime)
+                LAI_new = np.full(ntime, np.nan)
+                LAI_new[::2] = LAI_tmp  # Assign hourly values to even-indexed elements
+                # with lock:  
+                var_output.loc[site_mask, model_with_LAI+'_LAI'] = LAI_new
 
-                # put the value of hourly data to the first half hour
-                LAI_new = np.full(ntime,np.nan)
-                for t in ntime:
-                    if t % 2 == 0:
-                        try:
-                            LAI_new[t] = LAI_tmp[int(t/2.)]
-                        except:
-                            # in case, the site misses LAI data and it is set as np.nan
-                            LAI_new[t] = LAI_tmp
-                var_output.loc[site_mask, model_with_LAI+'_LAI'] =LAI_new
-        gc.collect()
-    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
-    return
+    return var_output
+
+def add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input):
+    
+    """Parallelized version of the function."""
+
+    var_output = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv', na_values=[''])
+    ntime = len(var_output)
+
+    for model_with_LAI in models_calc_LAI:
+        var_output[model_with_LAI+'_LAI'] = np.nan
+
+    # Creates a lock object, a tool for coordinating access to shared data in multiprocessing.
+    # Acts like a "gatekeeper" ensuring only one process can modify shared data at a time.
+    # manager = multiprocessing.Manager()
+    # lock    = manager.Lock()
+
+    # Creates a pool of worker processes to execute tasks in parallel.
+    # The with statement ensures proper cleanup of the pool after use.
+    with multiprocessing.Pool() as pool:
+
+        # Applies the process_site function to multiple arguments in parallel using the worker processes.
+        # starmap is similar to map but unpacks arguments from tuples or lists.
+        pool.starmap(process_site, [(site_name, models_calc_LAI, model_LAI_names, PLUMBER2_path_input, var_output) for site_name in site_names]) # , manager
+
+    var_output.to_csv(f'./txt/process1_output/LAI_all_sites_parallel.csv')
 
 def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path):
 
     # read the variables
-    var_output   = pd.read_csv(f'./txt/all_sites/{var_name}_all_sites.csv',usecols=['time','month',
+    var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',usecols=['time','month',
                                'hour','site_name','IGBP_type','climate_type','half_hrs_after_precip'],
                                na_values=[''])
 
@@ -395,12 +472,12 @@ def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names,
 
         var_output.loc[site_mask, 'model_mean_SMtop1m'] = f_in.variables['model_mean_SMtop1m'][:]
 
-    var_output.to_csv(f'./txt/all_sites/SMtop1m_all_sites.csv')
+    var_output.to_csv(f'./txt/process1_output/SMtop1m_all_sites.csv')
     return
 
 def add_greenness_to_write_spatial_land_days(var_name, site_names):
 
-    var_output   = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
+    var_output   = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv',na_values=[''])
     ntime        = len(var_output)
     var_output['NoahMPv401_greenness'] = np.nan
 
@@ -413,13 +490,13 @@ def add_greenness_to_write_spatial_land_days(var_name, site_names):
         f_green        = nc.Dataset(greenness_file, mode='r')
         var_output.loc[site_mask,'NoahMPv401_greenness'] = f_green.variables['Greenness'][:,0,0]
 
-    var_output.to_csv(f'./txt/all_sites/LAI_all_sites.csv')
+    var_output.to_csv(f'./txt/process1_output/LAI_all_sites.csv')
 
     return
 
 def check_LAI(var_name, site_names, PLUMBER2_met_path):
 
-    var_output            = pd.read_csv(f'./txt/all_sites/LAI_all_sites.csv',na_values=[''])
+    var_output            = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv',na_values=[''])
     ntime                 = len(var_output)
 
     print("np.any(var_output['obs_LAI'] !=0)",np.any(var_output['obs_LAI'] !=0))
@@ -438,23 +515,25 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'Qle'
+    var_name          = 'GPP' #'Qle'
     add_LAI           = False
-    models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','Noah-MP']
+    models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
     model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',
-                         'GFDL':'lai', 'SDGVM':'lai','QUINCY':'LAI','Noah-MP':'LAI'} #
+                         'GFDL':'lai', 'SDGVM':'lai','QUINCY':'LAI','NoahMPv401':'LAI'} #
 
     SM_names, soil_thicknesses = get_model_soil_moisture_info()
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
 
     # add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
 
     # # === Together ===
+    var_name          = 'LAI'
     # add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path)
-    # add_model_LAI_to_write_spatial_land_days(var_name, site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
+    # add_model_LAI_to_write_spatial_land_days(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
+    add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
     # add_greenness_to_write_spatial_land_days(var_name, site_names)
     # # ================
 

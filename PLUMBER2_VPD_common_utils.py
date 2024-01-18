@@ -82,7 +82,6 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
 
     return folder_name, file_message
 
-
 def get_model_out_list(var_name):
 
     # Using AR-SLu.nc file to get the model namelist
@@ -116,8 +115,8 @@ def calculate_VPD_by_RH(rh, tair):
     DEG_2_KELVIN = 273.15
     PA_TO_KPA    = 0.001
 
-    # convert back to Pa
-    # tair         -= DEG_2_KELVIN
+    # convert from K to C
+    tair         -= DEG_2_KELVIN
 
     # saturation vapor pressure
     es = 100.0 * 6.112 * np.exp((17.67 * tair) / (243.5 + tair))
@@ -276,6 +275,9 @@ def get_key_words(varname):
         case 'Qh':
             key_word      = 'sensible'
             key_word_not  = ['vegetation','soil',] # 'corrected'
+        case 'Qg':
+            key_word      = 'ground'
+            key_word_not  = ['radiation', 'snow', 'temperature', 'evaporation', 'water', 'carbon']
         case 'NEE':
             key_word      = 'exchange'
             key_word_not  = ['None']
@@ -303,7 +305,10 @@ def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_
     try:
         with nc.Dataset(file_path[0], 'r') as dataset:
             for var_name in dataset.variables:
-                if varname.lower() in var_name.lower():
+                if varname.lower() == var_name.lower():
+                    var_name_in_model = var_name
+                    var_exist         = True
+                elif varname.lower() in var_name.lower():
                     variable  = dataset.variables[var_name]
                     if hasattr(variable, 'long_name'):
                         long_name = variable.long_name.lower()
@@ -311,8 +316,8 @@ def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_
                             var_name_in_model = var_name
                             var_exist          = True
                     else:
-                        my_dict = var_name
-                        var_exist = True
+                        var_name_in_model = var_name
+                        var_exist         = True
                 else:
                     variable  = dataset.variables[var_name]
 
@@ -371,6 +376,11 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
         else:
             my_dict[model_name] = var_name_in_model
 
+    if varname == 'Qg':
+        # manually set 'hfdsn': heat flux into soil/snow including snow melt and lake / snow light transmission
+        # as CLM5a's Qg
+        my_dict['CLM5a'] = 'hfdsn'
+        
     return my_dict
 
 def check_variable_units(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):

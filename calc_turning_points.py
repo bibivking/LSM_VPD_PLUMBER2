@@ -1,3 +1,20 @@
+'''
+Including:
+    def calc_derivative
+    def find_turning_points_by_gradient
+    def find_turning_points_by_max_peaks
+    def find_turning_points_by_kneed
+    def find_turning_points_by_cdf
+    def find_turning_points_by_piecewise_regression
+    def single_plot_lines
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
 import os
 import gc
 import sys
@@ -268,7 +285,6 @@ def find_turning_points_by_piecewise_regression(model_out_list, vpd_series, vals
     # print('slopes',slopes)
 
     return turning_points, slopes
-
 
 def single_plot_lines(turning_points, model_out_list, x_values, y_values ,message=None):
 

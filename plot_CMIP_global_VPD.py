@@ -1,3 +1,18 @@
+'''
+Including:
+    def time_mask
+    def make_landsea_mask_file
+    def calculate_model_mean_land_VPD
+    def calculate_model_VPD_metrics
+    def calculate_future_VPD_warming_level
+    def plot_VPD_time_series
+
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
 import os
 import sys
 import glob
@@ -489,9 +504,10 @@ if __name__ == "__main__":
 
     # Read files
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
-    CMIP6_data_path   = "/g/data/w97/amu561/CMIP6_for_Mengyuan/Processed_CMIP6_data/"
-    CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6/"
-    scenarios         = ['historical','ssp126','ssp245','ssp585']
+    CMIP6_data_path   = "/g/data/w97/mm3972/data/CMIP6_data/Processed_CMIP6_data/"  
+                        # "/g/data/w97/amu561/CMIP6_for_Mengyuan/Processed_CMIP6_data/"
+    CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_daily/"
+    scenarios         = ['historical','ssp126','ssp245','ssp370']
     region            = [[-44,-10], [112,154]]
     region_name       = 'AU'
     # get file names
@@ -540,11 +556,13 @@ if __name__ == "__main__":
 
         model_out_list      = []
         for file_name in file_names_scenario:
-            model_out_name = file_name.split("/")[9]
+            # print(file_name)
+            model_out_name = file_name.split("/")[10]
             if model_out_name in ['NorESM2-LM','CESM2-WACCM']:
                 print('Ignore ',model_out_name,'since different time cooridate in Tair and RH')
             else:
                 model_out_list.append(model_out_name)
         print('model_out_list',model_out_list)
-        calculate_model_VPD_metrics(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list, time_s, time_e,
-                                    region=region, region_name=region_name)
+
+        # calculate_model_VPD_metrics(CMIP6_data_path, CMIP6_out_path, scenario, model_out_list, time_s, time_e,
+        #                             region=region, region_name=region_name)

@@ -1,3 +1,15 @@
+'''
+Including
+    def plot_var_VPD
+    def plot_model_bias_VPD
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
 import os
 import gc
 import sys
@@ -242,7 +254,6 @@ def plot_var_VPD(var_name, bin_by=None, low_bound=None, high_bound=None,
 
     # ax[1].set_xlabel('VPD (kPa)', loc='center',size=14)# rotation=270,
     fig.savefig("./plots/"+var_name+'_VPD_all_sites'+file_name+'_'+message+'_'+smooth_type+'_coarse.png',bbox_inches='tight',dpi=300) # '_30percent'
-
 
 def plot_model_bias_VPD(var_name, bin_by=None, day_time=False, summer_time=False,
                         window_size=11, order=3, smooth_type='S-G_filter', method='bin_by_vpd',

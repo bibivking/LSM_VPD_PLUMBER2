@@ -1,3 +1,16 @@
+'''
+Including:
+    def plot_var_VPD_uncertainty
+    def plot_var_VPD_line_box
+    def plot_var_VPD_line_box_three_cols
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
+#==============================================
+
 import os
 import gc
 import sys
@@ -12,8 +25,588 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib import colors
 import matplotlib.ticker as mticker
-from calc_turning_points import *
+# from calc_turning_points import *
 from PLUMBER2_VPD_common_utils import *
+
+def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, time_scale=None, country_code=None,
+                 selected_by=None, veg_fraction=None,  standardize=None, uncertain_type='UCRTN_percentile',
+                 method='CRV_bins', IGBP_type=None, clim_type=None, clarify_site={'opt':False,'remove_site':None},
+                 num_threshold=200):
+
+    # ============ Setting for plotting ============
+    cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
+
+    fig, ax  = plt.subplots(nrows=1, ncols=2, figsize=[12,5],sharex=False, sharey=False, squeeze=False)
+    # fig, ax = plt.subplots(figsize=[10, 7])
+    plt.subplots_adjust(wspace=0.09, hspace=0.02)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+
+    # ============ Set the input file name ============
+    bounds = [0.8,1.] 
+    folder_name, file_message_wet = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+    bounds = [0,0.2]
+    folder_name, file_message_dry = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+
+    file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}.csv',
+                    f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}.csv',]
+
+    print('Reading', file_names)
+
+    for i, file_name in enumerate(file_names):
+
+        # set plot row and col
+        row = int(i/2)
+        col = i%2
+
+        # Read lines data
+        var = pd.read_csv(file_name)
+        if i == 0:
+            # how to get the model out list from the column names
+            model_out_list = []
+            for column_name in var.columns:
+                if "_vals" in column_name:
+                    model_out_list.append(column_name.split("_vals")[0])
+
+            # models to plot
+            model_order     = []
+            model_names_all = model_names['model_select']
+            for model_name in model_names_all:
+                if (model_name in model_out_list) and (model_name not in ['obs_cor','RF_eb']):
+                    model_order.append(model_name)
+
+            # Add obs
+            # model_order.append('obs')
+            print('model_order',model_order)
+
+        # Calculate turning points
+        if turning_point['calc']:
+
+            nmodel   = len(model_out_list)
+            nvpd     = len(var['vpd_series'])
+            val_tmp  = np.zeros((nmodel,nvpd))
+
+            for j, model_out_name in enumerate(model_order):
+                vals_vpd_num = var[model_out_name+'_vpd_num']
+                # find_turning_points_by_piecewise_regression will transfer NEE to NEP so don't need to do it here.
+                val_tmp[j,:] = np.where(vals_vpd_num>num_threshold, var[model_out_name+'_vals'], np.nan)
+
+            # Find the turning points
+            if turning_point['method']=='kneed' :
+                turning_points = find_turning_points_by_kneed(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='cdf' :
+                turning_points = find_turning_points_by_cdf(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='piecewise':
+                turning_points, slope = find_turning_points_by_piecewise_regression(model_order, var['vpd_series'], val_tmp, var_name)
+
+        for j, model_out_name in enumerate(model_order):
+
+            # set line color
+            line_color = model_colors[model_out_name]
+
+            # ===== Drawing the lines =====
+            # Unify NEE units : upwards CO2 movement is positive values
+
+            if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                value = var[model_out_name+'_vals']*(-1)
+            else:
+                value = var[model_out_name+'_vals']
+
+            # smooth or not
+            if smooth_type != 'no_soomth':
+                value = smooth_vpd_series(value, window_size, order, smooth_type)
+
+            # only use vpd data points > num_threshold
+            above_thres      = (var[model_out_name+'_vpd_num']>num_threshold)
+            var_vpd_series = var['vpd_series'][above_thres]
+            value          = value[above_thres]
+
+            # Plot if the data point > num_threshold
+            if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+                if model_out_name == 'obs':
+                    lw=2
+                else:
+                    lw=1
+                plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,
+                                        alpha=0.8, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
+
+                # Plot uncertainty
+                # add error range of obs (I think top and bot boundary should be set to 1 sigema)
+                vals_bot   = var[model_out_name+'_bot'][above_thres]
+                vals_top   = var[model_out_name+'_top'][above_thres]
+
+                fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                                        color=line_color, edgecolor="none", alpha=0.2) #  .rolling(window=10).mean()
+
+            # ===== Drawing the turning points =====
+            # Calculate turning points
+            # if turning_point['calc']:
+            #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
+
+        if col == 1:
+            ax[row,col].legend(fontsize=7, frameon=False, ncol=2)
+
+        if IGBP_type !=None:
+            ax[1,0].text(0.12, 0.92, 'IGBP='+IGBP_type+'site_num='+str(var['site_num'][0]), va='bottom', ha='center', rotation_mode='anchor',transform=ax[1,0].transAxes, fontsize=12)
+
+        # ax[row,col].set_xlim(0, 11)
+
+    ax[0,0].set_title("Wet (EF>0.8)", fontsize=20)
+    ax[0,1].set_title("Dry (EF<0.2)", fontsize=20)
+
+    ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+
+    if var_name == 'NEE':
+        ax[1,0].set_ylabel("Net Ecosystem Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+    elif var_name == 'GPP':
+        ax[1,0].set_ylabel("Gross Primary Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+
+    ax[0,0].set_xlabel("VPD (kPa)", fontsize=12)
+    ax[0,1].set_xlabel("VPD (kPa)", fontsize=12)
+
+    # ax[0,0].set_xticks([0,1,2,3,4,5])
+    # ax[0,0].set_xticklabels(['0','1','2', '3','4','5'],fontsize=12)
+    # ax[0,0].set_xlim(-0.2,5.3)
+
+    # ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
+    # ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
+    # ax[0,1].set_xlim(-0.2,7.3)
+
+    ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5])
+    ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5'],fontsize=12)
+    ax[0,0].set_xlim(-0.1,2.7)
+    ax[0,0].set_ylim(0,170)
+
+    ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    ax[0,1].set_xlim(-0.1,5.1)
+    ax[0,1].set_ylim(0,40)
+
+    ax[0,0].tick_params(axis='y', labelsize=12)
+    ax[0,1].tick_params(axis='y', labelsize=12)
+
+    fig.savefig("./plots/Fig_Qle_VPD"+file_message_dry+".png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    return
+
+def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_cor=False, time_scale=None, country_code=None,
+                 selected_by=None, veg_fraction=None,  standardize=None, uncertain_type='UCRTN_percentile',
+                 method='CRV_bins', IGBP_type=None, clim_type=None, clarify_site={'opt':False,'remove_site':None},
+                 num_threshold=200):
+
+    # ============ Setting for plotting ============
+    cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
+
+    fig, ax  = plt.subplots(nrows=1, ncols=3, figsize=[18,5],sharex=False, sharey=False, squeeze=False)
+    # fig, ax = plt.subplots(figsize=[10, 7])
+    plt.subplots_adjust(wspace=0.09, hspace=0.02)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+
+    # ============ Set the input file name ============
+    bounds = [0.6,0.8] 
+    folder_name, file_message1 = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+    bounds = [0.4,0.6]
+    folder_name, file_message2 = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+    bounds = [0.2,0.4]
+    folder_name, file_message3 = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+
+    file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message1}.csv',
+                    f'./txt/process4_output/{folder_name}/{var_name}{file_message2}.csv',
+                    f'./txt/process4_output/{folder_name}/{var_name}{file_message3}.csv',]
+
+    print('Reading', file_names)
+
+    for i, file_name in enumerate(file_names):
+
+        # set plot row and col
+        row = int(i/3)
+        col = i%3
+
+        # Read lines data
+        var = pd.read_csv(file_name)
+        if i == 0:
+            # how to get the model out list from the column names
+            model_out_list = []
+            for column_name in var.columns:
+                if "_vals" in column_name:
+                    model_out_list.append(column_name.split("_vals")[0])
+
+            # models to plot
+            model_order     = []
+            model_names_all = model_names['model_select']
+            for model_name in model_names_all:
+                if (model_name in model_out_list) and (model_name not in ['obs_cor','RF_eb']):
+                    model_order.append(model_name)
+
+            # # Add obs
+            # model_order.append('obs')
+            print('model_order',model_order)
+
+        # Calculate turning points
+        if turning_point['calc']:
+
+            nmodel   = len(model_out_list)
+            nvpd     = len(var['vpd_series'])
+            val_tmp  = np.zeros((nmodel,nvpd))
+
+            for j, model_out_name in enumerate(model_order):
+                vals_vpd_num = var[model_out_name+'_vpd_num']
+                # find_turning_points_by_piecewise_regression will transfer NEE to NEP so don't need to do it here.
+                val_tmp[j,:] = np.where(vals_vpd_num>num_threshold, var[model_out_name+'_vals'], np.nan)
+
+            # Find the turning points
+            if turning_point['method']=='kneed' :
+                turning_points = find_turning_points_by_kneed(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='cdf' :
+                turning_points = find_turning_points_by_cdf(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='piecewise':
+                turning_points, slope = find_turning_points_by_piecewise_regression(model_order, var['vpd_series'], val_tmp, var_name)
+
+        for j, model_out_name in enumerate(model_order):
+
+            # set line color
+            line_color = model_colors[model_out_name]
+
+            # ===== Drawing the lines =====
+            # Unify NEE units : upwards CO2 movement is positive values
+
+            if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                value = var[model_out_name+'_vals']*(-1)
+            else:
+                value = var[model_out_name+'_vals']
+
+            # smooth or not
+            if smooth_type != 'no_soomth':
+                value = smooth_vpd_series(value, window_size, order, smooth_type)
+
+            # only use vpd data points > num_threshold
+            above_thres      = (var[model_out_name+'_vpd_num']>num_threshold)
+            var_vpd_series = var['vpd_series'][above_thres]
+            value          = value[above_thres]
+
+            # Plot if the data point > num_threshold
+            if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+                if model_out_name == 'obs':
+                    lw=2
+                else:
+                    lw=1
+                plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,
+                                        alpha=0.8, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
+
+                # Plot uncertainty
+                # add error range of obs (I think top and bot boundary should be set to 1 sigema)
+                vals_bot   = var[model_out_name+'_bot'][above_thres]
+                vals_top   = var[model_out_name+'_top'][above_thres]
+
+                fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                                        color=line_color, edgecolor="none", alpha=0.2) #  .rolling(window=10).mean()
+
+            # ===== Drawing the turning points =====
+            # Calculate turning points
+            # if turning_point['calc']:
+            #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
+
+        if col == 1:
+            ax[row,col].legend(fontsize=7, frameon=False, ncol=2)
+
+        if IGBP_type !=None:
+            ax[1,0].text(0.12, 0.92, 'IGBP='+IGBP_type+'site_num='+str(var['site_num'][0]), va='bottom', ha='center', rotation_mode='anchor',transform=ax[1,0].transAxes, fontsize=12)
+
+        # ax[row,col].set_xlim(0, 11)
+
+    ax[0,0].set_title("0.6<EF<0.8", fontsize=20)
+    ax[0,1].set_title("0.4<EF<0.6", fontsize=20)
+    ax[0,2].set_title("0.2<EF<0.4", fontsize=20)
+
+    ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+
+    if var_name == 'NEE':
+        ax[1,0].set_ylabel("Net Ecosystem Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+    elif var_name == 'GPP':
+        ax[1,0].set_ylabel("Gross Primary Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+
+    ax[0,0].set_xlabel("VPD (kPa)", fontsize=12)
+    ax[0,1].set_xlabel("VPD (kPa)", fontsize=12)
+    ax[0,2].set_xlabel("VPD (kPa)", fontsize=12)
+
+    ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    ax[0,0].set_xlim(-0.1,5.1)
+    ax[0,0].set_ylim(0,100)
+
+    ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    ax[0,1].set_xlim(-0.1,5.1)
+    ax[0,1].set_ylim(0,100)
+
+    ax[0,2].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    ax[0,2].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    ax[0,2].set_xlim(-0.1,5.1)
+    ax[0,2].set_ylim(0,100)
+
+    ax[0,0].tick_params(axis='y', labelsize=12)
+    ax[0,1].tick_params(axis='y', labelsize=12)
+    ax[0,2].tick_params(axis='y', labelsize=12)
+
+    fig.savefig("./plots/Fig_Qle_VPD"+file_message1+".png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    return
+
+def plot_var_VPD_uncertainty_veg(var_name=None, day_time=False, energy_cor=False, time_scale=None, country_code=None,
+                 selected_by=None, veg_fraction=None,  standardize=None, uncertain_type='UCRTN_percentile',
+                 method='CRV_bins', IGBP_types=None, clim_type=None, clarify_site={'opt':False,'remove_site':None},
+                 num_threshold=200):
+
+    # ============ Setting for plotting ============
+    nveg     = len(IGBP_types)
+
+    cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
+
+    fig, ax  = plt.subplots(nrows=1, ncols=nveg, figsize=[5*nveg,5],sharex=False, sharey=False, squeeze=False)
+    # fig, ax = plt.subplots(figsize=[10, 7])
+
+    plt.subplots_adjust(wspace=0.09, hspace=0.02)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+
+    # ============ Set the input file name ============
+    ## Wet periods
+    # bounds     = [0,0.2] 
+    bounds     = [0.8,1.] 
+    file_names = []
+
+    # Loop veg types 
+    for IGBP_type in IGBP_types:
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                    IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                    country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+        
+        file_names.append(f'./txt/process4_output/{folder_name}/{var_name}{file_message}.csv')
+        
+    print('Reading', file_names)
+
+    for i, file_name in enumerate(file_names):
+
+        # set plot row and col
+        row = int(i/nveg)
+        col = i%nveg
+
+        # Read lines data
+        var = pd.read_csv(file_name)
+        if i == 0:
+            # how to get the model out list from the column names
+            model_out_list = []
+            for column_name in var.columns:
+                if "_vals" in column_name:
+                    model_out_list.append(column_name.split("_vals")[0])
+
+            # models to plot
+            model_order     = []
+            model_names_all = model_names['model_select']
+            for model_name in model_names_all:
+                if (model_name in model_out_list) and (model_name not in ['obs_cor','RF_eb']):
+                    model_order.append(model_name)
+
+            # # Add obs
+            # model_order.append('obs')
+            print('model_order',model_order)
+
+        # Calculate turning points
+        if turning_point['calc']:
+
+            nmodel   = len(model_out_list)
+            nvpd     = len(var['vpd_series'])
+            val_tmp  = np.zeros((nmodel,nvpd))
+
+            for j, model_out_name in enumerate(model_order):
+                vals_vpd_num = var[model_out_name+'_vpd_num']
+                # find_turning_points_by_piecewise_regression will transfer NEE to NEP so don't need to do it here.
+                val_tmp[j,:] = np.where(vals_vpd_num>num_threshold, var[model_out_name+'_vals'], np.nan)
+
+            # Find the turning points
+            if turning_point['method']=='kneed' :
+                turning_points = find_turning_points_by_kneed(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='cdf' :
+                turning_points = find_turning_points_by_cdf(model_order, var['vpd_series'], val_tmp)
+            elif turning_point['method']=='piecewise':
+                turning_points, slope = find_turning_points_by_piecewise_regression(model_order, var['vpd_series'], val_tmp, var_name)
+
+        for j, model_out_name in enumerate(model_order):
+
+            # set line color
+            line_color = model_colors[model_out_name]
+
+            # ===== Drawing the lines =====
+            # Unify NEE units : upwards CO2 movement is positive values
+
+            if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                value = var[model_out_name+'_vals']*(-1)
+            else:
+                value = var[model_out_name+'_vals']
+
+            # smooth or not
+            if smooth_type != 'no_soomth':
+                value = smooth_vpd_series(value, window_size, order, smooth_type)
+
+            # only use vpd data points > num_threshold
+            above_thres      = (var[model_out_name+'_vpd_num']>num_threshold)
+            var_vpd_series = var['vpd_series'][above_thres]
+            value          = value[above_thres]
+
+            # Plot if the data point > num_threshold
+            if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+                if model_out_name == 'obs':
+                    lw=2
+                else:
+                    lw=1
+                plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,
+                                        alpha=0.8, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
+
+                # Plot uncertainty
+                # add error range of obs (I think top and bot boundary should be set to 1 sigema)
+                vals_bot   = var[model_out_name+'_bot'][above_thres]
+                vals_top   = var[model_out_name+'_top'][above_thres]
+
+                fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                                        color=line_color, edgecolor="none", alpha=0.2) #  .rolling(window=10).mean()
+
+            # ===== Drawing the turning points =====
+            # Calculate turning points
+            # if turning_point['calc']:
+            #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
+
+        if col == 1:
+            ax[row,col].legend(fontsize=7, frameon=False, ncol=2)
+
+        if IGBP_types !=None:
+            ax[row,col].set_title(IGBP_types[i], fontsize=20)
+            ax[row,col].text(0.12, 0.92, str(var['site_num'][0])+' sites', va='bottom', ha='center', 
+                             rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=12)
+
+        ax[row,col].set_xlabel("VPD (kPa)", fontsize=12)
+        ax[row,col].tick_params(axis='y', labelsize=12)
+
+        if bounds[0] <0.5:
+            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]) # 
+            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12) # 
+            ax[row,col].set_xlim(-0.1,5.1)
+            ax[row,col].set_ylim(0,50)
+        else:
+            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5]) 
+            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5'],fontsize=12) 
+            ax[row,col].set_xlim(-0.1,3.6)
+            ax[row,col].set_ylim(0,200)
+
+        # ax[row,col].set_xlim(0, 11)
+
+    ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+
+    if var_name == 'NEE':
+        ax[1,0].set_ylabel("Net Ecosystem Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+    elif var_name == 'GPP':
+        ax[1,0].set_ylabel("Gross Primary Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+
+    fig.savefig("./plots/Fig_Qle_VPD_"+str(bounds[0])+"-"+str(bounds[1])+"_veg.png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    return
 
 def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
                  smooth_type='S-G_filter', method='bin_by_vpd', message=None, model_names=None,
@@ -90,11 +683,6 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
                     f'./txt/VPD_curve/{folder_name}/{subfolder}Qle_VPD_'+message+'_'+bin_by+'_0-0.2_'+method+'_coarse.csv',
                     f'./txt/VPD_curve/{folder_name}/{subfolder}NEP_VPD_'+message+'_'+bin_by+'_0.8-1.0_'+method+'_coarse.csv',
                     f'./txt/VPD_curve/{folder_name}/{subfolder}NEP_VPD_'+message+'_'+bin_by+'_0-0.2_'+method+'_coarse.csv',]
-
-    # boxplot_file_names = [  f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/{subfolder}boxplot_metrics_Qle_VPD_{message}_{bin_by}_outlier_by_percentile_0.8-1.0_coarse.csv',
-    #                         f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/{subfolder}boxplot_metrics_Qle_VPD_{message}_{bin_by}_outlier_by_percentile_0-0.2_coarse.csv',
-    #                         f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/{subfolder}boxplot_metrics_NEP_VPD_{message}_{bin_by}_outlier_by_percentile_0.8-1.0_coarse.csv',
-    #                         f'./txt/boxplot_metrics_outlier_by_percentile/{folder_name}/{subfolder}boxplot_metrics_NEP_VPD_{message}_{bin_by}_outlier_by_percentile_0-0.2_coarse.csv',]
 
     boxplot_file_names = [ '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/pdf/original_clarify_site/pdf_Qle_VPD_daytime_clarify_site_EF_model_0.8-1.0_coarse.csv',
                            '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/pdf/original_clarify_site/pdf_Qle_VPD_daytime_clarify_site_EF_model_0.0-0.2_coarse.csv',
@@ -176,9 +764,9 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
                 value = smooth_vpd_series(value, window_size, order, smooth_type)
 
             # only use vpd data points > 200
-            above_200      = (var[model_out_name+'_vpd_num']>200)
-            var_vpd_series = var['vpd_series'][above_200]
-            value          = value[above_200]
+            above_thres      = (var[model_out_name+'_vpd_num']>200)
+            var_vpd_series = var['vpd_series'][above_thres]
+            value          = value[above_thres]
 
             # Plot if the data point > 200
             if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
@@ -190,11 +778,11 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
                                         alpha=0.8, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
                 # if model_out_name == 'obs':
                 #     # add error range of obs (I think top and bot boundary should be set to 1 sigema)
-                #     vals_bot   = var['obs_bot'][above_200]
-                #     vals_top   = var['obs_top'][above_200]
-                #
-                #     fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
-                #                             color=line_color, edgecolor="none", alpha=0.1) #  .rolling(window=10).mean()
+                    # vals_bot   = var['obs_bot'][above_thres]
+                    # vals_top   = var['obs_top'][above_thres]
+                
+                    # fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                    #                         color=line_color, edgecolor="none", alpha=0.1) #  .rolling(window=10).mean()
 
             # ===== Drawing the turning points =====
             # Calculate turning points
@@ -348,7 +936,6 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
 
     return
 
-
 def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
                  smooth_type='S-G_filter', method='bin_by_vpd', message=None, model_names=None,
                  turning_point={'calc':False,'method':'kneed'}):
@@ -432,8 +1019,8 @@ def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
                 model_order.append(model_name)
 
         # Add obs
-        if var_names[i] in ['Qle','NEE']:
-            model_order.append('obs')
+        # if var_names[i] in ['Qle','NEE']:
+        #     model_order.append('obs')
         print('model_order',model_order)
 
         # Calculate turning points
@@ -480,9 +1067,9 @@ def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
                 value = smooth_vpd_series(value, window_size, order, smooth_type)
 
             # only use vpd data points > 200
-            above_200      = (var[model_out_name+'_vpd_num']>200)
-            var_vpd_series = var['vpd_series'][above_200]
-            value          = value[above_200]
+            above_thres      = (var[model_out_name+'_vpd_num']>200)
+            var_vpd_series = var['vpd_series'][above_thres]
+            value          = value[above_thres]
 
             # Plot if the data point > 200
             if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
@@ -491,8 +1078,8 @@ def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
                                         alpha=0.8, label=model_out_name) #edgecolor='none', c='red' .rolling(window=10).mean()
                 if model_out_name == 'obs':
                     # add error range of obs (I think top and bot boundary should be set to 1 sigema)
-                    vals_bot   = var['obs_bot'][above_200]
-                    vals_top   = var['obs_top'][above_200]
+                    vals_bot   = var['obs_bot'][above_thres]
+                    vals_top   = var['obs_top'][above_thres]
                     if (var_names[i]=='NEE') &  ~(model_out_name in ['GFDL','NoahMPv401','STEMMUS-SCOPE','ACASA']):
                         vals_bot   = vals_bot*(-1)
                         vals_top   = vals_top*(-1)
@@ -555,7 +1142,6 @@ def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
 
     fig.savefig("./plots/Fig_var_VPD_all_sites_daytime_line_box_EF_0.2_0.6_coarse.png",bbox_inches='tight',dpi=300) # '_30percent'
 
-
 if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
@@ -571,22 +1157,60 @@ if __name__ == "__main__":
                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
     error_type     = 'one_std'
-    # Smoothing setting
 
+    # Smoothing setting
     window_size    = 11
     order          = 3
     smooth_type    = 'no_soomth' #'S-G_filter' #
-    turning_point  =  {'calc':True, 'method':'piecewise'}
+    turning_point  =  {'calc':False, 'method':'piecewise'}
                       #{'calc':True, 'method':'cdf'}#{'calc':True, 'method':'kneed'}
 
     # for IGBP_type in IGBP_types:
-
     standardize    = None #"by_LAI"#'by_obs_mean'#'by_LAI'#None#'by_obs_mean'
-    plot_var_VPD_line_box( bin_by=bin_by, window_size=window_size, order=order,
-             smooth_type=smooth_type, method='bin_by_vpd', model_names=model_names,
-             day_time=day_time,  clarify_site=clarify_site, standardize=standardize,
-             error_type=error_type,
-             turning_point=turning_point) # IGBP_type=IGBP_type,
+
+
+    # =========== plot_var_VPD_uncertainty ===========
+    day_time=False
+    energy_cor=False
+    time_scale='daily'
+    country_code=None
+    selected_by='EF_model'
+    veg_fraction=[0.7,1.]
+    standardize=None
+    uncertain_type='UCRTN_bootstrap'
+    method='CRV_bins'
+    IGBP_type=None
+    clim_type=None
+    clarify_site={'opt': True,
+                  'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                  'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+    var_name='Qle'
+    num_threshold=10
+
+    # ======== Plot EF wet & dry ========
+    plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                 selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+                 uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+                 clarify_site=clarify_site,num_threshold=num_threshold)
+
+    ## ======== Plot EF (0.2-0.8) ========
+    # plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+    ## ======== Plot different veg types ========
+    # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
+    # plot_var_VPD_uncertainty_veg(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+    #              uncertain_type=uncertain_type, method=method, IGBP_types=IGBP_types, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+    # plot_var_VPD_line_box( bin_by=bin_by, window_size=window_size, order=order,
+    #          smooth_type=smooth_type, method='bin_by_vpd', model_names=model_names,
+    #          day_time=day_time,  clarify_site=clarify_site, standardize=standardize,
+    #          error_type=error_type,
+    #          turning_point=turning_point) # IGBP_type=IGBP_type,
 
     # for IGBP_type in IGBP_types:
     #     plot_var_VPD_line_box( bin_by=bin_by, window_size=window_size, order=order,

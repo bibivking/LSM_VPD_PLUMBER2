@@ -1,3 +1,15 @@
+'''
+Extract CMIP6 data at 170 sites
+   
+Including:
+    def write_raw_data_var_VPD
+
+'''
+
+__author__  = "Mengyuan Mu"
+__version__ = "1.0 (05.01.2024)"
+__email__   = "mu.mengyuan815@gmail.com"
+
 import os
 import sys
 import gc
