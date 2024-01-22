@@ -248,6 +248,7 @@ def write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=N
 
             x_values = var_output['VPD']
             y_values = var_output[head+model_out_name]
+
             vpd_pred, y_pred, y_int = fit_GAM(x_top,x_bot,x_interval,x_values,y_values,n_splines=7,spline_order=3)
             gc.collect()
 
@@ -336,7 +337,7 @@ if __name__ == "__main__":
     time_scale     = 'daily'
     selected_by    = 'EF_model' # 'EF_model'
                                      # 'EF_obs'
-    method         = 'CRV_bins' # 'CRV_bins'
+    method         = 'CRV_fit_GAM' # 'CRV_bins'
                                 # 'CRV_fit_GAM'
     standardize    = None       # 'None'
                                 # 'STD_LAI'
@@ -406,7 +407,7 @@ if __name__ == "__main__":
 
 
     bounds         = [0.8,1.] #30
-    veg_fraction   = [0,0.3] 
+    veg_fraction   = [0,0.3]
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
                                                 standardize=standardize, country_code=country_code, selected_by=selected_by,
                                                 bounds=bounds, veg_fraction=veg_fraction, method=method,
@@ -440,7 +441,7 @@ if __name__ == "__main__":
     # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
 
     # for IGBP_type in IGBP_types:
-        
+
     #     # EF [0.8, 1.0]
     #     bounds         = [0,0.2] #30
     #     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,

@@ -151,12 +151,12 @@ def load_default_list():
                         "ACASA","LPJ-GUESS","MuSICA",
                         "NASAEnt","QUINCY", "SDGVM",] #"BEPS"
 
-    model_names_select= ['CABLE', 'CABLE-POP-CN', 'CHTESSEL_ERA5_3', 
-                         'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL', 
-                         'JULES_GL9_withLAI', 'JULES_test', 
-                         'MATSIRO', 'MuSICA', 'NASAEnt', 
-                         'NoahMPv401', 'ORC2_r6593', 'ORC2_r6593_CO2', 
-                         'ORC3_r7245_NEE', 'ORC3_r8120', 'QUINCY', 
+    model_names_select= ['CABLE', 'CABLE-POP-CN', 'CHTESSEL_ERA5_3',
+                         'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL',
+                         'JULES_GL9_withLAI', 'JULES_test',
+                         'MATSIRO', 'MuSICA', 'NASAEnt',
+                         'NoahMPv401', 'ORC2_r6593', 'ORC2_r6593_CO2',
+                         'ORC3_r7245_NEE', 'ORC3_r8120', 'QUINCY',
                          'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
     empirical_model  = ["1lin","3km27", "6km729","6km729lag",
@@ -205,6 +205,36 @@ def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order
     # gam          = LinearGAM(n_splines=n_splines,spline_order=spline_order).gridsearch(x_values, y_values) # n_splines=22
     y_pred       = gam.predict(x_series)
     y_int        = gam.confidence_intervals(x_series, width=.95)
+
+
+    '''
+    def evaluate_gam_fit(model_name, x_values, y_values):
+        """Evaluates goodness of fit for a GAM model."""
+
+        vpd_pred, y_pred, y_int = fit_GAM(x_top, x_bot, x_interval, x_values, y_values)
+
+        # Obtain the fitted model object for evaluation
+        model = fit_GAM(x_top, x_bot, x_interval, x_values, y_values)  # Assume model is the returned object
+
+        # Cross-validation scores
+        rmse_scores = cross_val_score(model, x_values, y_values, scoring='neg_root_mean_squared_error', cv=5)
+        r2_scores = cross_val_score(model, x_values, y_values, scoring='r2', cv=5)
+
+        # Deviance and AIC
+        deviance = model.deviance  # Access model attributes for these metrics
+        aic = model.aic
+
+        # Residual diagnostics (visualizing residuals is often more informative)
+        resids = y_values - y_pred
+
+        # Print evaluation metrics
+        print(f"Model: {model_name}")
+        print(f"Mean RMSE: {-rmse_scores.mean():.4f}, std dev: {rmse_scores.std():.4f}")
+        print(f"Mean R-squared: {r2_scores.mean():.4f}, std dev: {r2_scores.std():.4f}")
+        print(f"Deviance: {deviance:.4f}")
+        print(f"AIC: {aic:.4f}")
+
+    '''
 
     return x_series, y_pred, y_int
 
@@ -296,7 +326,7 @@ def get_key_words(varname):
 
     return key_word, key_word_not
 
-def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name, 
+def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name,
                                        key_word, key_word_not=None):
 
     # Set input file path
@@ -335,7 +365,7 @@ def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_
                             break  # Exit the loop once a variable is found
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"An error occurred: {e}, {site_name}, {model_name}, {file_path}")
 
     # variable doesn't exist
     if not var_exist:
@@ -353,25 +383,25 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
 
     for j, model_name in enumerate(model_names):
         # print(model_name)
-        var_name_in_model = check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name, 
+        var_name_in_model = check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name,
                                                                key_word, key_word_not)
         # if Rnet doesn't exist
         if var_name_in_model == 'None' and varname == 'Rnet':
-            SWnet_key_word, SWnet_key_word_not = get_key_words('SWnet') 
-            LWnet_key_word, LWnet_key_word_not = get_key_words('LWnet') 
-            SWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'SWnet', site_name, model_name, 
+            SWnet_key_word, SWnet_key_word_not = get_key_words('SWnet')
+            LWnet_key_word, LWnet_key_word_not = get_key_words('LWnet')
+            SWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'SWnet', site_name, model_name,
                                                                SWnet_key_word, SWnet_key_word_not)
-            LWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'LWnet', site_name, model_name, 
-                                                               LWnet_key_word, LWnet_key_word_not) 
+            LWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'LWnet', site_name, model_name,
+                                                               LWnet_key_word, LWnet_key_word_not)
 
-            if SWnet_in_model == 'SinAng': 
+            if SWnet_in_model == 'SinAng':
                 # correct the SWnet var name for ORC models
-                SWnet_in_model = 'SWnet' 
+                SWnet_in_model = 'SWnet'
 
             if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
                 my_dict[model_name] = 'None'
             else:
-                my_dict[model_name] = [SWnet_in_model, LWnet_in_model]     
+                my_dict[model_name] = [SWnet_in_model, LWnet_in_model]
 
         else:
             my_dict[model_name] = var_name_in_model
@@ -380,7 +410,7 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
         # manually set 'hfdsn': heat flux into soil/snow including snow melt and lake / snow light transmission
         # as CLM5a's Qg
         my_dict['CLM5a'] = 'hfdsn'
-        
+
     return my_dict
 
 def check_variable_units(PLUMBER2_path, varname, site_name, model_names, key_word, key_word_not=None):

@@ -11,9 +11,6 @@ __modifier__ = "Mengyuan Mu"
 __version__  = "1.0 (17.01.2024)"
 __email__    = "mu.mengyuan815@gmail.com"
 
-#import matplotlib
-#matplotlib.use('agg') # stop windows popping up
-
 import os
 import sys
 import glob
@@ -23,355 +20,344 @@ import matplotlib.pyplot as plt
 import calendar
 import datetime as dt
 from scipy.stats import pearsonr
-from rmse import rmse
+# from rmse import rmse
 import netCDF4 as nc
 import re
 from datetime import datetime
-from lmfit import minimize, Parameters
+# from lmfit import minimize, Parameters
+from PLUMBER2_VPD_common_utils import *
+import pdb
 
 sys.path.append('src')
-import constants as c
-from penman_monteith import PenmanMonteith
-from estimate_pressure import estimate_pressure
+import Martin_constants as c
+from Martin_penman_monteith import PenmanMonteith
 
-def main():
+def main(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, site_names, model_names):
 
-    Qle_dict = check_variable_exists(PLUMBER2_path, 'Qle', site_name, model_names)
-    Qh_dict  = check_variable_exists(PLUMBER2_path, 'Qh', site_name, model_names)
-    Qg_dict  = check_variable_exists(PLUMBER2_path, 'Qg', site_name, model_names)
-    GPP_dict = check_variable_exists(PLUMBER2_path, 'GPP', site_name, model_names)
-    Rnet_dict= check_variable_exists(PLUMBER2_path, 'Rnet', site_name, model_names)
+    for site_name in site_names:
+        print('site_name',site_name)
+        Qle_dict = check_variable_exists(PLUMBER2_path, 'Qle', site_name, model_names)
+        # print('Qle_dict',Qle_dict)
+        Qh_dict  = check_variable_exists(PLUMBER2_path, 'Qh', site_name, model_names)
+        # print('Qh_dict',Qh_dict)
+        Qg_dict  = check_variable_exists(PLUMBER2_path, 'Qg', site_name, model_names)
+        # print('Qg_dict',Qg_dict)
+        GPP_dict = check_variable_exists(PLUMBER2_path, 'GPP', site_name, model_names)
+        # print('GPP_dict',GPP_dict)
+        Rnet_dict= check_variable_exists(PLUMBER2_path, 'Rnet', site_name, model_names)
+        # print('Rnet_dict',Rnet_dict)
 
-def for_single_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_name,
-                    Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict,
-                    hour=False):
+        calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names, Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict)
+        # pdb.set_trace()
+    return
 
-    # Read obs met data 
+def calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
+                    Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict):
+
+    # ================== Reading data ==================
+    # Read obs met data
     canht, VPD_obs, Tair_obs, Precip_obs, Wind_obs, Psurf_obs = \
         read_met_variables(PLUMBER2_met_path, site_name)
 
-    # Read obs flux data 
-    Qle_obs, Qh_obs, GPP_obs, Rnet_obs, Qg_obs = \
+    # Read obs flux data
+    Qle_obs, Qh_obs, GPP_obs, Rnet_obs, Qg_obs, Ustar_obs = \
         read_obs_flux_variables(PLUMBER2_flux_path, site_name)
 
-    # Give values to var_input
-    var_input           = pd.DataFrame(VPD_obs, columns=['VPD'])
-    var_input['Tair']   = Tair_obs
-    var_input['Precip'] = Precip_obs
-    var_input['Wind']   = Wind_obs
-    var_input['Psurf']  = Psurf_obs
-    var_input['Qle']    = Qle_obs
-    var_input['Qh']     = Qh_obs
-    var_input['Qg']     = Qg_obs
-    var_input['GPP']    = GPP_obs
-    var_input['Rnet']   = Rnet_obs
-    
-    # Read model flux data 
-    if model_name != 'obs':
-
-        # Get variable names 
-        Qle_name   = Qle_dict[model_name]
-        Qh_name    = Qh_dict[model_name]
-        Qg_name    = Qg_dict[model_name] 
-        Rnet_name  = Rnet_dict[model_name] 
-        GPP_name   = GPP_dict[model_name]
-
-        # Get model fluxes
-        Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = \
-                   read_model_flux_variables(PLUMBER2_met_path, site_name, Qle_name, Qh_name, Qg_name, Rnet_name, GPP_name)
-
-        # Check the time interval
-        ntime_obs   = len(Qle_obs[:,0,0])
-        ntime_model = len(Qle_model[:,0,0])
-
+    for model_name in model_names:
         # Give values to var_input
-        if ntime_model == ntime_obs:
-            # if half-hourly as observation
-            if np.any(~np.isnan(Qle_model)):
-                var_input['Qle']  = Qle_model
+        var_input           = pd.DataFrame(VPD_obs, columns=['VPD'])
+        var_input['Tair']   = Tair_obs
+        var_input['Precip'] = Precip_obs
+        var_input['Wind']   = Wind_obs
+        var_input['Psurf']  = Psurf_obs
+        var_input['Qle']    = Qle_obs
+        var_input['Qh']     = Qh_obs
+        var_input['Qg']     = Qg_obs
+        var_input['GPP']    = GPP_obs
+        var_input['Rnet']   = Rnet_obs
+        var_input['Ustar']  = Ustar_obs
 
-            if np.any(~np.isnan(Qh_model)):
-                var_input['Qh']   = Qh_model
+        # Read model flux data
+        if model_name != 'obs':
 
-            if np.any(~np.isnan(Qg_model)):
-                var_input['Qg']   = Qg_model
+            file_path = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
 
-            if np.any(~np.isnan(Rnet_model)):
-                var_input['Rnet'] = Rnet_model
+            if not file_path:
+                # if the model doesn't simulate this site
+                return
+            else:
+                # Get model fluxes
+                Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = \
+                        read_model_flux_variables(file_path, Qle_dict[model_name],
+                                                Qh_dict[model_name], Qg_dict[model_name],
+                                                Rnet_dict[model_name], GPP_dict[model_name])
 
-            if np.any(~np.isnan(GPP_model)):
-                var_input['GPP']  = GPP_model
+                # Check the time interval
+                ntime_obs   = len(Qle_obs)
+                ntime_model = len(Qle_model)
 
-        elif ntime_model == int(ntime_obs/2):
-            # if it is hourly
-            print('model ', model_name, ' is hourly, model_ntime is', ntime_model, ' ntime_obs is', ntime_obs)
+                # Give values to var_input
+                if ntime_model == ntime_obs:
+                    # if half-hourly as observation
+                    if np.any(~np.isnan(Qle_model)):
+                        var_input['Qle'] = Qle_model
 
-            # put the value of hourly data to the first half hour
-            if np.any(~np.isnan(Qle_model)):
-                var_input['Qle'][::2]  = Qle_model
-                var_input['Qle'][1::2] = Qle_model
+                    if np.any(~np.isnan(Qh_model)):
+                        var_input['Qh']  = Qh_model
 
-            if np.any(~np.isnan(Qh_model)):
-                var_input['Qh'][::2]  = Qh_model
-                var_input['Qh'][1::2] = Qh_model
+                    if np.any(~np.isnan(Qg_model)):
+                        var_input['Qg']  = Qg_model
 
-            if np.any(~np.isnan(Qg_model)):
-                var_input['Qg'][::2]  = Qg_model
-                var_input['Qg'][1::2] = Qg_model
+                    if np.any(~np.isnan(Rnet_model)):
+                        var_input['Rnet']= Rnet_model
 
-            if np.any(~np.isnan(Rnet_model)):
-                var_input['Rnet'][::2]  = Rnet_model
-                var_input['Rnet'][1::2] = Rnet_model
+                    if np.any(~np.isnan(GPP_model)):
+                        var_input['GPP'] = GPP_model
 
-            if np.any(~np.isnan(GPP_model)):
-                var_input['GPP'][::2]  = GPP_model
-                var_input['GPP'][1::2] = GPP_model
+                elif ntime_model == int(ntime_obs/2):
+                    # if it is hourly
+                    print('model ', model_name, ' is hourly, model_ntime is', ntime_model, ' ntime_obs is', ntime_obs)
 
+                    # put the value of hourly data to the first half hour
+                    if np.any(~np.isnan(Qle_model)):
+                        var_input['Qle'][::2]  = Qle_model
+                        var_input['Qle'][1::2] = Qle_model
+
+                    if np.any(~np.isnan(Qh_model)):
+                        var_input['Qh'][::2]  = Qh_model
+                        var_input['Qh'][1::2] = Qh_model
+
+                    if np.any(~np.isnan(Qg_model)):
+                        var_input['Qg'][::2]  = Qg_model
+                        var_input['Qg'][1::2] = Qg_model
+
+                    if np.any(~np.isnan(Rnet_model)):
+                        var_input['Rnet'][::2]  = Rnet_model
+                        var_input['Rnet'][1::2] = Rnet_model
+
+                    if np.any(~np.isnan(GPP_model)):
+                        var_input['GPP'][::2]  = GPP_model
+                        var_input['GPP'][1::2] = GPP_model
+
+                else:
+                    # if it is hourly
+                    print('Error occur! ntime_model is ', ntime_model, 'ntime_obs is', ntime_obs)
+
+        # ================== Prepare data ==================
+
+        # Convert units ...
+        var_input['Tair'] -= 273.15
+
+        # screen for dew
+        var_input['Qle'] = np.where( var_input['Qle'] > 0.0, var_input['Qle'], np.nan)
+
+        # Calculate ET, W m-2 to kg m-2 s-1
+        lhv              = latent_heat_vapourisation(var_input['Tair'])
+        var_input['ET']  = var_input['Qle'] / lhv
+
+        # kg m-2 s-1 to mol m-2 s-1
+        conv            = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
+        var_input['ET']*= conv
+
+        # screen highly saturated conditions
+        var_input['VPD']= np.where(var_input['VPD']> 0.05, var_input['VPD'], np.nan)
+        # MMY: VPD units is kPa
+
+        # kPa to Pa
+        var_input['VPD']= var_input['VPD']*1000.
+
+        # (var_input, no_G) = filter_dataframe(var_input, hour) # MMY: hour tells it is hourly or half-hour data
+        # if no_G:
+        #     G = None
+
+
+        # To avoid crash in Gs calculation, set the row with any missing value in a column as np.nan
+        subset            = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET']
+        var_input[subset] = var_input[subset].where(~var_input[subset].isna().any(axis=1), other=np.nan)
+
+        # ==================
+        """
+        PM = PenmanMonteith(use_ustar=False)
+        # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
+        # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
+        # plantation oak woodland in south-eastern England, Biogeosciences, 9,
+        # 5373–5389, https://doi.org/10.5194/bg-9-5373-2012, 2012.
+        (var_input['Gs'],
+        var_input['VPDl'])  = PM.invert_penman(var_input['VPD'].values, var_input['Wind'].values,
+                                        var_input['Rnet'].values, var_input['Tair'].values,
+                                        var_input['Psurf'].values,
+                                        var_input['ET'].values, canht=28., G=G)
+        """
+        G = None
+        if np.all(~np.isnan(var_input['Ustar'])):
+            PM = PenmanMonteith(use_ustar=True)
+            (var_input['Gs'],
+             var_input['VPDl'])  = PM.invert_penman(var_input['VPD'].values, var_input['Wind'].values,
+                                             var_input['Rnet'].values, var_input['Tair'].values,
+                                             var_input['Psurf'].values,
+                                             var_input['ET'].values,
+                                             ustar=var_input["Ustar"], G=G)
         else:
-            # if it is hourly
-            print('Error occur! ntime_model is ', ntime_model, 'ntime_obs is', ntime_obs)
+            PM = PenmanMonteith(use_ustar=False)
+            (var_input['Gs'],
+            var_input['VPDl'])  = PM.invert_penman(var_input['VPD'].values, var_input['Wind'].values,
+                                        var_input['Rnet'].values, var_input['Tair'].values,
+                                        var_input['Psurf'].values,
+                                        var_input['ET'].values, canht=canht, G=G)
 
+        # screen for bad inverted data
+        var_input = var_input[(var_input['Gs'] > 0.0) & (var_input['Gs'] < 4.5) & (np.isnan(var_input['Gs']) == False)]
+        var_input = var_input[(var_input['VPDl'] > 0.05 * c.PA_TO_KPA) & \
+                (var_input['VPDl'] < 7.* 1000)  & \
+                (np.isnan(var_input['VPDl']) == False)]
 
-    # # Check here
-    # date_parse = lambda x: datetime.strptime(x, '%Y-%m-%d %H:%M:%S')
-    # var_input  = pd.read_csv(fname, index_col='DateTime',
-    #                  parse_dates=['DateTime'],
-    #                  date_parser=date_parse)
-    # var_input.index.names = ['date']
+        VPDa = var_input['VPD'] * c.PA_TO_KPA
+        VPDl = var_input['VPDl'] * c.PA_TO_KPA
 
-    ################ 
+        # plot_VPD(VPDa, VPDl, site_name)
+        # plot_gs_vs_D(var_input['Gs'], VPDa, var_input['ET'], site_name)
+        # plot_LE_vs_Tair(var_input['LE'], var_input['Tair'], site_name)
 
-    # Convert units ...
-    var_input.Tair -= 273.15
+        # When parameterizing the model of Eq. 1 in the main text, we
+        # limited the data to those collected when VPD > 1.0 kPa. From Novick sup
+        # remove stable conditions
+        #var_input = var_input[(var_input.VPD/1000. >= 1.) & (var_input.Wind >= 1.)]
 
-    # screen for dew
-    #var_input = var_input[var_input['LE'] > 0.0]
+        # gs_ref = np.mean(var_input[(var_input['VPD'] * c.PA_TO_KPA > 0.9) & \
+        #                     (var_input['VPD'] * c.PA_TO_KPA < 1.1)]['Gs'])
 
-    # Calculate ET, W m-2 to kg m-2 s-1
-    lhv             = latent_heat_vapourisation(var_input.Tair)
-    var_input['ET'] = var_input.Qle / lhv
+        # params = Parameters()
+        # params.add('m', value=0.5)
+        # params.add('gs_ref', value=gs_ref, vary=False)
 
-    # kg m-2 s-1 to mol m-2 s-1
-    conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
-    var_input.ET *= conv
+        # result = minimize(residual, params, args=(var_input['VPD']*c.PA_TO_KPA, var_input['Gs']))
+        # for name, par in result.params.items():
+        #     print('%s = %.4f +/- %.4f ' % (name, par.value, par.stderr))
 
-    # (var_input, no_G) = filter_dataframe(var_input, hour) # MMY: hour tells it is hourly or half-hour data 
-    # if no_G:
-    #     G = None
+        # m_pred = result.params['m'].value
 
-    # MMY: need to get obs_Rnet, obs_Wind, obs_Psurf
-    var_input = var_input.dropna(subset = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET'])
-    var_input = var_input[var_input.VPD > 0.05] # MMY: VPD units is kPa
+        #plt.plot(np.log(var_input['VPD']*c.PA_TO_KPA), var_input['Gs'], "ro")
+        #plt.plot(np.log(var_input['VPD']*c.PA_TO_KPA),
+        #         np.log(var_input['VPD']*c.PA_TO_KPA) * m_pred + gs_ref, "k-")
+        #plt.show()
 
+        var_input.to_csv(f'./txt/process1_output/Gs/Gs_{site_name}_{model_name}.csv') # , mode='a', index=False
+        var_input = None
 
-    """
-    PM = PenmanMonteith(use_ustar=False)
-    # Height from Wilkinson, M., Eaton, E. L., Broadmeadow, M. S. J., and
-    # Morison, J. I. L.: Inter-annual variation of carbon uptake by a
-    # plantation oak woodland in south-eastern England, Biogeosciences, 9,
-    # 5373–5389, https://doi.org/10.5194/bg-9-5373-2012, 2012.
-    (var_input['Gs'],
-     var_input['VPDl'])  = PM.invert_penman(var_input['VPD'].values, var_input['Wind'].values,
-                                     var_input['Rnet'].values, var_input['Tair'].values,
-                                     var_input['Psurf'].values,
-                                     var_input['ET'].values, canht=28., G=G)
-    """
+    return
 
-    PM = PenmanMonteith(use_ustar=False)
+# def gs_model_lohammar(VPD, m, gs_ref):
+#     return -m * np.log(VPD) + gs_ref
 
-    (var_input['Gs'],
-     var_input['VPDl'])  = PM.invert_penman(var_input['VPD'].values, var_input['Wind'].values,
-                                     var_input['Rnet'].values, var_input['Tair'].values,
-                                     var_input['Psurf'].values,
-                                     var_input['ET'].values, canht=canht, G=G)
+# def residual(params, VPD, obs):
+#     m = params['m'].value
+#     gs_ref = params['gs_ref'].value
+#     model = gs_model_lohammar(VPD, m, gs_ref)
 
-    # screen for bad inverted data
-    var_input = var_input[(var_input['Gs'] > 0.0) & (var_input['Gs'] < 4.5) & (np.isnan(var_input['Gs']) == False)]
-    var_input = var_input[(var_input['VPDl'] > 0.05 * c.PA_TO_KPA) & \
-            (var_input['VPDl'] < 7.* 1000)  & \
-            (np.isnan(var_input['VPDl']) == False)]
-
-    VPDa = var_input['VPD'] * c.PA_TO_KPA
-    VPDl = var_input['VPDl'] * c.PA_TO_KPA
-
-    # plot_VPD(VPDa, VPDl, site_name)
-    # plot_gs_vs_D(var_input['Gs'], VPDa, var_input['ET'], site_name)
-    # plot_LE_vs_Tair(var_input['LE'], var_input['Tair'], site_name)
-
-    # When parameterizing the model of Eq. 1 in the main text, we
-    # limited the data to those collected when VPD > 1.0 kPa. From Novick sup
-    # remove stable conditions
-    #var_input = var_input[(var_input.VPD/1000. >= 1.) & (var_input.Wind >= 1.)]
-
-    gs_ref = np.mean(var_input[(var_input.VPD * c.PA_TO_KPA > 0.9) & \
-                        (var_input.VPD * c.PA_TO_KPA < 1.1)].Gs)
-
-    params = Parameters()
-    params.add('m', value=0.5)
-    params.add('gs_ref', value=gs_ref, vary=False)
-
-    result = minimize(residual, params, args=(var_input['VPD']*c.PA_TO_KPA, var_input['Gs']))
-    for name, par in result.params.items():
-        print('%s = %.4f +/- %.4f ' % (name, par.value, par.stderr))
-
-    m_pred = result.params['m'].value
-
-    #plt.plot(np.log(var_input['VPD']*c.PA_TO_KPA), var_input['Gs'], "ro")
-    #plt.plot(np.log(var_input['VPD']*c.PA_TO_KPA),
-    #         np.log(var_input['VPD']*c.PA_TO_KPA) * m_pred + gs_ref, "k-")
-    #plt.show()
-
-def gs_model_lohammar(VPD, m, gs_ref):
-    return -m * np.log(VPD) + gs_ref
-
-def residual(params, VPD, obs):
-    m = params['m'].value
-    gs_ref = params['gs_ref'].value
-    model = gs_model_lohammar(VPD, m, gs_ref)
-
-    return (obs - model)
+#     return (obs - model)
 
 def read_met_variables(PLUMBER2_met_path, site_name):
 
     '''
-    Read met variable from PLUMBER2 met files: 'VPD', 'Tair', 'Precip', 'Wind', 'Psurf', 
+    Read met variable from PLUMBER2 met files: 'VPD', 'Tair', 'Precip', 'Wind', 'Psurf',
     Other variables may need: 'CO2air', 'CO2air_qc'
     '''
 
     file_path = glob.glob(PLUMBER2_met_path+site_name+"*.nc")
+    # print('file_path1',file_path)
     f         = nc.Dataset(file_path[0])
-    VPD       = f.variables['VPD'][:]
-    Tair      = f.variables['Tair'][:]
-    Precip    = f.variables['Precip'][:]
-    Wind      = f.variables['Wind'][:]
-    Psurf     = f.variables['Psurf'][:]
-    canht     = f.variables['canopy_height'][:]
+    VPD       = np.squeeze(f.variables['VPD'][:])
+    Tair      = np.squeeze(f.variables['Tair'][:])
+    Precip    = np.squeeze(f.variables['Precip'][:])
+    Wind      = np.squeeze(f.variables['Wind'][:])
+    Psurf     = np.squeeze(f.variables['Psurf'][:])
+    canht     = np.squeeze(f.variables['canopy_height'][:])
 
     return canht, VPD, Tair, Precip, Wind, Psurf
 
 def read_obs_flux_variables(PLUMBER2_flux_path, site_name):
 
     '''
-    Read obs from PLUMBER2 flux files: 'Qle', 'Qh', 'GPP', 'Rnet', 'Qg' 
-    Other variables may need: 'Qle_cor', 'Qh_cor', 'Qg_qc', 'Qle_qc', 'Qh_qc', 
-                              'Qle_cor_uc', 'Qh_cor_uc', 
+    Read obs from PLUMBER2 flux files: 'Qle', 'Qh', 'GPP', 'Rnet', 'Qg'
+    Other variables may need: 'Qle_cor', 'Qh_cor', 'Qg_qc', 'Qle_qc', 'Qh_qc',
+                              'Qle_cor_uc', 'Qh_cor_uc',
     '''
 
-    # Read model flux variables 
+    # Read model flux variables
     file_path = glob.glob(PLUMBER2_flux_path+site_name+"*.nc")
+    # print('file_path2',file_path)
     f         = nc.Dataset(file_path[0])
-    Qle       = f.variables['Qle'][:]
-    Qh        = f.variables['Qh'][:]
-    GPP       = f.variables['GPP'][:]
-    Rnet      = f.variables['Rnet'][:]
-    Qg        = f.variables['Qg'][:]
+    try:
+        Qle   = np.squeeze(f.variables['Qle'][:])
+    except:
+        Qle   = np.nan
 
-    return Qle, Qh, GPP, Rnet, Qg
+    try:
+        Qh    = np.squeeze(f.variables['Qh'][:])
+    except:
+        Qh    = np.nan
+    try:
+        GPP   = np.squeeze(f.variables['GPP'][:])
+    except:
+        GPP   = np.nan
 
-def read_model_flux_variables(PLUMBER2_path, model_name, site_name, 
-                              Qle_name=None, Qh_name=None, Qg_name=None, Rnet_name=None, GPP_name=None):
+    try:
+        Rnet  = np.squeeze(f.variables['Rnet'][:])
+    except:
+        Rnet  = np.nan
+    try:
+        Qg    = np.squeeze(f.variables['Qg'][:])
+    except:
+        Qg    = np.nan
+
+    try:
+        Ustar = np.squeeze(f.variables['Ustar'][:])
+    except:
+        Ustar = np.nan
+
+    return Qle, Qh, GPP, Rnet, Qg, Ustar
+
+def read_model_flux_variables(file_path, Qle_name=None, Qh_name=None, Qg_name=None, Rnet_name=None, GPP_name=None):
 
     '''
-    Read obs from model files: 'Qle', 'Qh', 'GPP', 'Rnet', Qg' 
+    Read obs from model files: 'Qle', 'Qh', 'GPP', 'Rnet', Qg'
     models with Qg: ACASA, CABLE, CABLE-POP-CN, MuSICA, ORC2_r6593, ORC2_r6593_CO2, STEMMUS-SCOPE
     '''
 
-    file_path = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
-    f         = nc.Dataset(file_path[0])
+    try:
+        f         = nc.Dataset(file_path[0])
+        if not ('None' in Qle_name):
+            Qle_model = np.squeeze(f.variables[Qle_name][:])
+        else:
+            Qle_model = np.nan
 
-    if not ('None' in Qle_name):
-        Qle_model = f.variables[Qle_name][:]
-    else:
-        Qle_model = np.nan
+        if not ('None' in Qh_name):
+            Qh_model  = np.squeeze(f.variables[Qh_name][:])
+        else:
+            Qh_model  = np.nan
 
-    if not ('None' in Qh_name):
-        Qh_model  = f.variables[Qh_name][:]  
-    else:
-        Qh_model  = np.nan
+        if not ('None' in Qg_name):
+            Qg_model  = np.squeeze(f.variables[Qg_name][:])
+        else:
+            Qg_model  = np.nan
 
-    if not ('None' in Qg_name):
-        Qg_model  = f.variables[Qg_name][:]  
-    else:
-        Qg_model  = np.nan
+        if not ('None' in GPP_name):
+            GPP_model = np.squeeze(f.variables[GPP_name][:])
+        else:
+            GPP_model = np.nan
 
-    if not ('None' in GPP_name):
-        GPP_model = f.variables[Rnet_name][:]
-    else:
-        GPP_model = np.nan
+        print('Rnet_name',Rnet_name)
+        if ('None' in Rnet_name):
+            Rnet_model = np.nan
+        elif len(Rnet_name) == 2:
+            Rnet_model = np.squeeze(f.variables[Rnet_name[0]][:]+f.variables[Rnet_name[1]][:])
+        else:
+            Rnet_model = np.squeeze(f.variables[Rnet_name][:])
 
-    if not ('None' in Rnet_name):
-        Rnet_model = f.variables[GPP_name][:]  
-    else:
-        Rnet_model = np.nan
-        
+    except:
+        Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = np.nan, np.nan, np.nan, np.nan, np.nan
+
     return Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model
-
-def calc_ustar(fname, model_name):
-    # Calculate ustar 
-    
-    return ustar
-
-
-    date_parse = lambda x: datetime.strptime(x, '%Y%m%d%H%M%S')
-
-    var_input = pd.read_csv(fname, index_col='TIMESTAMP_START',
-                     parse_dates=['TIMESTAMP_START'],
-                     date_parser=date_parse)
-    var_input.index.names = ['date']
-
-    # Using ERA interim filled met vars ... _F
-    var_input = var_input.rename(columns={'LE_F_MDS': 'Qle', 'H_F_MDS': 'Qh',
-                            'VPD_F_MDS': 'VPD', 'TA_F': 'Tair',
-                            'NETRAD': 'Rnet',
-                            'G_F_MDS': 'Qg',
-                            'WS_F': 'Wind', 'P_F': 'Precip',
-                            'USTAR': 'ustar', 'LE_CORR': 'Qle_cor',
-                            'H_CORR': 'Qh_cor', 'CO2_F_MDS': 'CO2air',
-                            'CO2_F_MDS_QC': 'CO2air_qc', 'PA_F': 'Psurf',
-                            'G_F_MDS_QC': 'Qg_qc',
-                            'LE_F_MDS_QC': 'Qle_qc', 'H_F_MDS_QC': 'Qh_qc',
-                            'LE_CORR_JOINTUNC': 'Qle_cor_uc',
-                            'H_CORR_JOINTUNC': 'Qh_cor_uc',
-                            'GPP_NT_VUT_REF': 'GPP'})
-
-
-    var_input = var_input[['Qle', 'Qh', 'VPD', 'Tair', 'Rnet', 'Qg', 'Wind', \
-             'Precip', 'ustar', 'Qle_cor', 'Qh_cor', 'Psurf',\
-             'CO2air', 'CO2air_qc', 'Qg_qc', 'Qle_qc', 'Qh_qc', \
-             'Qle_cor_uc', 'Qh_cor_uc', 'GPP']]
-
-    # Convert units ...
-
-
-    # hPa -> Pa
-    var_input.loc[:, 'VPD'] *= c.HPA_TO_KPA * c.KPA_TO_PA
-
-    # kPa -> Pa
-    var_input.loc[:, 'Psurf'] *= c.KPA_TO_PA
-
-    # W m-2 to kg m-2 s-1
-    lhv = latent_heat_vapourisation(var_input['Tair'])
-    var_input.loc[:, 'ET'] = var_input['Qle'] / lhv
-
-
-    # Use EBR value instead - uncomment to output this correction
-    #var_input.loc[:, 'ET'] = var_input['Qle_cor'] / lhv
-
-
-    # kg m-2 s-1 to mol m-2 s-1
-    conv = c.KG_TO_G * c.G_WATER_TO_MOL_WATER
-    var_input.loc[:, 'ET'] *= conv
-
-    # screen by low u*, i.e. conditions which are often indicative of
-    # poorly developed turbulence, after Sanchez et al. 2010, HESS, 14,
-    # 1487-1497. Some authors use 0.3 m s-1 (Oliphant et al. 2004) or
-    # 0.35 m s-1 (Barr et al. 2006) as a threshold for u*
-    var_input = var_input[var_input.ustar >= 0.25]
-
-    # screen for bad data
-    var_input = var_input[var_input['Rnet'] > -900.0]
-
-    return (var_input)
 
 def latent_heat_vapourisation(tair):
     """
@@ -623,5 +609,13 @@ def latent_heat_vapourisation(tair):
 
 if __name__ == "__main__":
 
-    fname = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process3_output/curves/raw_data_Qle_VPD_daily_RM16_SLCT_EF_model_0-0.2.csv"
-    main(fname, hour=False)
+    # Path of PLUMBER 2 dataset
+    PLUMBER2_path      = "/g/data/w97/mm3972/data/PLUMBER2/"
+    PLUMBER2_flux_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Flux/"
+    PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+
+    site_names, IGBP_types, clim_types, model_names_list = load_default_list()
+    # The site names
+    model_names   = model_names_list['model_select']
+
+    main(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, site_names, model_names)

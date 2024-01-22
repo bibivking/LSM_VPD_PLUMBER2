@@ -12,6 +12,7 @@ __version__ = "1.0 (05.01.2024)"
 __email__   = "mu.mengyuan815@gmail.com"
 
 import os
+import gc
 import sys
 import glob
 import numpy as np
@@ -114,8 +115,10 @@ def read_CMIP6(fname, model_name, var_name, time_s, time_e):
 def calculate_EF(Qle, Qh):
 
     # Set daily Qle+Qh percent
-    Qle_Qh_threshold=10
-    EF_tmp = np.where(np.all([Qh+Qle > Qle_Qh_threshold, Qh>0],axis=0), Qle/(Qh+Qle), np.nan)
+    # Qle_Qh_threshold=10
+    # EF_tmp = np.where(np.all([Qh+Qle > Qle_Qh_threshold, Qh>0],axis=0), Qle/(Qh+Qle), np.nan)
+    
+    EF_tmp = np.where(np.all([Qle>0, Qh>0],axis=0), Qle/(Qh+Qle), np.nan)
     EF     = np.where(EF_tmp<0, np.nan, EF_tmp)
 
     return EF
@@ -239,28 +242,55 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
 
     # Reading data
     input_file     = CMIP6_out_path + scenario + '.nc'
+
+    # Read EF
+    print('Read EF')
+    f              = nc.Dataset(input_file, mode='r')
+    ef             = f.variables['EF'][:]
+    f.close()
+
+    # Sorting EF
+    print('Sorting EF')
+    ef_sorted      = np.sort(ef, axis=0)
+    rearranged     = np.argsort(ef, axis=0)
+    ef             = None
+    gc.collect()
+
+    # Read qle
+    print('Read qle')
+    f              = nc.Dataset(input_file, mode='r')
+    qle            = f.variables['Qle'][:]
+    f.close()
+    qle_rearranged = qle[rearranged]
+    qle            = None
+    gc.collect()
+
+    # Read vpd
+    print('Read vpd')
+    f              = nc.Dataset(input_file, mode='r')
+    vpd            = f.variables['VPD'][:]
+    f.close()
+    vpd_rearranged = vpd[rearranged]
+    vpd            = None
+    gc.collect()
+
+    # Read ntime, lat, lon
+    print('Read ntime, lat, lon')
     f              = nc.Dataset(input_file, mode='r')
     ntime          = len(f.variables['time'][:])
     lat_out        = f.variables['lat'][:]
     lon_out        = f.variables['lon'][:]
-    ef             = f.variables['EF'][:]
-    qle            = f.variables['Qle'][:]
-    vpd            = f.variables['VPD'][:]
     f.close()
+    gc.collect()
 
-    # Sorting EF
-    ef_sorted      = np.sort(ef, axis=0)
-    qle_rearranged = qle[np.argsort(ef, axis=0)]
-    vpd_rearranged = vpd[np.argsort(ef, axis=0)]
-    
     # Decide how many data wanted in the new file
     new_length     = round( ntime * (percent/100) )
     index_bot      = new_length
     index_top      = ntime - new_length
 
     output_files   = [ CMIP6_out_path + scenario + '_EF_bot_'+percent+'percent.nc',
-                       CMIP6_out_path + scenario + '_EF_top_'+percent+'percent.nc']
-    
+                        CMIP6_out_path + scenario + '_EF_top_'+percent+'percent.nc']
+
     for output_file in output_files:
 
         f = nc.Dataset(output_file, 'w', format='NETCDF4')
@@ -297,7 +327,7 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
             Qle[:]         = qle_rearranged[:index_bot,:,:]
         elif 'top' in output_file:
             Qle[:]         = qle_rearranged[index_top:,:,:]
-        
+
         VPD                = f.createVariable('VPD', 'f4', ('rank', 'lat', 'lon'))
         VPD.standard_name  = 'Vapor pressure deficit'
         VPD.units          = 'kPa'
@@ -309,7 +339,7 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
 
         EF                 = f.createVariable('EF', 'f4', ('rank', 'lat', 'lon'))
         EF.standard_name   = 'Evaporative fraction'
-        EF.units           = 'fraction'      
+        EF.units           = 'fraction'
 
         if 'bot' in output_file:
             EF[:]         = ef_sorted[:index_bot,:,:]
@@ -324,7 +354,7 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
 
         f.close()
 
-    return 
+    return
 
 if __name__ == "__main__":
 
@@ -345,5 +375,6 @@ if __name__ == "__main__":
             time_e  = datetime(2100,1,1,0,0,0)
 
         # make_CMIP6_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s, time_e)
-        percent = 15
-        make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
+        # percent = 15
+        # make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
+        gc.collect()
