@@ -3,21 +3,33 @@ import re
 import gc
 import sys
 import glob
+import psutil
+import copy
 import netCDF4 as nc
 import codecs
 import numpy as np
 import xarray as xr
 import pandas as pd
-from scipy.interpolate import griddata
-from pygam import LinearGAM, PoissonGAM
+import joblib
+from pygam import LinearGAM, PoissonGAM, s, f
+from sklearn.model_selection import KFold
 from scipy import stats, interpolate
+from scipy.interpolate import griddata
 from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+
+def check_server():
+
+    print("CPU usage:", psutil.cpu_percent())
+    print("Memory usage:", psutil.virtual_memory().percent, "%")
+    print("Disk usage:", psutil.disk_usage("/").percent, "%")  # Replace "/" with the desired path
+    return
 
 def decide_filename(day_time=False, summer_time=False, energy_cor=False,
                     IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
                     country_code=None, selected_by=None, bounds=None, veg_fraction=None,
-                    uncertain_type=None, method=None,
+                    uncertain_type=None, method=None,LAI_range=None,
                     clarify_site={'opt':False,'remove_site':None}):
 
     # file name
@@ -35,6 +47,10 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
     if veg_fraction !=None:
         # if selected based on vegetation fraction
         file_message = file_message + '_VF='+str(veg_fraction[0])+'-'+str(veg_fraction[1])
+
+    if LAI_range !=None:
+        # if selected based on LAI
+        file_message = file_message + '_LAI='+str(LAI_range[0])+'-'+str(LAI_range[1])
 
     if country_code !=None:
         # if for a country/region
@@ -69,8 +85,11 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
             else:
                 file_message = file_message + '_'+str(bounds[0])
 
-    if uncertain_type != None:
-        file_message = file_message + '_'+uncertain_type
+    if method != None:
+        file_message = file_message + '_' + method
+
+    if uncertain_type != None and method == 'CRV_bins':
+        file_message = file_message + '_' + uncertain_type
 
     folder_name = 'original'
 
@@ -85,15 +104,18 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
 def get_model_out_list(var_name):
 
     # Using AR-SLu.nc file to get the model namelist
-    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
-    model_in_list = f.variables[var_name + '_models']
+    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/old/AR-SLu.nc", mode='r')
+    if var_name == 'Gs':
+        model_in_list = f.variables['Qle_models']
+    else:
+        model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
     model_out_list= []
 
     # Compare each model's output time interval with CABLE hourly interval
     # If the model has hourly output then use the model simulation
     for model_in in model_in_list:
-        if len(f.variables[f"{model_in}_time"]) == ntime:
+        if len(f.variables[f"{model_in}_time"]) == ntime and model_in != '1lin':
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
@@ -191,7 +213,7 @@ def load_sites_in_country_list(country_code):
         site_names     = None
     return site_names
 
-def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
+def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spline_order=2):
 
     x_series   = np.arange(x_bot, x_top, x_interval)
 
@@ -206,37 +228,125 @@ def fit_GAM(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order
     y_pred       = gam.predict(x_series)
     y_int        = gam.confidence_intervals(x_series, width=.95)
 
+    return x_series, y_pred, y_int
 
-    '''
-    def evaluate_gam_fit(model_name, x_values, y_values):
-        """Evaluates goodness of fit for a GAM model."""
+def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values):
 
-        vpd_pred, y_pred, y_int = fit_GAM(x_top, x_bot, x_interval, x_values, y_values)
+    # Remove nan values
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
 
-        # Obtain the fitted model object for evaluation
-        model = fit_GAM(x_top, x_bot, x_interval, x_values, y_values)  # Assume model is the returned object
+    # copy.deepcopy: creates a complete, independent copy of an object
+    # and its entire internal structure, including nested objects and any
+    # references they contain.
 
-        # Cross-validation scores
-        rmse_scores = cross_val_score(model, x_values, y_values, scoring='neg_root_mean_squared_error', cv=5)
-        r2_scores = cross_val_score(model, x_values, y_values, scoring='r2', cv=5)
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
 
-        # Deviance and AIC
-        deviance = model.deviance  # Access model attributes for these metrics
-        aic = model.aic
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+    
+    # Set x_series
+    x_series   = np.arange(x_bot, x_top, x_interval)
 
-        # Residual diagnostics (visualizing residuals is often more informative)
-        resids = y_values - y_pred
+    # Define grid search parameters
+    lam        = np.logspace(-5, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 10, 1)   # Number of splines per smooth term range
+    # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
+    # n_splines: Number of spline basis functions (7 values between 3 and 9).
 
-        # Print evaluation metrics
-        print(f"Model: {model_name}")
-        print(f"Mean RMSE: {-rmse_scores.mean():.4f}, std dev: {rmse_scores.std():.4f}")
-        print(f"Mean R-squared: {r2_scores.mean():.4f}, std dev: {r2_scores.std():.4f}")
-        print(f"Deviance: {deviance:.4f}")
-        print(f"AIC: {aic:.4f}")
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
 
-    '''
+    # Initialize empty lists for storing results
+    models = []
+    scores = []
+
+    # Perform grid search
+    for train_index, test_index in kf.split(x_values):
+        X_train, X_test = x_values.iloc[train_index], x_values.iloc[test_index]
+        y_train, y_test = y_values.iloc[train_index], y_values.iloc[test_index]
+
+        X_train = X_train.to_numpy().reshape(-1, 1)
+        
+        print('X_train.shape', X_train.shape)
+        print('X_test.shape', X_test.shape)
+        print('y_train.shape', y_train.shape)
+        print('y_test.shape', y_test.shape)
+
+        # Define and fit GAM model
+        gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        # LinearGAM(s(0)) creates a GAM with a spline term
+        # edge_knots: specify minimum and maximum domain of the spline function. 
+        #             To make GAM model covers the whole range of VPD, I manually set them as VPD boundaries
+
+        # Alternative
+        # gam = LinearGAM(s(0) + f(0)).fit(X_train, y_train)
+        # Fits the GAM model to the data using default hyperparameters.
+
+        models.append(gam)
+
+        # Evaluate model performance (replace with your preferred metric)
+        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+        scores.append(score)
+
+    print('scores',scores)
+    # Find the best model based on average score
+    # For gam.score which calcuate deviance, the best model's score is closet to 0
+    best_model_index = np.argmin(np.abs(scores))
+    print('best_model_index',best_model_index)
+    best_model = models[best_model_index]
+    print('best_model',best_model)
+    best_score = scores[best_model_index]
+    print('best_score',best_score)
+    print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
+    
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+
+    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
+    y_pred       = best_model.predict(x_series)
+
+    # Note that The code calculates 95% confidence intervals, but remember that confidence
+    #           intervals should generally be calculated on the actual test data points,
+    #           not a new set of equally spaced values like x_series
+    y_int        = best_model.confidence_intervals(x_series, width=.95)
+
+    print('x_series',x_series)
+    print('y_pred',y_pred)
+    print('y_int',y_int)
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+
+    # Add legend
+    plt.legend()
+
+    plt.savefig(f'./Check_{model_out_name}_GAM_fitted_curve.png')
 
     return x_series, y_pred, y_int
+
+def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values):
+    '''
+    Read the fitted GAM curve and based on x_values to calcuate predicted Y 
+    '''
+    # Load the model using joblib
+    best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+
+    # Predict using new data
+    y_pred = best_model.predict(x_values)
+    return y_pred
 
 def fit_spline(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
 

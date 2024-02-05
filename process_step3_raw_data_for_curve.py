@@ -69,7 +69,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
            np.any(~np.isnan(var_output["model_CABLE"])) )
 
     # Get model names
-    model_out_list = get_model_out_list(var_name)
+    if var_name == 'Gs':
+        site_names, IGBP_types, clim_types, model_names = load_default_list()
+        model_out_list = model_names['model_select']
+    else:
+        model_out_list = get_model_out_list(var_name)
 
     # model_out_list = np.array(model_out_list)
 
@@ -147,8 +151,10 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     # select data with required LAI values : Check the code!!!
     if LAI_range !=None:
-
-        LAI_input       = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv', na_values=[''])
+        if time_scale == 'daily':
+            LAI_input = pd.read_csv(f'./txt/process2_output/daily/LAI_all_sites_daily.csv', na_values=[''])
+        else:
+            LAI_input = pd.read_csv(f'./txt/process1_output/LAI_all_sites_parallel.csv', na_values=[''])
 
         for i, model_out_name in enumerate(model_out_list):
             if 'obs' in model_out_name:
@@ -156,10 +162,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             else:
                 head = 'model_'
             try:
-                LAI_mask  = (LAI_input[model_out_name+'_LAI'] > LAI_range[0]) & (LAI_input[model_out_name+'_LAI'] < LAI_range[1])
+                LAI_mask  = (LAI_input[model_out_name+'_LAI'] >= LAI_range[0]) & (LAI_input[model_out_name+'_LAI'] < LAI_range[1])
             except:
-                LAI_mask  = (LAI_input['obs_LAI'] > LAI_range[0]) & (LAI_input['obs_LAI'] < LAI_range[1])
+                LAI_mask  = (LAI_input['obs_LAI'] >= LAI_range[0]) & (LAI_input['obs_LAI'] < LAI_range[1])
             var_output[head+model_out_name]  = np.where(LAI_mask, var_output[head+model_out_name], np.nan)
+        site_num     = len(np.unique(var_output["site_name"]))
 
     # whether only considers observation without precipitation in hours_precip_free hours
     if hours_precip_free!=None:
@@ -358,7 +365,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
         folder_name, file_message = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                                     IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
-                                                    standardize=standardize, country_code=country_code,
+                                                    standardize=standardize, country_code=country_code, LAI_range=LAI_range,
                                                     veg_fraction=veg_fraction, clarify_site=clarify_site)
 
         var_output_raw_data.to_csv(f'./txt/process3_output/2d_grid/raw_data_{var_name}_VPD'+file_message+'.csv')
@@ -485,13 +492,13 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         folder_name, file_message1 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
-                                            bounds=low_bound, veg_fraction=veg_fraction, method=method,
+                                            bounds=low_bound, veg_fraction=veg_fraction, method=method, LAI_range=LAI_range,
                                             clarify_site=clarify_site)
 
         folder_name, file_message2 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
-                                            bounds=high_bound, veg_fraction=veg_fraction, method=method,
+                                            bounds=high_bound, veg_fraction=veg_fraction, method=method, LAI_range=LAI_range,
                                             clarify_site=clarify_site)
 
         var_select_dry.to_csv(f'./txt/process3_output/curves/raw_data_{var_name}_VPD'+file_message1+'.csv')
@@ -505,7 +512,7 @@ if __name__ == "__main__":
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    var_name       = 'Qle'      #'TVeg'
+    var_name       = 'Gs'      #'TVeg'
     selected_by    = 'EF_model' #'EF_model' #'EF_obs'#
     method         = 'CRV_bins'
                                 # 'CRV_bins'
@@ -517,10 +524,14 @@ if __name__ == "__main__":
                                    # 'STD_monthly_model'
                                    # 'STD_daily_obs'
 
-    day_time          = False
     selected_raw_data = True
 
-    time_scale        = 'daily'
+    time_scale        = 'daily' # 'daily'
+
+    day_time          = False
+    if var_name == 'Gs' and time_scale == 'hourly':
+        day_time      = True
+
     clarify_site      = {'opt': True,
                          'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                          'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
@@ -539,7 +550,56 @@ if __name__ == "__main__":
 
     low_bound      = [0,0.2] #30
     high_bound     = [0.8,1.] #70
+    veg_fraction   = None # [0,0.3] # low veg fraction
+    LAI_range      = None # [0.,1.]
+
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    LAI_range      = [0.,1.]
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    LAI_range      = [1.,2.]
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    LAI_range      = [2.,4.]
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    LAI_range      = [4.,10.]
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    low_bound      = [0,0.2] #30
+    high_bound     = [0.8,1.] #70
     veg_fraction   = [0,0.3] # low veg fraction
+    LAI_range      = None
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+                    country_code=country_code,  # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    low_bound      = [0,0.2] #30
+    high_bound     = [0.8,1.] #70
+    veg_fraction   = [0.7,1.] # high veg fraction
 
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
@@ -550,54 +610,44 @@ if __name__ == "__main__":
 
     low_bound      = [0,0.2] #30
     high_bound     = [0.8,1.] #70
-    veg_fraction   = [0.7,1.] # low veg fraction
+    LAI_range      = None   # [0,1.]
+                            # [1.,2.]
+                            # [2.,4.]
+                            # [4.,10.]
+    veg_fraction   = None
+    for IGBP_type in IGBP_types:
+        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                        models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+                        country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
+                        energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+        gc.collect()
+
+    low_bound      = [0.2,0.4] #30
+    high_bound     = [0.6,0.8] #70
+    LAI_range      = None   # [0,1.]
+                            # [1.,2.]
+                            # [2.,4.]
+                            # [4.,10.]
+    veg_fraction   = None
+    IGBP_type      = None
+    write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+                    high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+                    country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
+                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+
+    low_bound      = [0.2,0.4] #30
+    high_bound     = [0.4,0.6] #70
+    LAI_range      = None   # [0,1.]
+                            # [1.,2.]
+                            # [2.,4.]
+                            # [4.,10.]
 
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                    models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                    country_code=country_code,  # IGBP_type=IGBP_type,
+                    models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+                    country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
                     energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
 
-
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-
-    # for IGBP_type in IGBP_types:
-    #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                     country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
-    #                     energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
-    #     gc.collect()
-
-    # low_bound      = [0.2,0.4] #30
-    # high_bound     = [0.6,0.8] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                 country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
-
-    # low_bound      = [0.2,0.4] #30
-    # high_bound     = [0.4,0.6] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                 country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
-
-    # gc.collect()
+    gc.collect()

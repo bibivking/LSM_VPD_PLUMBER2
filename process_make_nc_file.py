@@ -45,11 +45,9 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
             # Set input file path
             file_path      = glob.glob(PLUMBER2_path+model_name +"/*"+site_name+"*.nc")
-            # print('j=',j, "model_name=",model_name, 'file_path=',file_path)
-            # print('file_path==None 1',file_path==None)
+
             # Change var_name for the different models
             var_name_tmp   = var_name_dict[model_name]
-            # print('len(var_name_tmp)',len(var_name_tmp))
 
             # if the input file exist
             # Open input file
@@ -138,7 +136,12 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # print('model_name=',model_name,len(Var_tmp_tmp))
             # ===== Quality Control =====
             # use average of the previous and later values to replace outlier
-            Var_tmp_tmp                 = conduct_quality_control(varname, Var_tmp_tmp,zscore_threshold)
+            # Var_tmp_tmp                 = conduct_quality_control(varname, Var_tmp_tmp,zscore_threshold)
+            # Comment this line out, because setting zscore_threshold=3 will screen 3% extreme values.
+            # However, these extreme values may be the high VPD period we are interested.
+            if var_name_dict['CABLE'] == 'Qle':
+                Var_tmp_tmp                 = np.where(Var_tmp_tmp>800., np.nan, Var_tmp_tmp)
+                Var_tmp_tmp                 = np.where(Var_tmp_tmp<-300., np.nan, Var_tmp_tmp)
 
             # ===== Convert Units =====
             # use average of the previous and later values to replace outlier
@@ -298,7 +301,10 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     f_in               = nc.Dataset(file_path[0])
     Qle                = f_in.variables['Qle'][:]
-    Qle                = np.where(Qle == -9999., np.nan, Qle)
+    # Qle                = np.where(Qle == -9999., np.nan, Qle)
+
+    Qle                = np.where(Qle>800., np.nan, Qle)
+    Qle                = np.where(Qle<-300., np.nan, Qle)
 
     f_out              = nc.Dataset(output_file,'r+', format='NETCDF4')
 
@@ -313,7 +319,11 @@ def add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file):
 
     try:
         Qle_cor                = f_in.variables['Qle_cor'][:]
-        Qle_cor                = np.where(Qle_cor == -9999., np.nan, Qle_cor)
+        # Qle_cor                = np.where(Qle_cor == -9999., np.nan, Qle_cor)
+
+        Qle_cor                = np.where(Qle_cor>800., np.nan, Qle_cor)
+        Qle_cor                = np.where(Qle_cor<-300., np.nan, Qle_cor)
+
         if 'obs_Qle_cor' not in f_out.variables:
             obs_cor                = f_out.createVariable('obs_Qle_cor', 'f4', ('CABLE_time'))
             obs_cor.standard_name  = "obs_latent_heat_cor"
@@ -810,7 +820,7 @@ if __name__ == "__main__":
     site_names     =['AU-Cpr']
                     # ['AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7', 'CN-Din', 'US-WCr', 'ZM-Mon',]
                     # ['CA-NS1', 'AR-SLu']
-    # 'AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7', 
+    # 'AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7',
     #                       'CN-Din', 'US-WCr', 'ZM-Mon',
     for site_name in site_names:
         print('site_name',site_name)

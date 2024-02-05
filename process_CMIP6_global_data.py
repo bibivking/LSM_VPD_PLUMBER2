@@ -246,50 +246,37 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
     # Read EF
     print('Read EF')
     f              = nc.Dataset(input_file, mode='r')
-    ef             = f.variables['EF'][:]
-    f.close()
-
-    # Sorting EF
-    print('Sorting EF')
-    ef_sorted      = np.sort(ef, axis=0)
-    rearranged     = np.argsort(ef, axis=0)
-    ef             = None
-    gc.collect()
-
-    # Read qle
-    print('Read qle')
-    f              = nc.Dataset(input_file, mode='r')
-    qle            = f.variables['Qle'][:]
-    f.close()
-    qle_rearranged = qle[rearranged]
-    qle            = None
-    gc.collect()
-
-    # Read vpd
-    print('Read vpd')
-    f              = nc.Dataset(input_file, mode='r')
-    vpd            = f.variables['VPD'][:]
-    f.close()
-    vpd_rearranged = vpd[rearranged]
-    vpd            = None
-    gc.collect()
-
-    # Read ntime, lat, lon
-    print('Read ntime, lat, lon')
-    f              = nc.Dataset(input_file, mode='r')
-    ntime          = len(f.variables['time'][:])
+    time           = f.variables['time'][:]
     lat_out        = f.variables['lat'][:]
     lon_out        = f.variables['lon'][:]
+    ef             = f.variables['EF'][:]
+    qle            = f.variables['Qle'][:]
+    vpd            = f.variables['VPD'][:]
     f.close()
+
+    # calculate EF percentile, ignoring nan
+    print('calculate EF percentile')
+    p_bot_ef       = np.nanpercentile(ef, percent, axis=0)
+    p_top_ef       = np.nanpercentile(ef, 100-percent, axis=0)
+
+
+    # save data with EF percentile range
+    ef_bot         = np.where(ef<p_bot_ef, ef, np.nan)
+    ef_top         = np.where(ef>p_top_ef, ef, np.nan)
+    qle_bot        = np.where(ef<p_bot_ef, qle, np.nan)
+    qle_top        = np.where(ef>p_top_ef, qle, np.nan)
+    vpd_bot        = np.where(ef<p_bot_ef, vpd, np.nan)
+    vpd_top        = np.where(ef>p_top_ef, vpd, np.nan)
+
     gc.collect()
 
-    # Decide how many data wanted in the new file
-    new_length     = round( ntime * (percent/100) )
-    index_bot      = new_length
-    index_top      = ntime - new_length
+    # # Decide how many data wanted in the new file
+    # new_length     = round( ntime * (percent/100) )
+    # index_bot      = new_length
+    # index_top      = ntime - new_length
 
-    output_files   = [ CMIP6_out_path + scenario + '_EF_bot_'+percent+'percent.nc',
-                        CMIP6_out_path + scenario + '_EF_top_'+percent+'percent.nc']
+    output_files   = [ CMIP6_out_path + scenario + '_EF_bot_'+str(percent)+'th_percent.nc',
+                       CMIP6_out_path + scenario + '_EF_top_'+str(percent)+'th_percent.nc']
 
     for output_file in output_files:
 
@@ -300,17 +287,21 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
         f.creation_date     = "%s" % (datetime.now())
 
         if 'bot' in output_file:
-            f.description   = 'bottom '+percent+' percent of EF in CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
+            f.description   = 'bottom '+str(percent)+' percent of EF in CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
         elif 'top' in output_file:
-            f.description   = 'top '+percent+' percent of EF in CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
+            f.description   = 'top '+str(percent)+' percent of EF in CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
 
         f.Conventions       = "CF-1.0"
 
         # set dimensions
         f.createDimension('lat',  len(lat_out))
         f.createDimension('lon',  len(lon_out))
-        f.createDimension('rank', new_length)
+        f.createDimension('time', len(time))
 
+        Time               = f.createVariable('time', 'f4', ('time'))
+        Time.standard_name = 'time'
+        Time[:]            = time
+        
         Lat                = f.createVariable('lat', 'f4', ('lat'))
         Lat.standard_name  = 'latitude'
         Lat[:]             = lat_out
@@ -319,33 +310,42 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
         Lon.standard_name  = 'longitude'
         Lon[:]             = lon_out
 
-        Qle                = f.createVariable('Qle', 'f4', ('rank', 'lat', 'lon'))
+        Qle                = f.createVariable('Qle', 'f4', ('time', 'lat', 'lon'))
         Qle.standard_name  = 'Latent heat flux'
         Qle.units          = 'W m-2'
 
         if 'bot' in output_file:
-            Qle[:]         = qle_rearranged[:index_bot,:,:]
+            Qle[:]         = qle_bot[:]
         elif 'top' in output_file:
-            Qle[:]         = qle_rearranged[index_top:,:,:]
+            Qle[:]         = qle_top[:]
 
-        VPD                = f.createVariable('VPD', 'f4', ('rank', 'lat', 'lon'))
+        VPD                = f.createVariable('VPD', 'f4', ('time', 'lat', 'lon'))
         VPD.standard_name  = 'Vapor pressure deficit'
         VPD.units          = 'kPa'
 
         if 'bot' in output_file:
-            VPD[:]         = vpd_rearranged[:index_bot,:,:]
+            VPD[:]         = vpd_bot[:]
         elif 'top' in output_file:
-            VPD[:]         = vpd_rearranged[index_top:,:,:]
+            VPD[:]         = vpd_top[:]
 
-        EF                 = f.createVariable('EF', 'f4', ('rank', 'lat', 'lon'))
+        EF                 = f.createVariable('EF', 'f4', ('time', 'lat', 'lon'))
         EF.standard_name   = 'Evaporative fraction'
         EF.units           = 'fraction'
 
         if 'bot' in output_file:
-            EF[:]         = ef_sorted[:index_bot,:,:]
+            EF[:]         = ef_bot[:]
         elif 'top' in output_file:
-            EF[:]         = ef_sorted[index_top:,:,:]
+            EF[:]         = ef_top[:]
 
+        Num               = f.createVariable('numbers', 'f4', ('lat', 'lon'))
+
+        if 'bot' in output_file:
+            Num.standard_name = 'number of data points'
+            Num[:]            = np.sum(np.where(np.isnan(ef_bot[:]),0,1),axis=0)
+        elif 'top' in output_file:
+            Num.standard_name = 'number of data points'
+            Num[:]            = np.sum(np.where(np.isnan(ef_top[:]),0,1),axis=0)
+    
         Lat = None
         Lon = None
         Qle = None
@@ -375,6 +375,6 @@ if __name__ == "__main__":
             time_e  = datetime(2100,1,1,0,0,0)
 
         # make_CMIP6_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s, time_e)
-        # percent = 15
-        # make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
+        percent = 15
+        make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
         gc.collect()

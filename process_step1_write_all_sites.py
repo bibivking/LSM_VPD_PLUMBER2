@@ -248,7 +248,8 @@ def calc_hours_after_precip(precip, valid_daily_precip=1,site_name=None):
 
     return half_hrs_after_precip
 
-def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI=False, country_code=None):
+def write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI=False, 
+                            country_code=None):
 
     # ============= read all sites data ================
     # get veg type info
@@ -415,7 +416,7 @@ def save_site_modelled_LAI(PLUMBER2_met_path, site_name, models_calc_LAI, model_
                 LAI_model[model_with_LAI+'_LAI'] = LAI
             except:
                 LAI_model = pd.DataFrame(LAI, columns=[model_with_LAI+'_LAI'])
-    
+
     LAI_model.to_csv(f'./txt/process1_output/LAI/model_LAI_{site_name}.csv')
 
     return
@@ -445,16 +446,23 @@ def add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LA
 
     for site_name in site_names:
         site_mask = (var_output['site_name'] == site_name)
+        # print('np.any(site_mask)', np.any(site_mask))
         var_LAI   = pd.read_csv(f'./txt/process1_output/LAI/model_LAI_{site_name}.csv', na_values=[''])
-        print('var_LAI',var_LAI)
+        # print('var_LAI.columns',var_LAI.columns)
+
         for model_with_LAI in models_calc_LAI:
+            print('Reading ', site_name, model_with_LAI)
             try:
-                var_output.loc[site_mask, model_with_LAI+'_LAI'][:] = var_LAI[model_with_LAI+'_LAI'][:]
-                print(model_with_LAI+'_LAI')
+                var_output.loc[site_mask, model_with_LAI+'_LAI'] = var_LAI[model_with_LAI+'_LAI'].values
+                # print(var_LAI[model_with_LAI+'_LAI'][:])
+                # print(model_with_LAI+'_LAI')
             except:
                 # print('site',site_name,'model',model_with_LAI)
                 var_output.loc[site_mask, model_with_LAI+'_LAI'][:] = np.nan
+            gc.collect()
+
             # print(var_output.loc[site_mask, model_with_LAI+'_LAI'])
+    # print(var_output[models_calc_LAI[0]+'_LAI'])
 
     var_output.to_csv(f'./txt/process1_output/LAI_all_sites_parallel.csv')
 
@@ -536,7 +544,7 @@ if __name__ == "__main__":
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
 
-    var_name          = 'GPP' #'Qle'
+    var_name          = 'Qle' #'Qle'
     add_LAI           = False
     models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
     model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',
@@ -546,7 +554,7 @@ if __name__ == "__main__":
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
 
     # add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
 
@@ -555,7 +563,7 @@ if __name__ == "__main__":
     # add_obs_LAI_to_write_spatial_land_days(var_name, site_names, PLUMBER2_met_path)
     # add_model_LAI_to_write_spatial_land_days(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
     # write_model_LAI_parallel(site_names, models_calc_LAI, model_LAI_names, PLUMBER2_path_input)
-    add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LAI)
+    # add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LAI)
     # add_greenness_to_write_spatial_land_days(var_name, site_names)
     # # ================
 

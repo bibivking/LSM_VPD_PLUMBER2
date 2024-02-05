@@ -69,7 +69,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
     # ============ Set the input file name ============
-    bounds = [0.8,1.] 
+    bounds = [0.8,1.]
     folder_name, file_message_wet = decide_filename(day_time=day_time, energy_cor=energy_cor,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
@@ -93,6 +93,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
 
         # Read lines data
         var = pd.read_csv(file_name)
+
         if i == 0:
             # how to get the model out list from the column names
             model_out_list = []
@@ -186,8 +187,10 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
 
     ax[0,0].set_title("Wet (EF>0.8)", fontsize=20)
     ax[0,1].set_title("Dry (EF<0.2)", fontsize=20)
-
-    ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+    if var_name == 'Qle':
+        ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+    elif var_name == 'Gs':
+        ax[0,0].set_ylabel("Canopy Stomatal Conductance (mol m$\mathregular{^{-2}}$ s$\mathregular{^{-1}}$)", fontsize=12)
 
     if var_name == 'NEE':
         ax[1,0].set_ylabel("Net Ecosystem Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
@@ -205,20 +208,23 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     # ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
     # ax[0,1].set_xlim(-0.2,7.3)
 
-    ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5])
-    ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5'],fontsize=12)
-    ax[0,0].set_xlim(-0.1,2.7)
-    ax[0,0].set_ylim(0,170)
+    # ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5])
+    # ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5'],fontsize=12)
+    if var_name == 'Qle':
+        ax[0,0].set_xlim(-0.1,2.7)
+        ax[0,0].set_ylim(0,170)
 
-    ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
-    ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
-    ax[0,1].set_xlim(-0.1,5.1)
-    ax[0,1].set_ylim(0,40)
+    # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+
+    if var_name == 'Qle':
+        ax[0,1].set_xlim(-0.1,5.1)
+        ax[0,1].set_ylim(0,40)
 
     ax[0,0].tick_params(axis='y', labelsize=12)
     ax[0,1].tick_params(axis='y', labelsize=12)
 
-    fig.savefig("./plots/Fig_Qle_VPD"+file_message_dry+".png",bbox_inches='tight',dpi=300) # '_30percent'
+    fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
     return
 
@@ -263,7 +269,7 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     props        = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
 
     # ============ Set the input file name ============
-    bounds = [0.6,0.8] 
+    bounds = [0.6,0.8]
     folder_name, file_message1 = decide_filename(day_time=day_time, energy_cor=energy_cor,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
@@ -402,40 +408,47 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
     ax[0,0].set_xlim(-0.1,5.1)
-    ax[0,0].set_ylim(0,100)
+    if var_name == 'Qle':
+        ax[0,0].set_ylim(0,100)
 
     ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
     ax[0,1].set_xlim(-0.1,5.1)
-    ax[0,1].set_ylim(0,100)
+    if var_name == 'Qle':
+        ax[0,1].set_ylim(0,100)
 
     ax[0,2].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     ax[0,2].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
     ax[0,2].set_xlim(-0.1,5.1)
-    ax[0,2].set_ylim(0,100)
+    if var_name == 'Qle':
+        ax[0,2].set_ylim(0,100)
 
     ax[0,0].tick_params(axis='y', labelsize=12)
     ax[0,1].tick_params(axis='y', labelsize=12)
     ax[0,2].tick_params(axis='y', labelsize=12)
 
-    fig.savefig("./plots/Fig_Qle_VPD"+file_message1+".png",bbox_inches='tight',dpi=300) # '_30percent'
+    fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message1}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
     return
 
-def plot_var_VPD_uncertainty_veg(var_name=None, day_time=False, energy_cor=False, time_scale=None, country_code=None,
+def plot_var_VPD_uncertainty_veg_LAI(var_name=None, day_time=False, energy_cor=False, time_scale=None, country_code=None,
                  selected_by=None, veg_fraction=None,  standardize=None, uncertain_type='UCRTN_percentile',
-                 method='CRV_bins', IGBP_types=None, clim_type=None, clarify_site={'opt':False,'remove_site':None},
-                 num_threshold=200):
+                 method='CRV_bins', IGBP_types=None, LAI_ranges=None, clim_type=None, bounds=None,
+                 clarify_site={'opt':False,'remove_site':None}, num_threshold=200):
 
     # ============ Setting for plotting ============
-    nveg     = len(IGBP_types)
+    if IGBP_types != None:
+        ncol = len(IGBP_types)
+
+    elif LAI_ranges !=None:
+        ncol = len(LAI_ranges[:])
 
     cmap     = plt.cm.rainbow #YlOrBr #coolwarm_r
 
-    fig, ax  = plt.subplots(nrows=1, ncols=nveg, figsize=[5*nveg,5],sharex=False, sharey=False, squeeze=False)
+    fig, ax  = plt.subplots(nrows=1, ncols=ncol, figsize=[5*ncol,5],sharex=False, sharey=False, squeeze=False)
     # fig, ax = plt.subplots(figsize=[10, 7])
 
-    plt.subplots_adjust(wspace=0.09, hspace=0.02)
+    plt.subplots_adjust(wspace=0.12, hspace=0.02)
 
     plt.rcParams['text.usetex']     = False
     plt.rcParams['font.family']     = "sans-serif"
@@ -467,26 +480,35 @@ def plot_var_VPD_uncertainty_veg(var_name=None, day_time=False, energy_cor=False
 
     # ============ Set the input file name ============
     ## Wet periods
-    # bounds     = [0,0.2] 
-    bounds     = [0.8,1.] 
     file_names = []
 
-    # Loop veg types 
-    for IGBP_type in IGBP_types:
-        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
-                                                    IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
-                                                    country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-                                                    uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
-        
-        file_names.append(f'./txt/process4_output/{folder_name}/{var_name}{file_message}.csv')
-        
+    # Loop veg types
+    if IGBP_types!=None:
+        for IGBP_type in IGBP_types:
+            folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                        IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                        country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                        uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+
+            file_names.append(f'./txt/process4_output/{folder_name}/{var_name}{file_message}.csv')
+
+    # Loop veg types
+    elif LAI_ranges!=None:
+        for LAI_range in LAI_ranges:
+            folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
+                                                        LAI_range=LAI_range, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
+                                                        country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                        uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
+
+            file_names.append(f'./txt/process4_output/{folder_name}/{var_name}{file_message}.csv')
+
     print('Reading', file_names)
 
     for i, file_name in enumerate(file_names):
 
         # set plot row and col
-        row = int(i/nveg)
-        col = i%nveg
+        row = int(i/ncol)
+        col = i%ncol
 
         # Read lines data
         var = pd.read_csv(file_name)
@@ -578,22 +600,29 @@ def plot_var_VPD_uncertainty_veg(var_name=None, day_time=False, energy_cor=False
 
         if IGBP_types !=None:
             ax[row,col].set_title(IGBP_types[i], fontsize=20)
-            ax[row,col].text(0.12, 0.92, str(var['site_num'][0])+' sites', va='bottom', ha='center', 
+            ax[row,col].text(0.12, 0.92, str(var['site_num'][0])+' sites', va='bottom', ha='center',
+                             rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=12)
+
+        elif LAI_ranges != None:
+            ax[row,col].set_title(f'LAI {LAI_ranges[i]}', fontsize=20)
+            ax[row,col].text(0.12, 0.92, str(var['site_num'][0])+' sites', va='bottom', ha='center',
                              rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=12)
 
         ax[row,col].set_xlabel("VPD (kPa)", fontsize=12)
         ax[row,col].tick_params(axis='y', labelsize=12)
 
         if bounds[0] <0.5:
-            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]) # 
-            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12) # 
-            ax[row,col].set_xlim(-0.1,5.1)
-            ax[row,col].set_ylim(0,50)
+            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5]) #
+            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5','5.5'],fontsize=12) #
+            ax[row,col].set_xlim(-0.1,5.6)
+            if var_name == 'Qle':
+                ax[row,col].set_ylim(0,50)
         else:
-            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5]) 
-            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5'],fontsize=12) 
-            ax[row,col].set_xlim(-0.1,3.6)
-            ax[row,col].set_ylim(0,200)
+            ax[row,col].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4])
+            ax[row,col].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4'],fontsize=12)
+            ax[row,col].set_xlim(-0.1,4.1)
+            if var_name == 'Qle':
+                ax[row,col].set_ylim(0,200)
 
         # ax[row,col].set_xlim(0, 11)
 
@@ -604,7 +633,10 @@ def plot_var_VPD_uncertainty_veg(var_name=None, day_time=False, energy_cor=False
     elif var_name == 'GPP':
         ax[1,0].set_ylabel("Gross Primary Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
 
-    fig.savefig("./plots/Fig_Qle_VPD_"+str(bounds[0])+"-"+str(bounds[1])+"_veg.png",bbox_inches='tight',dpi=300) # '_30percent'
+    if IGBP_types != None:
+        fig.savefig("./plots/Fig_"+var_name+"_VPD_"+str(bounds[0])+"-"+str(bounds[1])+"_veg.png",bbox_inches='tight',dpi=300) # '_30percent'
+    elif LAI_ranges != None:
+        fig.savefig("./plots/Fig_"+var_name+"_VPD_"+str(bounds[0])+"-"+str(bounds[1])+"_LAI.png",bbox_inches='tight',dpi=300) # '_30percent'
 
     return
 
@@ -780,7 +812,7 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
                 #     # add error range of obs (I think top and bot boundary should be set to 1 sigema)
                     # vals_bot   = var['obs_bot'][above_thres]
                     # vals_top   = var['obs_top'][above_thres]
-                
+
                     # fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
                     #                         color=line_color, edgecolor="none", alpha=0.1) #  .rolling(window=10).mean()
 
@@ -1152,7 +1184,7 @@ if __name__ == "__main__":
 
     bin_by         = 'EF_model' #'EF_model' #'EF_obs'#
     day_time       = True
-    method         = 'bin_by_vpd' #'GAM'
+    method         = 'CRV_bins' #'GAM'
     clarify_site   = {'opt': True,
                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
@@ -1175,7 +1207,7 @@ if __name__ == "__main__":
     time_scale='daily'
     country_code=None
     selected_by='EF_model'
-    veg_fraction=[0.7,1.]
+    veg_fraction=None#[0.7,1.]
     standardize=None
     uncertain_type='UCRTN_bootstrap'
     method='CRV_bins'
@@ -1185,26 +1217,89 @@ if __name__ == "__main__":
                   'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
     var_name='Qle'
-    num_threshold=10
+    num_threshold=0#10
 
-    # ======== Plot EF wet & dry ========
-    plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                 selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
-                 uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
-                 clarify_site=clarify_site,num_threshold=num_threshold)
-
-    ## ======== Plot EF (0.2-0.8) ========
-    # plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    # # ======== Plot EF wet & dry ========
+    var_name='Gs'
+    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
     #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
     #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
     #              clarify_site=clarify_site,num_threshold=num_threshold)
 
-    ## ======== Plot different veg types ========
+    plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                 selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+                 uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+                 clarify_site=clarify_site,num_threshold=num_threshold)
+
+
+    # var_name='Gs'
+    # veg_fraction=[0,0.3]
+    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+
+    # var_name='Gs'
+    # veg_fraction=[0.7,1.]
+    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+    # # # ======== Plot EF (0.2-0.8) ========
+
+    # # veg_fraction=None
+    # # plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    # #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+    # #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+    # #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+    # ## ======== Plot different veg types ========
+    # # bounds = [0,0.2]
+    # # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
+    # # plot_var_VPD_uncertainty_veg_LAI(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    # #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize, bounds=bounds,
+    # #              uncertain_type=uncertain_type, method=method, IGBP_types=IGBP_types, clim_type=clim_type,
+    # #              clarify_site=clarify_site,num_threshold=num_threshold)
+    # bounds = [0.8,1.]
+    # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
+    # plot_var_VPD_uncertainty_veg_LAI(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize, bounds=bounds,
+    #              uncertain_type=uncertain_type, method=method, IGBP_types=IGBP_types, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+    # ## ======== Plot LAI ranges ========
+    # # bounds = [0,0.2]
+    # # IGBP_types = None
+    # # LAI_ranges = [[0.,1.],
+    # #               [1.,2.],
+    # #               [2.,4.],
+    # #               [4.,10.],] #30
+
+    # # plot_var_VPD_uncertainty_veg_LAI(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    # #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize, bounds=bounds,
+    # #              uncertain_type=uncertain_type, method=method, LAI_ranges=LAI_ranges, clim_type=clim_type,
+    # #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+    # bounds = [0.8,1.]
+    # IGBP_types = None
+    # LAI_ranges = [[0.,1.],
+    #               [1.,2.],
+    #               [2.,4.],
+    #               [4.,10.],] #30
+
+    # plot_var_VPD_uncertainty_veg_LAI(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize, bounds=bounds,
+    #              uncertain_type=uncertain_type, method=method, LAI_ranges=LAI_ranges, clim_type=clim_type,
+    #              clarify_site=clarify_site,num_threshold=num_threshold)
+    
     # IGBP_types    = ['GRA', 'DBF', 'ENF', 'EBF']
     # plot_var_VPD_uncertainty_veg(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
     #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
     #              uncertain_type=uncertain_type, method=method, IGBP_types=IGBP_types, clim_type=clim_type,
     #              clarify_site=clarify_site,num_threshold=num_threshold)
+
+
 
     # plot_var_VPD_line_box( bin_by=bin_by, window_size=window_size, order=order,
     #          smooth_type=smooth_type, method='bin_by_vpd', model_names=model_names,

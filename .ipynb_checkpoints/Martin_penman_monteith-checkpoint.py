@@ -376,7 +376,7 @@ class PenmanMonteith(object):
         * Jones 1992 p 110 (note error in a - wrong units)
         """
 
-        return (613.75 * exp(17.502 * tac / (240.97 + tac)))
+        return (613.75 * exp(17.502 * tac / (240.97 + tac)));
 
     def calc_pyschrometric_constant(self, lambdax, press):
         """ Psychrometric constant ratio of specific heat of moist air at

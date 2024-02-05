@@ -28,8 +28,13 @@ import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 
 def time_step_2_daily(var_name):
-    var_input    = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',
+    if var_name == 'LAI':
+        var_input = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites_parallel.csv',
                    na_values=[''])
+    else:
+        var_input = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',
+                   na_values=[''])
+
     col_lists    = var_input.columns
 
     ntime        = len(var_input)
@@ -43,34 +48,43 @@ def time_step_2_daily(var_name):
     var_input['day']  = day
 
     for col_name in col_lists:
+        print('Before,', var_input[col_name])
         var_input.loc[var_input[col_name] == -9999, col_name] = np.nan
+        print('After,', var_input[col_name])
 
-    # drop the column 'time' since it will cause groupby error     
-    var_input = var_input.drop(labels=['time'], axis=1)  
+    if var_name == 'Gs':
+        # Exculde night time (var_input['obs_SWdown'] < 5), and the 24 hr (if half-hour, otherwise hourly 48hr) after rain
+        Gs_mask    = (var_input['obs_SWdown'] < 5) | (var_input['half_hrs_after_precip']<48)
+        for col_name in var_input.columns:
+            if 'Gs' in col_name:
+                var_input[Gs_mask][col_name]  = np.nan
+
+    # drop the column 'time' since it will cause groupby error
+    var_input = var_input.drop(labels=['time'], axis=1)
 
     ### CAUTION: EF should be re-calculated, when making nc file,
     ###          I filter out some EF values which make no sense,
     ###          which may make the below EF daily average biased.
-    ###          Groupby ignores np.nan values to calculate 
+    ###          Groupby ignores np.nan values to calculate
     ###          daily average Qle & Qh, but I want to set the day
-    ###          with nan timestep as nan. To achieve it, I replace  
-    ###          nan with inf, groupby the data and then change back 
-    ###          to nan. This method will make the days with any nan 
+    ###          with nan timestep as nan. To achieve it, I replace
+    ###          nan with inf, groupby the data and then change back
+    ###          to nan. This method will make the days with any nan
     ###          time step become nan.
-        
+
     # Change nan value to np.inf
     var_input = var_input.fillna(np.inf)
-    
+
     # Groupby
     # if var_name == 'Qle' or var_name == 'Qh' or var_name == 'LAI' :
     var_out = var_input.groupby(by=['year','month','day','site_name','IGBP_type','climate_type']).mean()
     # elif var_name == 'GPP' or var_name == 'NEE' or var_name == 'TVeg':
     #     var_out = var_input.groupby(by=['year','day','site_name','IGBP_type','climate_type']).sum()
 
-    # Change back np.inf to nan value 
+    # Change back np.inf to nan value
     var_out = var_out.replace(np.inf, np.nan)
 
-    # Reset index 
+    # Reset index
     var_output   = var_out.reset_index(level=['year','month','day','site_name','IGBP_type','climate_type'])
     print(var_output)
 
@@ -81,14 +95,14 @@ def time_step_2_daily(var_name):
 
 def update_EF_in_Qle():
 
-    # Reading qle and qh files 
+    # Reading qle and qh files
     var_input_Qle  = pd.read_csv(f'./txt/process2_output/daily/Qle_all_sites_daily.csv',
                      na_values=[''])
 
     var_input_Qh   = pd.read_csv(f'./txt/process2_output/daily/Qh_all_sites_daily.csv',
                      na_values=[''])
 
-    # Get model name list 
+    # Get model name list
     # how to get the model out list from the column names???
     model_out_list = []
     for column_name in var_input_Qle.columns:
@@ -99,7 +113,7 @@ def update_EF_in_Qle():
 
     # Set daily Qle+Qh threshold
     Qle_Qh_threshold=10
-    
+
     # Calculate daily EF
     for model_in in model_out_list:
         if model_in == 'obs':
@@ -114,55 +128,7 @@ def update_EF_in_Qle():
     # Save data
     var_input_Qle.to_csv(f'./txt/process2_output/daily/Qle_all_sites_daily.csv')
 
-    return 
-
-def time_step_2_daily_LAI():
-    
-    var_input    = pd.read_csv(f'./txt/process1_output/LAI_all_sites.csv',
-                   na_values=[''])
-    col_lists    = var_input.columns
-
-    ntime        = len(var_input)
-    year         = np.zeros(ntime)
-    day          = np.zeros(ntime)
-    for i in np.arange(ntime):
-        time     = datetime.strptime(var_input['time'][i], "%Y-%m-%d %H:%M:%S")
-        year[i]  = time.year
-        day[i]   = time.day
-    var_input['year'] = year
-    var_input['day']  = day
-
-    for col_name in col_lists:
-        var_input.loc[var_input[col_name] == -9999, col_name] = np.nan
-
-    # drop the column 'time' since it will cause groupby error     
-    var_input = var_input.drop(labels=['time'], axis=1)  
-
-    ### CAUTION: EF should be re-calculated, when making nc file,
-    ###          I filter out some EF values which make no sense,
-    ###          which may make the below EF daily average biased.
-    ###          Groupby ignores np.nan values to calculate 
-    ###          daily average Qle & Qh, but I want to set the day
-    ###          with nan timestep as nan. To achieve it, I replace  
-    ###          nan with inf, groupby the data and then change back 
-    ###          to nan. This method will make the days with any nan 
-    ###          time step become nan.
-        
-    # Change nan value to np.inf
-    var_input = var_input.fillna(np.inf)
-    
-    # Groupby
-    var_out = var_input.groupby(by=['year','month','day','site_name','IGBP_type','climate_type']).mean()
-
-    # Change back np.inf to nan value 
-    var_out = var_out.replace(np.inf, np.nan)
-
-    # Reset index 
-    var_output   = var_out.reset_index(level=['year','month','day','site_name','IGBP_type','climate_type'])
-    print(var_output)
-
-    # Save data
-    var_output.to_csv(f'./txt/process2_output/daily/LAI_all_sites_daily.csv')
+    return
 
 if __name__ == "__main__":
 
@@ -175,8 +141,13 @@ if __name__ == "__main__":
     # var_name = 'Qh'  #'TVeg'
     # time_step_2_daily(var_name)
 
-    update_EF_in_Qle()
+    var_name = 'Gs'  #'TVeg'
+    time_step_2_daily(var_name)
 
+    # update_EF_in_Qle()
+
+    # var_name = 'Qh'  #'TVeg'
+    # time_step_2_daily(var_name)
 
     # time_step_2_daily_LAI()
 
