@@ -29,7 +29,7 @@ from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 
-def calculate_LSM_lead_CMIP6_uncertainty(CMIP6_out_path, scenario, percent=15, var_name='Qle'):
+def calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_out_path, scenario, percent=15, var_name='Qle'):
 
     # Read ACCESS-CM2 land fraction to divide land and sea
     f_landsea = nc.Dataset('/g/data/fs38/publications/CMIP6/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/fx/sftlf/gn/v20191108/sftlf_fx_ACCESS-CM2_historical_r1i1p1f1_gn.nc',
@@ -147,6 +147,111 @@ def calculate_LSM_lead_CMIP6_uncertainty(CMIP6_out_path, scenario, percent=15, v
 
     return EF
 
+def calculate_LSM_lead_CMIP6_uncertainty_3hourly(CMIP6_3h_out_path, scenario, var_name='Qle'):
+
+    # Read ACCESS-CM2 land fraction to divide land and sea
+
+    
+    input_file  = CMIP6_3h_out_path + scenario + '.nc'
+
+    model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
+                   'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+
+    # Get model lists 
+    site_names, IGBP_types, clim_types, model_names = load_default_list()
+    model_list = model_names['model_select']
+
+    # Open my processed CMIP6 file
+    f_cmip    = nc.Dataset(input_file, mode='r')
+
+    # make data ensembles
+    for i, model_name in enumerate(model_list):
+    
+        Qle_tmp     = f_cmip.variables[model_name+'_Qle'][:]
+        VPD_tmp     = f_cmip.variables[model_name+'_VPD'][:]
+        EF_tmp      = f_cmip.variables[model_name+'_EF'][:]
+        landsea_tmp = f_cmip.variables[model_name+'_landsea'][:]
+
+        Qle_tmp    = np.where(landsea_tmp==1,Qle_tmp,np.nan)
+        VPD_tmp    = np.where(landsea_tmp==1,VPD_tmp,np.nan)
+        EF_tmp     = np.where(landsea_tmp==1,EF_tmp,np.nan)
+
+        # Remove NaN values
+        Qle_1d     = Qle_tmp.flatten() 
+        VPD_1d     = VPD_tmp.flatten() 
+        EF_1d      = EF_tmp.flatten()
+
+        mask_all   = (~np.isnan(Qle_1d)) & (~np.isnan(VPD_1d)) & (~np.isnan(EF_1d))
+        Qle_1d     = Qle_1d[mask_all] 
+        VPD_1d     = VPD_1d[mask_all] 
+        EF_1d      = EF_1d[mask_all]  
+
+        var_tmp    = pd.DataFrame([Qle_1d,VPD_1d,EF_1d], columns=['Qle','VPD','EF'])
+        if i == 0:
+            var_output = var_tmp
+        else:
+            var_output = pd.concat([var_output, var_tmp], ignore_index=True)
+
+    # divide Qle_1d, VPD_1d and EF_1d by EF_1d values
+    EF         = var_output['EF'][:]
+    Qle        = var_output['Qle'][:]
+    VPD        = var_output['VPD'][:]
+    EF_02_mask = (EF >= 0)   & (EF < 0.2)
+    EF_04_mask = (EF >= 0.2) & (EF < 0.4)
+    EF_06_mask = (EF >= 0.4) & (EF < 0.6)
+    EF_08_mask = (EF >= 0.6) & (EF < 0.8)
+    EF_10_mask = (EF >= 0.8) & (EF <= 1.)
+
+    Qle_02     = Qle[EF_02_mask]
+    Qle_04     = Qle[EF_04_mask]
+    Qle_06     = Qle[EF_06_mask]
+    Qle_08     = Qle[EF_08_mask]
+    Qle_10     = Qle[EF_10_mask]
+
+    VPD_02     = VPD[EF_02_mask]
+    VPD_04     = VPD[EF_04_mask]
+    VPD_06     = VPD[EF_06_mask]
+    VPD_08     = VPD[EF_08_mask]
+    VPD_10     = VPD[EF_10_mask]
+
+    EF_02      = EF[EF_02_mask]
+    EF_04      = EF[EF_04_mask]
+    EF_06      = EF[EF_06_mask]
+    EF_08      = EF[EF_08_mask]
+    EF_10      = EF[EF_10_mask]
+
+    # Read GAM models
+    Qle_pred   = {}
+    for m, model_in in enumerate(model_list):
+
+        print('model', model_in)
+        bounds = [0,0.2]
+        folder_name, file_message = get_PLUMBER2_curve_names(bounds)
+        Qle_pred_02 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_02)
+        
+        bounds = [0.2,0.4]
+        folder_name, file_message = get_PLUMBER2_curve_names(bounds)
+        Qle_pred_04 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_04)
+
+        bounds = [0.4,0.6]
+        folder_name, file_message = get_PLUMBER2_curve_names(bounds)
+        Qle_pred_06 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_06)
+
+        bounds = [0.6,0.8]
+        folder_name, file_message = get_PLUMBER2_curve_names(bounds)
+        Qle_pred_08 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_08)
+
+        bounds = [0.8,1.]
+        folder_name, file_message = get_PLUMBER2_curve_names(bounds)
+        Qle_pred_10 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_10)
+
+        Qle_pred[model_in] = np.concatenate((Qle_pred_02,Qle_pred_04,Qle_pred_06,Qle_pred_08,Qle_pred_10))
+
+    np.savetxt(f'{CMIP6_txt_out_path}/predicted_{var_name}_{scenario}.csv',Qle_pred)
+
+    return
+
+
 def get_PLUMBER2_curve_names(bounds):
 
    # Path of PLUMBER 2 dataset
@@ -201,12 +306,17 @@ if __name__ == "__main__":
     # Read files
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
     CMIP6_data_path   = "/g/data/w97/mm3972/data/CMIP6_data/Processed_CMIP6_data/"
-    CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_daily/"
-    scenarios         = ['historical','ssp126','ssp245','ssp370']
+    CMIP6_da_out_path = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_daily/"
+    CMIP6_3h_out_path = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
+    CMIP6_txt_out_path = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
+    scenarios         = ['historical', 'ssp245']
+    # scenarios         = ['historical','ssp126','ssp245','ssp370']
     percent           = 15
     var_name          = 'Qle'
     
     for scenario in scenarios:
-        calculate_LSM_lead_CMIP6_uncertainty(CMIP6_out_path, scenario, percent=percent, var_name=var_name)
+        # Processing daily 
+        # calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_da_out_path, scenario, percent=percent, var_name=var_name)
     
- 
+        # Processing 3 hourly 
+        calculate_LSM_lead_CMIP6_uncertainty_3hourly(CMIP6_3h_out_path, CMIP6_txt_out_path, scenario, percent=15, var_name='Qle')

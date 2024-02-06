@@ -151,6 +151,42 @@ def calculate_VPD_by_RH(rh, tair):
 
     return vpd
 
+def calculate_VPD_by_Qair(qair, tair, press):
+    '''
+    calculate vpd
+    Input: 
+          qair: kg/kg
+          tair: K
+          press: Pa
+    Output:
+          vpd: kPa
+    '''
+
+    # set nan values
+    qair = np.where(qair==-9999.,np.nan,qair)
+    tair = np.where(tair==-9999.,np.nan,tair)
+    press= np.where(press<-9999.,np.nan,press)
+
+    DEG_2_KELVIN = 273.15
+    PA_TO_KPA    = 0.001
+    PA_TO_HPA    = 0.01
+
+    # convert back to Pa
+    # press        /= PA_TO_HPA
+    tair         -= DEG_2_KELVIN
+
+    # saturation vapor pressure
+    es = 100.0 * 6.112 * np.exp((17.67 * tair) / (243.5 + tair))
+
+    # vapor pressure
+    ea = (qair * press) / (0.622 + (1.0 - 0.622) * qair)
+
+    vpd = (es - ea) * PA_TO_KPA
+    # vpd = np.where(vpd < 0.0, 0.0, vpd)
+
+    return vpd
+
+
 def load_default_list():
 
     # The site names

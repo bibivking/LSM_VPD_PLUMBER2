@@ -67,13 +67,13 @@ def parallel_quality_control(var_name, site_names, zscore_threshold=4):
     # Create a pool of workers
     with mp.Pool() as pool:
         results = pool.starmap(quality_control_for_site, [(site_name, var_output, zscore_threshold) for site_name in site_names])
-    
+
     print('results', results)
 
     # Merge modified data back into var_output
     for result in results:
         var_output.update(result)
-    
+
     print('var_output', var_output)
 
     # Save the results
@@ -93,4 +93,5 @@ if __name__ == "__main__":
 
     var_name          = 'Qle' #'Qle'
     zscore_threshold  = 4
-    quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
+    # quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
+    parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold)
