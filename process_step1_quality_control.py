@@ -25,48 +25,52 @@ from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 import multiprocessing as mp
+import logging
 
-def quality_control_process1_output(var_name, site_names, zscore_threshold=4):
+def quality_control_process1_output(var_name, site_names, zscore_threshold=4,gap_fill='nan'):
 
     # read the variables
     var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv', na_values=[''])
 
     for site_name in site_names:
         print('site',site_name)
-        site_mask = (var_output['site_name'][:] == site_name)
+        site_mask = (var_output['site_name'] == site_name)
         for col_name in var_output.columns:
             if 'obs' in col_name or 'model_' in col_name:
                 var_output.loc[site_mask, col_name] = \
-                    conduct_quality_control(col_name, var_output[site_mask][col_name].values, zscore_threshold)
+                    conduct_quality_control(col_name, var_output[site_mask][col_name].values, zscore_threshold,gap_fill)
 
     var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_filter_{zscore_threshold}sigma.csv')
 
-
-def quality_control_for_site(site_name, var_output, zscore_threshold):
+def quality_control_for_site(site_name, var_output, zscore_threshold,gap_fill='nan'):
 
     """
     Performs quality control for a single site.
     """
-
-    site_mask = (var_output['site_name'][:] == site_name)
+    
+    logging.info(f"Starting processing for site {site_name} (process ID: {os.getpid()})")
+    
+    site_mask = (var_output['site_name'] == site_name)
     site_data = var_output[site_mask]
     for col_name in var_output.columns:
-        if 'obs' in col_name or 'model_' in col_name:
-            site_data.loc[:, col_name] = conduct_quality_control(col_name, site_data[col_name].values, zscore_threshold)
+        if 'obs' in col_name: # or 'model_' in col_name:
+            site_data.loc[:, col_name] = conduct_quality_control(col_name, site_data[col_name].values, zscore_threshold, gap_fill)
     return site_data
 
-def parallel_quality_control(var_name, site_names, zscore_threshold=4):
+def parallel_quality_control(var_name, site_names, zscore_threshold=4, gap_fill='nan'):
 
     """
     Runs quality control for multiple sites in parallel.
     """
+
+    logging.basicConfig(level=logging.INFO)
 
     # Read the variables
     var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv', na_values=[''])
 
     # Create a pool of workers
     with mp.Pool() as pool:
-        results = pool.starmap(quality_control_for_site, [(site_name, var_output, zscore_threshold) for site_name in site_names])
+        results = pool.starmap(quality_control_for_site, [(site_name, var_output, zscore_threshold, gap_fill) for site_name in site_names])
 
     print('results', results)
 
@@ -77,7 +81,7 @@ def parallel_quality_control(var_name, site_names, zscore_threshold=4):
     print('var_output', var_output)
 
     # Save the results
-    var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_filter_{zscore_threshold}sigma.csv')
+    var_output.to_csv(f'./txt/process1_output/{var_name}_all_sites_filter_{zscore_threshold}sigma_check.csv')
 
 if __name__ == "__main__":
 
@@ -93,5 +97,6 @@ if __name__ == "__main__":
 
     var_name          = 'Qle' #'Qle'
     zscore_threshold  = 4
+    gap_fill          = 'nan'
     # quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
-    parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold)
+    parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold, gap_fill=gap_fill)

@@ -139,6 +139,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             # Var_tmp_tmp                 = conduct_quality_control(varname, Var_tmp_tmp,zscore_threshold)
             # Comment this line out, because setting zscore_threshold=3 will screen 3% extreme values.
             # However, these extreme values may be the high VPD period we are interested.
+            # if processing Qle then do the filter below
             if var_name_dict['CABLE'] == 'Qle':
                 Var_tmp_tmp                 = np.where(Var_tmp_tmp>800., np.nan, Var_tmp_tmp)
                 Var_tmp_tmp                 = np.where(Var_tmp_tmp<-300., np.nan, Var_tmp_tmp)

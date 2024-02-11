@@ -56,7 +56,6 @@ def time_step_2_monthly(var_name):
 
     return
 
-
 if __name__ == "__main__":
 
     var_name       = 'GPP'  #'TVeg'

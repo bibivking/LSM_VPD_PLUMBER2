@@ -2,7 +2,6 @@
 Select the raw data by
     var_name
     selected_by
-    method
     standardize
     day_time
     selected_raw_data
@@ -44,7 +43,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                             models_calc_LAI=None, veg_fraction=None, time_scale=None,
                             clarify_site={'opt':False,'remove_site':None}, standardize=None,
                             remove_strange_values=True, country_code=None, LAI_range=None,
-                            hours_precip_free=None, method='GAM', selected_raw_data=True):
+                            hours_precip_free=None, selected_raw_data=True):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -63,10 +62,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     if time_scale == 'daily':
         var_output = pd.read_csv(f'./txt/process2_output/daily/{var_name}_all_sites'+message+'.csv',na_values=[''])
     else:
-        var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites'+message+'.csv',na_values=[''])
+        # var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites'+message+'.csv',na_values=[''])
+        var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',na_values=[''])
 
-    print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
-           np.any(~np.isnan(var_output["model_CABLE"])) )
+    # print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
+    #       np.any(~np.isnan(var_output["model_CABLE"])) )
 
     # Get model names
     if var_name == 'Gs':
@@ -75,12 +75,25 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     else:
         model_out_list = get_model_out_list(var_name)
 
-    # model_out_list = np.array(model_out_list)
+
+    # Read LAI if needed
+    if LAI_range !=None:
+        if time_scale == 'daily':
+            LAI_input = pd.read_csv(f'./txt/process2_output/daily/LAI_all_sites_daily.csv', na_values=[''])
+        else:
+            LAI_input = pd.read_csv(f'./txt/process1_output/LAI_all_sites_parallel.csv', na_values=[''])
+        
+        for model_out_name in model_out_list:
+            try:
+                var_output[model_out_name+'_LAI'] = LAI_input[model_out_name+'_LAI']
+            except:
+                var_output[model_out_name+'_LAI'] = LAI_input['obs_LAI']
+
 
     # total site number
     site_num    = len(np.unique(var_output["site_name"]))
-    # print('Point 1, site_num=',site_num)
-    print('Finish reading csv file')
+    # # print('Point 1, site_num=',site_num)
+    # # print('Finish reading csv file')/
 
     # ========== select data ==========
 
@@ -94,7 +107,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     if remove_strange_values:
         for model_out_name in model_out_list:
-            print('Checking strange values in', model_out_name)
+            # print('Checking strange values in', model_out_name)
             if 'obs' in model_out_name:
                 head = ''
             else:
@@ -102,7 +115,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             var_output[head+model_out_name] = np.where(np.any([var_output[head+model_out_name]>999.,
                                                        var_output[head+model_out_name]<-999.],axis=0),
                                                        np.nan, var_output[head+model_out_name])
-            print('np.any(np.isnan(var_output[head+model_out_name]))',np.any(np.isnan(var_output[head+model_out_name])))
+            # print('np.any(np.isnan(var_output[head+model_out_name]))',np.any(np.isnan(var_output[head+model_out_name])))
 
     # whether only considers day time
     if day_time:
@@ -114,57 +127,53 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
         var_output  = var_output[day_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 2, site_num=',site_num)
+        # # print('Point 2, site_num=',site_num)
 
         check_site = var_output[ var_output['site_name']=='CA-NS1']
 
     # whether only considers summers
     if summer_time:
         summer_mask = (var_output['month'] > 11) | (var_output['month']< 3)
-        # print('np.any(summer_mask)', np.any(summer_mask))
+        # # print('np.any(summer_mask)', np.any(summer_mask))
         var_output  = var_output[summer_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 3, site_num=',site_num)
+        # # print('Point 3, site_num=',site_num)
 
     # whether only considers one type of IGBP
     if IGBP_type!=None:
         IGBP_mask   = (var_output['IGBP_type'] == IGBP_type)
-        # print('np.any(IGBP_mask)', np.any(IGBP_mask))
+        # # print('np.any(IGBP_mask)', np.any(IGBP_mask))
         var_output  = var_output[IGBP_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 4, site_num=',site_num)
+        # # print('Point 4, site_num=',site_num)
 
     # whether only considers one type of climate type
     if clim_type!=None:
         clim_mask   = (var_output['climate_type'] == clim_type)
-        # print('np.any(clim_mask)', np.any(clim_mask))
+        # # print('np.any(clim_mask)', np.any(clim_mask))
         var_output  = var_output[clim_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 5, site_num=',site_num)
+        # # print('Point 5, site_num=',site_num)
 
     # select data with required vegetation fraction
     if veg_fraction !=None:
         veg_frac_mask= (var_output['NoahMPv401_greenness']>=veg_fraction[0]) & (var_output['NoahMPv401_greenness']<=veg_fraction[1])
         var_output   = var_output[veg_frac_mask]
         site_num     = len(np.unique(var_output["site_name"]))
-        # print('Point 6, site_num=',site_num)
+        # # print('Point 6, site_num=',site_num)
 
     # select data with required LAI values : Check the code!!!
     if LAI_range !=None:
-        if time_scale == 'daily':
-            LAI_input = pd.read_csv(f'./txt/process2_output/daily/LAI_all_sites_daily.csv', na_values=[''])
-        else:
-            LAI_input = pd.read_csv(f'./txt/process1_output/LAI_all_sites_parallel.csv', na_values=[''])
-
+       
         for i, model_out_name in enumerate(model_out_list):
             if 'obs' in model_out_name:
                 head = ''
             else:
                 head = 'model_'
             try:
-                LAI_mask  = (LAI_input[model_out_name+'_LAI'] >= LAI_range[0]) & (LAI_input[model_out_name+'_LAI'] < LAI_range[1])
+                LAI_mask  = (var_output[model_out_name+'_LAI'] >= LAI_range[0]) & (var_output[model_out_name+'_LAI'] < LAI_range[1])
             except:
-                LAI_mask  = (LAI_input['obs_LAI'] >= LAI_range[0]) & (LAI_input['obs_LAI'] < LAI_range[1])
+                LAI_mask  = (var_output['obs_LAI'] >= LAI_range[0]) & (var_output['obs_LAI'] < LAI_range[1])
             var_output[head+model_out_name]  = np.where(LAI_mask, var_output[head+model_out_name], np.nan)
         site_num     = len(np.unique(var_output["site_name"]))
 
@@ -173,24 +182,24 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         rain_mask   = (var_output['hrs_after_precip'] > hours_precip_free)
         var_output  = var_output[rain_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 7, site_num=',site_num)
+        # # print('Point 7, site_num=',site_num)
 
     # To exclude the sites have rainfall input problems
     if clarify_site['opt']:
-        print('clarifying sites')
+        # print('clarifying sites')
         length    = len(var_output)
         site_mask = np.full(length,True)
 
         for site_remove in clarify_site['remove_site']:
             site_mask = np.where(var_output['site_name'] == site_remove, False, site_mask)
-        # print('np.all(site_mask)',np.all(site_mask))
+        # # print('np.all(site_mask)',np.all(site_mask))
 
         # site_mask = ~(var_output['site_name'] in clarify_site['remove_site'])
         var_output  = var_output[site_mask]
         site_num    = len(np.unique(var_output["site_name"]))
-        # print('Point 8, site_num=',site_num)
+        # # print('Point 8, site_num=',site_num)
 
-    print('Finish selecting data')
+    # print('Finish selecting data')
 
     if var_name == 'NEE':
         for model_out_name in model_out_list:
@@ -199,7 +208,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             else:
                 head = 'model_'
             if (model_out_name == 'GFDL') | (model_out_name == 'NoahMPv401') | (model_out_name =='STEMMUS-SCOPE') | (model_out_name =='ACASA'):
-                print('model_out_name=',model_out_name,'in GFDL, NoahMPv401, STEMMUS-SCOPE,ACASA')
+                # print('model_out_name=',model_out_name,'in GFDL, NoahMPv401, STEMMUS-SCOPE,ACASA')
                 values = var_output[head+model_out_name]
             else:
                 values = var_output[head+model_out_name]*(-1)
@@ -207,7 +216,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     if standardize == 'STD_annual_obs':
 
-        print('standardized by annual obs mean')
+        # print('standardized by annual obs mean')
 
         # Get all sites left
         sites_left    = np.unique(var_output["site_name"])
@@ -235,11 +244,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                     head = 'model_'
                 var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_mean[site]
 
-        print('site_obs_mean',site_obs_mean)
+        # print('site_obs_mean',site_obs_mean)
 
     elif standardize == 'STD_LAI ':
 
-        print('standardized by LAI')
+        # print('standardized by LAI')
 
         # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
         for i, model_out_name in enumerate(model_out_list):
@@ -267,7 +276,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     elif standardize == 'STD_montly_obs':
 
-        print('standardized by monthly obs mean')
+        # print('standardized by monthly obs mean')
 
         # read monthly mean
         var_monthly_input = pd.read_csv(f'./txt/process2_output/monthly/{var_name}_all_sites_monthly.csv',
@@ -280,22 +289,22 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         for site in sites_left:
             for mth in np.arange(1,13,1):
 
-                print('site=',site,'mth=',mth)
+                # print('site=',site,'mth=',mth)
 
                 # Get the mask of this site
                 site_mask_tmp       = (var_output['site_name'] == site) & (var_output['month'] == mth)
                 site_mask_month     = (var_monthly_input['month'] == mth) & (var_monthly_input['site_name'] == site)
 
-                print('Point 8, np.any(site_mask_tmp)',np.any(site_mask_tmp))
-                print('!!! Point 9, np.any(site_mask_month)',np.any(site_mask_month))
+                # print('Point 8, np.any(site_mask_tmp)',np.any(site_mask_tmp))
+                # print('!!! Point 9, np.any(site_mask_month)',np.any(site_mask_month))
 
                 # Mask the dataframe to get slide of the dataframe for this site
                 var_tmp             = var_output[site_mask_tmp]
-                print('var_tmp', var_tmp)
+                # print('var_tmp', var_tmp)
 
                 # get site monthly mean
                 site_obs_month      = var_monthly_input.loc[site_mask_month]['obs'].values
-                print('site_obs_month', site_obs_month)
+                # print('site_obs_month', site_obs_month)
 
                 # Standardize the different model's values by the obs mean for this site
                 for i, model_out_name in enumerate(model_out_list):
@@ -304,11 +313,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                     else:
                         head = 'model_'
                     var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_month
-        print('var_output',var_output)
+        # print('var_output',var_output)
 
     elif standardize == 'STD_month_model':
 
-        print('standardized by monthly model mean')
+        # print('standardized by monthly model mean')
 
         # read monthly mean
         var_monthly_input = pd.read_csv(f'./txt/process2_output/monthly/{var_name}_all_sites_monthly.csv',na_values=[''])
@@ -340,7 +349,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     elif standardize == 'STD_daily_obs':
 
-        print('standardized by daily obs mean')
+        # print('standardized by daily obs mean')
         obs_daily = var_output['obs']
 
         # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
@@ -379,7 +388,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         EF_notNan_mask = ~ np.isnan(var_output['obs_EF'])
         var_output     = var_output[EF_notNan_mask]
 
-        # print('np.any(EF_notNan_mask)', np.any(EF_notNan_mask))
+        # # print('np.any(EF_notNan_mask)', np.any(EF_notNan_mask))
 
         # Select EF<low_bound and EF>high_bound for each site to make sure
         # that every site can contribute to the final VPD lines
@@ -388,7 +397,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # select data for this site
             site_mask       = (var_output['site_name'] == site_name)
 
-            print('In bin by EF, site_name=', site_name, 'np.any(site_mask)',np.any(site_mask))
+            # print('In bin by EF, site_name=', site_name, 'np.any(site_mask)',np.any(site_mask))
 
             # calculate EF thresholds for this site
             if len(low_bound)>1 and len(high_bound)>1:
@@ -441,8 +450,8 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         var_output_dry = copy.deepcopy(var_output)
         var_output_wet = copy.deepcopy(var_output)
 
-        print( 'Check point 6, np.any(~np.isnan(var_output_dry["model_CABLE"]))=',
-               np.any(~np.isnan(var_output_dry["model_CABLE"])) )
+        # print( 'Check point 6, np.any(~np.isnan(var_output_dry["model_CABLE"]))=',
+        #       np.any(~np.isnan(var_output_dry["model_CABLE"])) )
 
         # select time step where obs_EF isn't NaN (when Qh<0 or Qle+Qh<10)
         for i, model_out_name in enumerate(model_out_list):
@@ -470,10 +479,10 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             var_output_dry[head+model_out_name] = np.where(dry_mask, var_output[head+model_out_name], np.nan)
             var_output_wet[head+model_out_name] = np.where(wet_mask, var_output[head+model_out_name], np.nan)
 
-        print( 'Check point 7, np.any(~np.isnan(var_output_dry["model_CABLE"]))=',
-               np.any(~np.isnan(var_output_dry["model_CABLE"])) )
+        # print( 'Check point 7, np.any(~np.isnan(var_output_dry["model_CABLE"]))=',
+        #       np.any(~np.isnan(var_output_dry["model_CABLE"])) )
 
-    print('Finish dividing dry and wet periods')
+    # print('Finish dividing dry and wet periods')
 
     if selected_raw_data:
 
@@ -492,13 +501,13 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         folder_name, file_message1 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
-                                            bounds=low_bound, veg_fraction=veg_fraction, method=method, LAI_range=LAI_range,
+                                            bounds=low_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
                                             clarify_site=clarify_site)
 
         folder_name, file_message2 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
-                                            bounds=high_bound, veg_fraction=veg_fraction, method=method, LAI_range=LAI_range,
+                                            bounds=high_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
                                             clarify_site=clarify_site)
 
         var_select_dry.to_csv(f'./txt/process3_output/curves/raw_data_{var_name}_VPD'+file_message1+'.csv')
@@ -512,11 +521,8 @@ if __name__ == "__main__":
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    var_name       = 'Gs'      #'TVeg'
-    selected_by    = 'EF_model' #'EF_model' #'EF_obs'#
-    method         = 'CRV_bins'
-                                # 'CRV_bins'
-                                # 'CRV_fit_GAM'
+    var_name       = 'Qle'      #'TVeg'
+    selected_by    = 'EF_model' #'EF_model' #'EF_obs'
     standardize    = None          # None
                                    # 'STD_LAI'
                                    # 'STD_annual_obs'
@@ -526,10 +532,11 @@ if __name__ == "__main__":
 
     selected_raw_data = True
 
-    time_scale        = 'daily' # 'daily'
+    time_scale        = 'hourly' # 'daily'
+                                 # 'hourly'
 
     day_time          = False
-    if var_name == 'Gs' and time_scale == 'hourly':
+    if time_scale == 'hourly':
         day_time      = True
 
     clarify_site      = {'opt': True,
@@ -557,35 +564,35 @@ if __name__ == "__main__":
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     LAI_range      = [0.,1.]
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     LAI_range      = [1.,2.]
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     LAI_range      = [2.,4.]
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     LAI_range      = [4.,10.]
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     low_bound      = [0,0.2] #30
     high_bound     = [0.8,1.] #70
@@ -595,17 +602,16 @@ if __name__ == "__main__":
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code,  # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     low_bound      = [0,0.2] #30
     high_bound     = [0.8,1.] #70
     veg_fraction   = [0.7,1.] # high veg fraction
-
     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
                     country_code=country_code,  # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
 
     low_bound      = [0,0.2] #30
@@ -620,7 +626,7 @@ if __name__ == "__main__":
                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                         models_calc_LAI=models_calc_LAI, time_scale=time_scale,
                         country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                        energy_cor=energy_cor, selected_raw_data=selected_raw_data)
         gc.collect()
 
     low_bound      = [0.2,0.4] #30
@@ -635,7 +641,7 @@ if __name__ == "__main__":
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
                     country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     low_bound      = [0.2,0.4] #30
     high_bound     = [0.4,0.6] #70
@@ -648,6 +654,6 @@ if __name__ == "__main__":
                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
                     country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-                    energy_cor=energy_cor, method=method, selected_raw_data=selected_raw_data)
+                    energy_cor=energy_cor, selected_raw_data=selected_raw_data)
 
     gc.collect()

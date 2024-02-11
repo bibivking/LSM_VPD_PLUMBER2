@@ -211,15 +211,19 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     # ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5])
     # ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5'],fontsize=12)
     if var_name == 'Qle':
-        ax[0,0].set_xlim(-0.1,2.7)
-        ax[0,0].set_ylim(0,170)
+        if time_scale == 'daily':
+            ax[0,0].set_xlim(-0.1,2.7)
+            ax[0,0].set_ylim(0,170)
+            ax[0,1].set_xlim(-0.1,5.1)
+            ax[0,1].set_ylim(0,40)
+        elif time_scale == 'hourly':
+            ax[0,0].set_xlim(-0.1,7.)
+            ax[0,0].set_ylim(0,450)
+            ax[0,1].set_xlim(-0.1,7.)
+            ax[0,1].set_ylim(0,100)
 
     # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
-
-    if var_name == 'Qle':
-        ax[0,1].set_xlim(-0.1,5.1)
-        ax[0,1].set_ylim(0,40)
 
     ax[0,0].tick_params(axis='y', labelsize=12)
     ax[0,1].tick_params(axis='y', labelsize=12)
@@ -405,23 +409,43 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,1].set_xlabel("VPD (kPa)", fontsize=12)
     ax[0,2].set_xlabel("VPD (kPa)", fontsize=12)
 
-    ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
-    ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
-    ax[0,0].set_xlim(-0.1,5.1)
-    if var_name == 'Qle':
-        ax[0,0].set_ylim(0,100)
+    # ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    # ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    # ax[0,0].set_xlim(-0.1,5.1)
 
-    ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
-    ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
-    ax[0,1].set_xlim(-0.1,5.1)
-    if var_name == 'Qle':
-        ax[0,1].set_ylim(0,100)
+    ax[0,0].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6.,6.5,7.])
+    ax[0,0].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5','5.5','6','6.5','7'],fontsize=12)
+    ax[0,0].set_xlim(-0.1,7.1)
 
-    ax[0,2].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
-    ax[0,2].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
-    ax[0,2].set_xlim(-0.1,5.1)
     if var_name == 'Qle':
-        ax[0,2].set_ylim(0,100)
+        if time_scale == 'daily':
+            ax[0,0].set_ylim(0,100)
+        elif time_scale == 'hourly':
+            ax[0,0].set_ylim(0,500)
+
+    # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    # ax[0,1].set_xlim(-0.1,5.1)
+    ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6.,6.5,7.])
+    ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5','5.5','6','6.5','7'],fontsize=12)
+    ax[0,1].set_xlim(-0.1,7.1)
+    if var_name == 'Qle':
+        if time_scale == 'daily':
+            ax[0,1].set_ylim(0,100)
+        elif time_scale == 'hourly':
+            ax[0,1].set_ylim(0,500)
+
+    # ax[0,2].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
+    # ax[0,2].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
+    # ax[0,2].set_xlim(-0.1,5.1)
+    ax[0,2].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6.,6.5,7.])
+    ax[0,2].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5','5.5','6','6.5','7'],fontsize=12)
+    ax[0,2].set_xlim(-0.1,7.1)
+    if var_name == 'Qle':
+        if time_scale == 'daily':
+            ax[0,2].set_ylim(0,100)
+        elif time_scale == 'hourly':
+            ax[0,2].set_ylim(0,500)
 
     ax[0,0].tick_params(axis='y', labelsize=12)
     ax[0,1].tick_params(axis='y', labelsize=12)
@@ -886,7 +910,7 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
 
                 # vertical line
                 x_line = np.zeros(len(x))
-                x_line[:] = xaxis_s
+                x_line = xaxis_s
 
                 # one standard deviation
                 y_mean = dist_box_values[model_out_name+'_mean']
@@ -1202,29 +1226,30 @@ if __name__ == "__main__":
 
 
     # =========== plot_var_VPD_uncertainty ===========
-    day_time=False
-    energy_cor=False
-    time_scale='daily'
-    country_code=None
-    selected_by='EF_model'
-    veg_fraction=None#[0.7,1.]
-    standardize=None
+    day_time    = True
+    energy_cor  = False
+    time_scale  = 'hourly'
+    country_code= None
+    selected_by = 'EF_model'
+    veg_fraction= None#[0.7,1.]
+    standardize = None
     uncertain_type='UCRTN_bootstrap'
-    method='CRV_bins'
-    IGBP_type=None
-    clim_type=None
+    method      = 'CRV_bins'
+    IGBP_type   = None
+    clim_type   = None
     clarify_site={'opt': True,
                   'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
-    var_name='Qle'
+    var_name    = 'Qle'
     num_threshold=0#10
 
     # # ======== Plot EF wet & dry ========
-    var_name='Gs'
-    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
-    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
-    #              clarify_site=clarify_site,num_threshold=num_threshold)
+    var_name='Qle'
+
+    plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                 selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+                 uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+                 clarify_site=clarify_site,num_threshold=num_threshold)
 
     plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
                  selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,

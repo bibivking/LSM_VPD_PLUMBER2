@@ -19,6 +19,12 @@ from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 
+def get_header(model_out_name):
+    if 'obs' in model_out_name:
+        return ''
+    else:
+        return 'model_'
+
 def check_server():
 
     print("CPU usage:", psutil.cpu_percent())
@@ -181,6 +187,13 @@ def calculate_VPD_by_Qair(qair, tair, press):
     # vapor pressure
     ea = (qair * press) / (0.622 + (1.0 - 0.622) * qair)
 
+    print('np.shape(qair)',np.shape(qair))
+    print('np.shape(tair)',np.shape(tair))
+    print('np.shape(press)',np.shape(press))
+    print('np.shape(es)',np.shape(es))
+    print('np.shape(ea)',np.shape(ea))
+
+
     vpd = (es - ea) * PA_TO_KPA
     # vpd = np.where(vpd < 0.0, 0.0, vpd)
 
@@ -288,8 +301,14 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     x_series   = np.arange(x_bot, x_top, x_interval)
 
     # Define grid search parameters
-    lam        = np.logspace(-5, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(3, 10, 1)   # Number of splines per smooth term range
+    # GAM parameter set 2:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 5, 1)   # Number of splines per smooth term range
+
+    # GAM parameter set 1:
+    #     lam        = np.logspace(-5, 5, 11)
+    #     n_splines  = np.arange(3, 10, 1)
+
     # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
     # n_splines: Number of spline basis functions (7 values between 3 and 9).
 
@@ -302,10 +321,10 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
     # Perform grid search
     for train_index, test_index in kf.split(x_values):
-        X_train, X_test = x_values.iloc[train_index], x_values.iloc[test_index]
-        y_train, y_test = y_values.iloc[train_index], y_values.iloc[test_index]
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
 
-        X_train = X_train.to_numpy().reshape(-1, 1)
+        X_train = X_train.reshape(-1, 1)
         
         print('X_train.shape', X_train.shape)
         print('X_test.shape', X_test.shape)
@@ -369,7 +388,7 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     # Add legend
     plt.legend()
 
-    plt.savefig(f'./Check_{model_out_name}_GAM_fitted_curve.png')
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve.png')
 
     return x_series, y_pred, y_int
 
@@ -799,7 +818,7 @@ def set_model_colors():
 
     return model_colors
 
-def conduct_quality_control(varname, data_input,zscore_threshold=2):
+def conduct_quality_control(varname, data_input,zscore_threshold=2, gap_fill='nan'):
 
     '''
     Please notice EF has nan values
@@ -808,32 +827,37 @@ def conduct_quality_control(varname, data_input,zscore_threshold=2):
     z_scores    = np.abs(stats.zscore(data_input, nan_policy='omit'))
     data_output = np.where(z_scores > zscore_threshold, np.nan, data_input)
 
-    # print('z_scores',z_scores)
-    if 'EF' not in varname:
-        print('EF is not in ', varname)
-        # Iterate through the data to replace NaN with the average of nearby non-NaN values
-        for i in range(1, len(data_output) - 1):
-            if np.isnan(data_output[i]):
-                prev_index = i - 1
-                next_index = i + 1
+    if gap_fill=='interpolate':
+        
+        print('Gap filling by linear interpolation')
 
-                # find the closest non nan values
-                while prev_index >= 0 and np.isnan(data_output[prev_index]):
-                    prev_index -= 1
+        if 'EF' not in varname:
+            
+            # Iterate through the data to replace NaN with the average of nearby non-NaN values
+            for i in range(1, len(data_output) - 1):
+                if np.isnan(data_output[i]):
+                    prev_index = i - 1
+                    next_index = i + 1
 
-                while next_index < len(data_output) and np.isnan(data_output[next_index]):
-                    next_index += 1
+                    # find the closest non nan values
+                    while prev_index >= 0 and np.isnan(data_output[prev_index]):
+                        prev_index -= 1
 
-                # use average them
-                if prev_index >= 0 and next_index < len(data_output):
-                    prev_non_nan = data_output[prev_index]
-                    next_non_nan = data_output[next_index]
-                    data_output[i] = (prev_non_nan + next_non_nan) / 2.0
+                    while next_index < len(data_output) and np.isnan(data_output[next_index]):
+                        next_index += 1
 
-    print('len(z_scores)',len(z_scores))
-    # print('data_output',data_output)
+                    # use average them
+                    if prev_index >= 0 and next_index < len(data_output):
+                        prev_non_nan = data_output[prev_index]
+                        next_non_nan = data_output[next_index]
+                        data_output[i] = (prev_non_nan + next_non_nan) / 2.0
 
-    return data_output
+        return data_output
+    
+    elif gap_fill=='nan':
+        print('Gap filling by NaN values')
+        return data_output
+
 
 def convert_into_kg_m2_s(data_input, var_units):
 

@@ -28,6 +28,7 @@ from matplotlib import cm
 from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
+from multiprocessing import Pool
 
 def time_mask(time_tmp, time_s, time_e, seconds=None):
 
@@ -39,8 +40,7 @@ def time_mask(time_tmp, time_s, time_e, seconds=None):
     Time    = time_tmp - datetime(2000,1,1,0,0,0)
     Time_s  = time_s - datetime(2000,1,1,0,0,0)
     Time_e  = time_e - datetime(2000,1,1,0,0,0)
-    # print('Time',Time)
-    # print('Time_s',Time_s)
+
     if seconds == None:
         time_cood = (Time>=Time_s) & (Time<Time_e)
     else:
@@ -66,6 +66,8 @@ def read_CMIP6(fname, model_name, var_name, time_s, time_e, regrid_to=None):
     time_tmp  = nc.num2date(f.variables['time'][:], f.variables['time'].units,
                 only_use_cftime_datetimes=False, calendar=f.variables['time'].calendar) # only_use_python_datetimes=True,
 
+    print('In read_CMIP6, len(time_tmp)',len(time_tmp))
+
     # To solve the inconsistancy in time coordinate
     for i, t in enumerate(time_tmp):
         year   = t.year
@@ -75,15 +77,18 @@ def read_CMIP6(fname, model_name, var_name, time_s, time_e, regrid_to=None):
         minute = t.minute
         second = t.second
         microsecond = t.microsecond
-        time_tmp[i] = datetime(year, month, day, hour, minute, second, microsecond)
+        if f.variables['time'].calendar == '360_day':
+            time_tmp[i] = datetime(year, month, 1)
+        else:
+            time_tmp[i] = datetime(year, month, day, hour, minute, second, microsecond)
 
     # select time periods
     time_cood = time_mask(time_tmp, time_s, time_e)
 
     # make new time cooridate
-    time      = time_tmp[time_cood]
-    var       = var_tmp[time_cood,:,:]
+    time      = f.variables['time'][time_cood]
 
+    var       = var_tmp[time_cood,:,:]
 
     # Regrid ACCESS-ESM1-5 to ACCESS-CM2
     if regrid_to == "ACCESS-CM2" and model_name == 'ACCESS-ESM1-5':
@@ -117,249 +122,226 @@ def calculate_EF(Qle, Qh):
     # Set daily Qle+Qh percent
     # Qle_Qh_threshold=10
     # EF_tmp = np.where(np.all([Qh+Qle > Qle_Qh_threshold, Qh>0],axis=0), Qle/(Qh+Qle), np.nan)
-    
+
     EF_tmp = np.where(np.all([Qle>0, Qh>0],axis=0), Qle/(Qh+Qle), np.nan)
     EF     = np.where(EF_tmp<0, np.nan, EF_tmp)
 
     return EF
 
-def make_CMIP6_multiple_nc_file(CMIP6_data_path, output_file, scenario, time_s, time_e):
+def make_CMIP6_each_nc_file(CMIP6_data_path,  scenario, landsea_list, time_s, time_e, model_name):
 
     '''
-    Process multiple CMIP6 models 
+    Process one CMIP6 model
     '''
 
-    print('scenario',scenario)
+    print('model', model_name)
 
-    # Get CMIP6 model list
-    model_list = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
-                  'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+    # === Get variable from Processed_CMIP6_data ===
+    # latent heat flux (hfls) files
+    fname_hfls  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hfls/{model_name}/*/*.nc'))[0]
+
+    # sensible heat flux (hfss) files
+    fname_hfss  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hfss/{model_name}/*/*.nc'))[0]
+
+    # air temperature (tas) files
+    fname_tas   = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/tas/{model_name}/*/*.nc'))[0]
+
+    # shortwave radiation flux (rsds) files
+    fname_rsds  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/rsds/{model_name}/*/*.nc'))[0]
+
+    # air pressure (ps) files
+    fname_ps    = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/ps/{model_name}/*/*.nc'))[0]
+
+    # specific humidity (huss) files
+    fname_huss  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/huss/{model_name}/*/*.nc'))[0]
+
+    # # relative humidity (hurs) files
+    # fname_hurs  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hurs/{model_name}/*/*.nc'))[0]
+
+    # === Get the same griding and time period data ===
+    time_series, var_hfls  = read_CMIP6(fname_hfls, model_name, 'hfls', time_s, time_e)
+    time_series, var_hfss  = read_CMIP6(fname_hfss, model_name, 'hfss', time_s, time_e)
+    time_series, var_tas   = read_CMIP6(fname_tas,  model_name, 'tas',  time_s, time_e)
+    time_series, var_rsds  = read_CMIP6(fname_rsds, model_name, 'rsds', time_s, time_e)
+    time_series, var_ps    = read_CMIP6(fname_ps,   model_name, 'ps',   time_s, time_e)
+    time_series, var_huss  = read_CMIP6(fname_huss, model_name, 'huss', time_s, time_e)
+    # time_series, var_hurs  = read_CMIP6(fname_hurs, model_name, 'hurs', time_s, time_e)
+
+    print('len(time_series)',len(time_series))
+
+    # === Obtain landsea ===
+    fname_landsea   = sorted(glob.glob(f'{landsea_list[model_name]}/*.nc'))[0]
+    landsea_varname = (fname_landsea).split("/")[12]
+
+    # Read landsea_lat and landsea_lon
+    f_landsea = nc.Dataset(fname_landsea, mode='r')
+    landsea_lat = f_landsea.variables['lat'][:]
+    landsea_lon = f_landsea.variables['lon'][:]
+
+    # Read landsea var
+    if len(np.shape(f_landsea.variables[landsea_varname])) == 2:
+        landsea_var = f_landsea.variables[landsea_varname][:]
+    elif len(np.shape(f_landsea.variables[landsea_varname])) == 3:
+        landsea_var = f_landsea.variables[landsea_varname][0,:,:]
+
+    # Adjust the original CMIP6 landsea since Anna's R script changed lat & lon
+    # in the processed CMIP6 files to lat [-90 ~ 90] and lon [-180,180].
+
+    # Adjust lat from 90 ~ -90 to -90 ~ 90
+    if landsea_lat[0] > landsea_lat[-1]:
+        landsea_var[:] = landsea_var[::-1,:]
+
+    # Adjust lon from 0 ~ 360 to -180 ~ 180
+    if landsea_lon[0] >= 0:
+        landsea_lon[:] = np.where(landsea_lon>180, landsea_lon-360, landsea_lon)
+        landsea_var[:] = landsea_var[:,np.argsort(landsea_lon)]
+
+    # Set missing values as 0
+    for attr in ['_FillValue', '_fillValue', 'missing_value']:
+        if hasattr(f_landsea.variables[landsea_varname], attr):
+            var_FillValue = getattr(f_landsea.variables[landsea_varname], attr)
+            landsea_var   = np.where(landsea_var==var_FillValue, 0, landsea_var)
+
+    # Set land == 1 and ocean == 0
+    landsea_var   = np.where(landsea_var>0, 1, landsea_var)
+
+    f_landsea.close()
+
+    # === Calculate VPD ===
+    var_vpd       = calculate_VPD_by_Qair(var_huss, var_tas, var_ps)
+
+    # === Calcuate EF ===
+    var_EF        = calculate_EF(var_hfls,  var_hfss)
+
+    # === Read lat, lon and time information ===
+    f_info       = nc.Dataset(fname_hfls, mode='r')
+    lat          = f_info.variables['lat'][:]
+    lon          = f_info.variables['lon'][:]
+    time_units   = f_info.variables['time'].units
+    time_calendar= f_info.variables['time'].calendar
+    f_info.close()
+
+    # === Create nc file ===
+    # if not os.path.exists(output_file):
+
+    output_file = CMIP6_out_path + scenario + '_'+model_name+'.nc'
+
+    # Create the nc file
+    f = nc.Dataset(output_file, 'w', format='NETCDF4')
+
+    f.history           = "Created by: %s" % (os.path.basename(__file__))
+    f.creation_date     = "%s" % (datetime.now())
+    f.description       = 'CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
+    f.Conventions       = "CF-1.0"
+
+    # === Set other variables ===
+    # Set time dimension
+    f.createDimension('time', len(time_series))
+
+    Time                = f.createVariable('time', 'f4', ('time'))
+    Time.standard_name  = 'time'
+    Time.units          = time_units
+    Time.calendar       = time_calendar
+    Time[:]             = time_series
+
+    # Set lat and lon out
+    f.createDimension('lat', len(lat))
+    f.createDimension('lon', len(lon))
+
+    # Latitude
+    Lat                = f.createVariable('lat', 'f4', ('lat'))
+    Lat.standard_name  = 'latitude'
+    Lat[:]             = lat
+
+    # Longitude
+    Lon                = f.createVariable('lon', 'f4', ('lon'))
+    Lon.standard_name  = 'longitude'
+    Lon[:]             = lon
+
+    # Latent heat flux
+    Qle                = f.createVariable('Qle', 'f4', ('time', 'lat', 'lon'))
+    Qle.standard_name  = 'Latent heat flux'
+    Qle.units          = 'W m-2'
+    Qle[:]             = var_hfls
+
+    # Sensible heat flux
+    Qh                = f.createVariable('Qh', 'f4', ('time', 'lat', 'lon'))
+    Qh.standard_name  = 'Sensible heat flux'
+    Qh.units          = 'W m-2'
+    Qh[:]             = var_hfss
+
+    # Relative humidity
+    # RH                = f.createVariable('RH', 'f4', ('time', 'lat', 'lon'))
+    # RH.standard_name  = 'Relative humidity'
+    # RH.units          = '%'
+    # RH[:]             = var_hurs
+
+    # Air temperature
+    Tair                = f.createVariable('Tair', 'f4', ('time', 'lat', 'lon'))
+    Tair.standard_name  = 'Near-Surface Air Temperature'
+    Tair.units          = 'K'
+    Tair[:]             = var_tas
+
+    # Air pressure
+    Press                = f.createVariable('Press', 'f4', ('time', 'lat', 'lon'))
+    Press.standard_name  = 'Surface Air Pressure'
+    Press.units          = 'Pa'
+    Press[:]             = var_ps
+
+    # Air pressure
+    SWdown                = f.createVariable('SWdown', 'f4', ( 'time', 'lat', 'lon'))
+    SWdown.standard_name  = 'Surface Downwelling Shortwave Radiation'
+    SWdown.units          = 'W m-2'
+    SWdown[:]             = var_rsds
+
+    Qair                = f.createVariable('Qair', 'f4', ('time', 'lat', 'lon'))
+    Qair.standard_name  = 'Near-Surface Specific Humidity'
+    Qair.units          = 'W m-2'
+    Qair[:]             = var_huss
+
+    VPD                = f.createVariable('VPD', 'f4', ( 'time', 'lat', 'lon'))
+    VPD.standard_name  = 'Vapor pressure deficit'
+    VPD.units          = 'kPa'
+    VPD[:]             = var_vpd
+
+    EF                 = f.createVariable('EF', 'f4', ( 'time', 'lat', 'lon'))
+    EF.standard_name   = 'Evaporative fraction'
+    EF.units           = 'fraction'
+    EF[:]              = var_EF
+
+    Landsea               = f.createVariable('landsea', 'f4', ('lat', 'lon'))
+    Landsea.standard_name = 'Landsea mask (land=1, sea=0)'
+    Landsea.units         = '1/0'
+    Landsea[:]            = landsea_var
+
+    f.close()
+
+    gc.collect()
+    return
+
+def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e):
     
+    # Get CMIP6 model list
+    model_list   = [ 'EC-Earth3']
+    
+    # ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G',
+    #  'MIROC6','MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
     landsea_list = {'ACCESS-CM2':'/g/data/fs38/publications/CMIP6/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/fx/sftlf/gn/v20191108',
                     'BCC-CSM2-MR':'/g/data/oi10/replicas/CMIP6/GMMIP/BCC/BCC-CSM2-MR/hist-resIPO/r1i1p1f1/fx/sftlf/gn/v20190613',
                     'CMCC-CM2-SR5':'/g/data/oi10/replicas/CMIP6/CMIP/CMCC/CMCC-CM2-SR5/historical/r1i1p1f1/fx/sftlf/gn/v20200616',
                     'CMCC-ESM2':'/g/data/oi10/replicas/CMIP6/CMIP/CMCC/CMCC-ESM2/historical/r1i1p1f1/fx/sftlf/gn/v20210114',
-                    'EC-Earth3':'/g/data/oi10/replicas/CMIP6/CMIP/EC-Earth-Consortium/EC-Earth3/historical/r1i1p1f1/fx/sftlf/gr/v20200310', 
+                    'EC-Earth3':'/g/data/oi10/replicas/CMIP6/CMIP/EC-Earth-Consortium/EC-Earth3/historical/r1i1p1f1/fx/sftlf/gr/v20200310',
                     'KACE-1-0-G':'/g/data/oi10/replicas/CMIP6/CMIP/NIMS-KMA/KACE-1-0-G/historical/r1i1p1f1/Lmon/mrsos/gr/v20191002',
                     'MIROC6':'/g/data/oi10/replicas/CMIP6/CMIP/MIROC/MIROC6/historical/r1i1p1f1/fx/sftlf/gn/v20190311',
                     'MIROC-ES2L':'/g/data/oi10/replicas/CMIP6/CMIP/MIROC/MIROC-ES2L/historical/r1i1p1f2/fx/sftlf/gn/v20190823',
                     'MPI-ESM1-2-HR':'/g/data/oi10/replicas/CMIP6/CMIP/MPI-M/MPI-ESM1-2-HR/historical/r1i1p1f1/fx/sftlf/gn/v20190710',
-                    'MPI-ESM1-2-LR':'/g/data/oi10/replicas/CMIP6/CMIP/MPI-M/MPI-ESM1-2-LR/historical/r1i1p1f1/fx/sftlf/gn/v20190710', 
+                    'MPI-ESM1-2-LR':'/g/data/oi10/replicas/CMIP6/CMIP/MPI-M/MPI-ESM1-2-LR/historical/r1i1p1f1/fx/sftlf/gn/v20190710',
                     'MRI-ESM2-0':'/g/data/oi10/replicas/CMIP6/CMIP/MRI/MRI-ESM2-0/historical/r1i1p1f1/fx/sftlf/gn/v20190603'}
-    
 
-    # ======Loop each model ======
-    for model_name in model_list:
-
-        print('model', model_name)
-
-        # === Get variable from Processed_CMIP6_data ===
-        # latent heat flux (hfls) files
-        fname_hfls  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hfls/{model_name}/*/*.nc'))[0]
-        
-        # sensible heat flux (hfss) files
-        fname_hfss  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hfss/{model_name}/*/*.nc'))[0]
-
-        # air temperature (tas) files
-        fname_tas   = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/tas/{model_name}/*/*.nc'))[0]
-
-        # shortwave radiation flux (rsds) files
-        fname_rsds  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/rsds/{model_name}/*/*.nc'))[0]
-        
-        # air pressure (ps) files
-        fname_ps    = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/ps/{model_name}/*/*.nc'))[0]
-
-        # specific humidity (huss) files
-        fname_huss  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/huss/{model_name}/*/*.nc'))[0]
-
-        # # relative humidity (hurs) files
-        # fname_hurs  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/hurs/{model_name}/*/*.nc'))[0]
-
-        # === Get the same griding and time period data ===
-        time, var_hfls  = read_CMIP6(fname_hfls, model_name, 'hfls', time_s, time_e)
-        time, var_hfss  = read_CMIP6(fname_hfss, model_name, 'hfss', time_s, time_e)
-        time, var_tas   = read_CMIP6(fname_tas,  model_name, 'tas',  time_s, time_e)
-        time, var_rsds  = read_CMIP6(fname_rsds, model_name, 'rsds', time_s, time_e)
-        time, var_ps    = read_CMIP6(fname_ps,   model_name, 'ps',   time_s, time_e)
-        time, var_huss  = read_CMIP6(fname_huss, model_name, 'huss', time_s, time_e)
-        # time, var_hurs  = read_CMIP6(fname_hurs, model_name, 'hurs', time_s, time_e)
-
-        # === Obtain landsea ===
-        fname_landsea   = sorted(glob.glob(f'{landsea_list[model_name]}/*.nc'))[0]
-        landsea_varname = (fname_landsea).split("/")[12]
-
-        # Read landsea_lat and landsea_lon
-        f_landsea = nc.Dataset(fname_landsea, mode='r')
-        landsea_lat = f_landsea.variables['lat'][:]
-        landsea_lon = f_landsea.variables['lon'][:]
-
-        # Read landsea var
-        if len(np.shape(f_landsea.variables[landsea_varname])) == 2:            
-            landsea_var = f_landsea.variables[landsea_varname][:]
-        elif len(np.shape(f_landsea.variables[landsea_varname])) == 3:          
-            landsea_var = f_landsea.variables[landsea_varname][0,:,:]
-        
-        # Adjust the original CMIP6 landsea since Anna's R script changed lat & lon
-        # in the processed CMIP6 files to lat [-90 ~ 90] and lon [-180,180].
-            
-        # Adjust lat from 90 ~ -90 to -90 ~ 90
-        if landsea_lat[0] > landsea_lat[-1]:
-            landsea_var[:] = landsea_var[::-1,:]
-
-        # Adjust lon from 0 ~ 360 to -180 ~ 180
-        if landsea_lon[0] >= 0:  
-            landsea_lon[:] = np.where(landsea_lon>180, landsea_lon-360, landsea_lon)
-            landsea_var[:] = landsea_var[:,np.argsort(landsea_lon)]
-        
-        # Set missing values as 0
-        for attr in ['_FillValue', '_fillValue', 'missing_value']:
-            if hasattr(f_landsea.variables[landsea_varname], attr):
-                var_FillValue = getattr(f_landsea.variables[landsea_varname], attr)
-                landsea_var   = np.where(landsea_var==var_FillValue, 0, landsea_var)
-
-        # Set land == 1 and ocean == 0 
-        landsea_var   = np.where(landsea_var>0, 1, landsea_var)
-
-        f_landsea.close()    
-
-        # === Calculate VPD === 
-        var_vpd       = calculate_VPD_by_Qair(var_huss, var_tas, var_ps)
-
-        # === Calcuate EF ===
-        var_EF        = calculate_EF(var_hfls,  var_hfss)
-        
-        # === Create nc file and set time ===
-        if not os.path.exists(output_file):
-
-            # Make time series
-            time_init   = datetime(1970,1,1,0,0,0)
-            time_series = []
-            for t in time:
-                time_series.append((t-time_init).total_seconds())
-            print(time_series)
-
-            # Create the nc file
-            f = nc.Dataset(output_file, 'w', format='NETCDF4')
-
-            f.history           = "Created by: %s" % (os.path.basename(__file__))
-            f.creation_date     = "%s" % (datetime.now())
-            f.description       = 'CMIP6 '+scenario+' ensemble mean, made by MU Mengyuan'
-            f.Conventions       = "CF-1.0"
-
-            # Set time dimension
-            f.createDimension('time', len(time))
-
-            Time                = f.createVariable('time', 'f4', ('time'))
-            Time.standard_name  = 'time'
-            Time.units          = "seconds since 1970-01-01 00:00:00"
-            Time[:]             = time_series
-            f.close()    
-        
-        # === Set other variables ===
-        f = nc.Dataset(output_file, 'r+', format='NETCDF4')
-
-        # Read lat and lon dimension
-        f_lat_lon    = nc.Dataset(fname_hfls, mode='r')
-        lat          = f_lat_lon.variables['lat'][:]
-        lon          = f_lat_lon.variables['lon'][:]
-        f_lat_lon.close()
-
-        # Set lat and lon out
-        f.createDimension(model_name+'_lat', len(lat))
-        f.createDimension(model_name+'_lon', len(lon))
-
-        # Latitude
-        Lat                = f.createVariable('lat', 'f4', ('lat'))
-        Lat.standard_name  = 'latitude'
-        Lat[:]             = lat
-
-        # Longitude
-        Lon                = f.createVariable('lon', 'f4', ('lon'))
-        Lon.standard_name  = 'longitude'
-        Lon[:]             = lon
-
-        # Latent heat flux
-        Qle                = f.createVariable(model_name+'_Qle', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        Qle.standard_name  = 'Latent heat flux'
-        Qle.units          = 'W m-2'
-        Qle[:]             = var_hfls
-
-        # Sensible heat flux
-        Qh                = f.createVariable(model_name+'_Qh', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        Qh.standard_name  = 'Sensible heat flux'
-        Qh.units          = 'W m-2'
-        Qh[:]             = var_hfss
-
-        # Relative humidity
-        # RH                = f.createVariable(model_name+'_RH', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        # RH.standard_name  = 'Relative humidity'
-        # RH.units          = '%'
-        # RH[:]             = var_hurs
-
-        # Air temperature
-        Tair                = f.createVariable(model_name+'_Tair', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        Tair.standard_name  = 'Near-Surface Air Temperature'
-        Tair.units          = 'K'
-        Tair[:]             = var_tas
-
-        # Air pressure
-        Press                = f.createVariable(model_name+'_Press', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        Press.standard_name  = 'Surface Air Pressure'
-        Press.units          = 'Pa'
-        Press[:]             = var_ps
-
-        # Air pressure
-        SWdown                = f.createVariable(model_name+'_SWdown', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        SWdown.standard_name  = 'Surface Downwelling Shortwave Radiation'
-        SWdown.units          = 'W m-2'
-        SWdown[:]             = var_rsds
-
-        Qair                = f.createVariable(model_name+'_Qair', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        Qair.standard_name  = 'Near-Surface Specific Humidity'
-        Qair.units          = 'W m-2'
-        Qair[:]             = var_huss
-
-        VPD                = f.createVariable(model_name+'_VPD', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        VPD.standard_name  = 'Vapor pressure deficit'
-        VPD.units          = 'kPa'
-        VPD[:]             = var_vpd
-        
-        EF                 = f.createVariable(model_name+'_EF', 'f4', ('time', model_name+'_lat', model_name+'_lon'))
-        EF.standard_name   = 'Evaporative fraction'
-        EF.units           = 'fraction'
-        EF[:]              = var_EF
-
-        Landsea               = f.createVariable(model_name+'_landsea', 'f4', (model_name+'_lat', model_name+'_lon'))
-        Landsea.standard_name = 'Landsea mask (land=1, sea=0)'
-        Landsea.units         = '1/0'
-        Landsea[:]            = landsea_var
-
-        f.close()
-
-        # Free memory
-        lat       = None
-        lon       = None        
-        var_hfls  = None
-        var_hfss  = None
-        var_tas   = None
-        var_rsds  = None
-        var_ps    = None
-        var_huss  = None
-        var_vpd   = None
-        var_EF    = None
-        landsea_var  = None
-
-        Lat       = None
-        Lon       = None        
-        Qle       = None
-        Qh        = None
-        Tair      = None
-        SWdown    = None
-        Press     = None
-        Qair      = None
-        VPD       = None
-        EF        = None
-        Landsea   = None
+    with Pool() as pool:
+        pool.starmap(make_CMIP6_each_nc_file, [(CMIP6_data_path, scenario, landsea_list, time_s, time_e, model_name) 
+                     for model_name in model_list])
+    return
 
 def make_CMIP6_ACCESS_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s, time_e, regrid_to="ACCESS-CM2"):
 
@@ -415,12 +397,10 @@ def make_CMIP6_ACCESS_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s,
     output_file   = CMIP6_out_path + scenario + '.nc'
     print('output_file is ',output_file)
 
-    print('time', time)
     time_init   = datetime(1970,1,1,0,0,0)
     time_series = []
     for t in time:
         time_series.append((t-time_init).days)
-    print(time_series)
 
     f = nc.Dataset(output_file, 'w', format='NETCDF4')
 
@@ -483,7 +463,7 @@ def make_CMIP6_ACCESS_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s,
 def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
 
     '''
-    Output top/bom xx percentiles of the CMIP6 nc files 
+    Output top/bom xx percentiles of the CMIP6 nc files
     '''
 
     # Reading data
@@ -547,7 +527,7 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
         Time               = f.createVariable('time', 'f4', ('time'))
         Time.standard_name = 'time'
         Time[:]            = time
-        
+
         Lat                = f.createVariable('lat', 'f4', ('lat'))
         Lat.standard_name  = 'latitude'
         Lat[:]             = lat_out
@@ -591,7 +571,7 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
         elif 'top' in output_file:
             Num.standard_name = 'number of data points'
             Num[:]            = np.sum(np.where(np.isnan(ef_top[:]),0,1),axis=0)
-    
+
         Lat = None
         Lon = None
         Qle = None
@@ -608,7 +588,7 @@ if __name__ == "__main__":
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
     CMIP6_data_path   = "/g/data/w97/mm3972/data/CMIP6_3hr_data/Processed_CMIP6_data/"
     CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
-    scenarios         = ['historical']# , 'ssp245']
+    scenarios         = ['historical']# 'ssp245',
 
     # read CMIP6 data
     for scenario in scenarios:
@@ -616,6 +596,7 @@ if __name__ == "__main__":
         if scenario == 'historical':
             time_s  = datetime(1985,1,1,0,0,0)
             time_e  = datetime(2015,1,1,0,0,0)
+
         else:
             time_s  = datetime(2070,1,1,0,0,0)
             time_e  = datetime(2100,1,1,0,0,0)
@@ -625,5 +606,4 @@ if __name__ == "__main__":
         # make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
         # gc.collect()
 
-        output_file = CMIP6_out_path + scenario + '.nc'
-        make_CMIP6_multiple_nc_file(CMIP6_data_path, output_file, scenario, time_s, time_e)
+        make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e)

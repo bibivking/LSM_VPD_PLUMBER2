@@ -458,7 +458,7 @@ def add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LA
                 # print(model_with_LAI+'_LAI')
             except:
                 # print('site',site_name,'model',model_with_LAI)
-                var_output.loc[site_mask, model_with_LAI+'_LAI'][:] = np.nan
+                var_output.loc[site_mask, model_with_LAI+'_LAI'] = np.nan
             gc.collect()
 
             # print(var_output.loc[site_mask, model_with_LAI+'_LAI'])
