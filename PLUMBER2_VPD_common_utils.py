@@ -301,9 +301,15 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     x_series   = np.arange(x_bot, x_top, x_interval)
 
     # Define grid search parameters
-    # GAM parameter set 2:
+
+    # GAM parameter set 3:
     lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(3, 5, 1)   # Number of splines per smooth term range
+    n_splines  = np.arange(3, 7, 1)   # Number of splines per smooth term range
+
+
+    # # GAM parameter set 2:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 5, 1)   # Number of splines per smooth term range
 
     # GAM parameter set 1:
     #     lam        = np.logspace(-5, 5, 11)
@@ -756,6 +762,7 @@ def set_model_colors():
     # file path
     model_colors = {
                     'obs': 'black',
+                    'CMIP6':'firebrick',
                     'CABLE':'darkblue',
                     'CABLE-POP-CN':'blue',
                     'CHTESSEL_ERA5_3':'cornflowerblue',

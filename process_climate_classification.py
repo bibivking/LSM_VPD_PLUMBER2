@@ -6,6 +6,7 @@ import netCDF4 as nc
 import numpy as np
 import xarray as xr
 import pandas as pd
+from matplotlib.patches import Polygon
 from datetime import datetime, timedelta
 import matplotlib.ticker as mticker
 import matplotlib.pyplot as plt
@@ -239,10 +240,24 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
 
     cbar.ax.tick_params(labelsize=6, labelrotation=45)
 
+    reg_lats      = [  [-44.5,-22],         # East AU
+                        [35,60],       # West EU
+                        [25,58]    ]   # North America 
+
+    reg_lons      = [  [138,155],
+                        [-12,22],
+                        [-125,-65]    ]
+    
+    # Add boxes, lines
+    for i in np.arange(3):
+        ax.add_patch(Polygon([[reg_lons[i][0], reg_lats[i][0]], [reg_lons[i][1], reg_lats[i][0]],
+                                    [reg_lons[i][1], reg_lats[i][1]], [reg_lons[i][0], reg_lats[i][1]]],
+                                    closed=True,color=almost_black, fill=False,linewidth=0.8))
+
     # Adding lat and lon
     lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
     for site_name in site_names:
-        ax.plot(lon_dict[site_name], lat_dict[site_name], color='red', marker='s', markersize=0.3, transform=ccrs.PlateCarree())
+        ax.plot(lon_dict[site_name], lat_dict[site_name], color='red', marker='s', markersize=0.2, transform=ccrs.PlateCarree())
 
     plt.savefig('./plots/climate_classification.png',dpi=300)
     

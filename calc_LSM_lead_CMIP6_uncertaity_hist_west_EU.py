@@ -231,8 +231,8 @@ def save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var
                                 region={'name':'global','lat':None, 'lon':None}):
 
     # CMIP6 model list
-    CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
-                         'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+    CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'MIROC-ES2L',  'MPI-ESM1-2-LR',
+                         'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6', 'MPI-ESM1-2-HR','MRI-ESM2-0'] #
 
     # Creates a pool of worker processes to execute tasks in parallel.
     # The with statement ensures proper cleanup of the pool after use.
@@ -281,31 +281,61 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     VPD_tmp     = f_cmip.variables['VPD'][:]
     EF_tmp      = f_cmip.variables['EF'][:]
     landsea_tmp = f_cmip.variables['landsea'][:]
+    ntime       = len(Qle_tmp[:,0,0])
+
+    landsea_3d  = np.repeat(landsea_tmp[np.newaxis, :, :], ntime, axis=0)
+    print('np.shape(landsea_3d)',np.shape(landsea_3d))
+    print('np.shape(Qle_tmp)',np.shape(Qle_tmp))
 
     if day_time:
         SWdown_tmp  = f_cmip.variables['SWdown'][:]
         # mask out ocean and night time
-        Qle_tmp     = np.where((landsea_tmp==1) & (SWdown_tmp>=5), Qle_tmp, np.nan)
-        VPD_tmp     = np.where((landsea_tmp==1) & (SWdown_tmp>=5), VPD_tmp, np.nan)
-        EF_tmp      = np.where((landsea_tmp==1) & (SWdown_tmp>=5), EF_tmp, np.nan)
+        Qle_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), Qle_tmp, np.nan)
+        VPD_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), VPD_tmp, np.nan)
+        EF_tmp      = np.where((landsea_3d==1) & (SWdown_tmp>=5), EF_tmp, np.nan)
     else:
         # mask out ocean
-        Qle_tmp     = np.where(landsea_tmp==1, Qle_tmp, np.nan)
-        VPD_tmp     = np.where(landsea_tmp==1, VPD_tmp, np.nan)
-        EF_tmp      = np.where(landsea_tmp==1, EF_tmp, np.nan)
+        Qle_tmp     = np.where(landsea_3d==1, Qle_tmp, np.nan)
+        VPD_tmp     = np.where(landsea_3d==1, VPD_tmp, np.nan)
+        EF_tmp      = np.where(landsea_3d==1, EF_tmp, np.nan)
 
-    # Select region
+    # Select region 
     if region['name'] != 'global':
+        print(CMIP6_model)
         # get lat and lon
         Lat_tmp  = f_cmip.variables['lat'][:]
         Lon_tmp  = f_cmip.variables['lon'][:]
-        lat_mask = (Lat_tmp >= region['lat'][0]) & (Lat_tmp <= region['lat'][1])
-        lon_mask = (Lon_tmp >= region['lon'][0]) & (Lon_tmp <= region['lon'][1])
+        lon_2d, lat_2d = np.meshgrid(Lon_tmp, Lat_tmp)
+        
+        lon_3d  = np.repeat(lon_2d[np.newaxis, :, :], ntime, axis=0)
+        lat_3d  = np.repeat(lat_2d[np.newaxis, :, :], ntime, axis=0)
+        print('np.shape(lon_3d)',np.shape(lon_3d))
+        print('np.shape(lat_3d)',np.shape(lat_3d))
+        print('lon_3d[0,:,:]==lon_3d[1,:,:]',lon_3d[0,:,:]==lon_3d[1,:,:])
+        print('lat_3d[0,:,:]==lat_3d[1,:,:]',lat_3d[0,:,:]==lat_3d[1,:,:])
 
+        # lat_mask = (Lat_tmp >= region['lat'][0]) & (Lat_tmp <= region['lat'][1])
+        # lon_mask = (Lon_tmp >= region['lon'][0]) & (Lon_tmp <= region['lon'][1])
+        
         # select region
-        Qle_tmp    = Qle_tmp[lat_mask, lon_mask]
-        VPD_tmp    = VPD_tmp[lat_mask, lon_mask]
-        EF_tmp     = EF_tmp[lat_mask, lon_mask]
+        Qle_tmp = np.where(np.all([lat_3d >= region['lat'][0],
+                                   lat_3d <= region['lat'][1],
+                                   lon_3d >= region['lon'][0],
+                                   lon_3d <= region['lon'][1]],axis=0),
+                                   Qle_tmp, np.nan)
+        VPD_tmp = np.where(np.all([lat_3d >= region['lat'][0],
+                                   lat_3d <= region['lat'][1],
+                                   lon_3d >= region['lon'][0],
+                                   lon_3d <= region['lon'][1]],axis=0),
+                                   VPD_tmp, np.nan)
+        EF_tmp  = np.where(np.all([lat_3d >= region['lat'][0],
+                                   lat_3d <= region['lat'][1],
+                                   lon_3d >= region['lon'][0],
+                                   lon_3d <= region['lon'][1]],axis=0),
+                                   EF_tmp, np.nan)
+        
+        print('np.shape(Qle_tmp)',np.shape(Qle_tmp))
+        print('Qle_tmp',Qle_tmp)
 
     # To 1D
     Qle_1d     = Qle_tmp.flatten()
@@ -316,6 +346,8 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     VPD_tmp     = None
     EF_tmp      = None
     landsea_tmp = None
+    landsea_3d  = None
+
 
     # Remove NaN values
     mask_all   = (~np.isnan(Qle_1d)) & (~np.isnan(VPD_1d)) & (~np.isnan(EF_1d))
@@ -440,7 +472,7 @@ def calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model
         else:
             var_tmp = pd.read_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv', na_values=[''], usecols=[model_in])
         # var_input.append(var_tmp[model_in])
-            
+
         if i == 0:
             var_input = var_tmp[model_in].values #np.array(var_tmp.values)
         else:
@@ -454,7 +486,7 @@ def calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model
         metrics.to_csv(f'{CMIP6_txt_path}/metrics_CMIP6_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
 
     return
-
+    
 if __name__ == "__main__":
 
     # Read files
@@ -481,14 +513,14 @@ if __name__ == "__main__":
         # calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_da_out_path, scenario, percent=percent, var_name=var_name)
 
         # Processing 3 hourly
-        # # east AU
-        # region = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
+        ## east AU
+        #region = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
 
-        # # west EU
-        # region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+        # west EU
+        region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
 
-        # North America 
-        region = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
+        # # North America
+        # region = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
 
         save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region)
 
@@ -503,4 +535,3 @@ if __name__ == "__main__":
         #                     'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
         # model_in    = 'CABLE-POP-CN'
         # calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile')
-

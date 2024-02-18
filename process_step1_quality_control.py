@@ -27,7 +27,7 @@ from PLUMBER2_VPD_common_utils import *
 import multiprocessing as mp
 import logging
 
-def quality_control_process1_output(var_name, site_names, zscore_threshold=4,gap_fill='nan'):
+def quality_control_process1_output(var_name, site_names, zscore_threshold=4, gap_fill='nan'):
 
     # read the variables
     var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv', na_values=[''])
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     # site_names      = ["AU-How","AU-Tum"]
 
     var_name          = 'Qle' #'Qle'
-    zscore_threshold  = 4
+    zscore_threshold  = 3
     gap_fill          = 'nan'
     # quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
     parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold, gap_fill=gap_fill)

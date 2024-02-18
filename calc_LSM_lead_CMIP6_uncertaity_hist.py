@@ -7,7 +7,7 @@ Including:
     def save_CMIP6_3hourly_each_model
     def calc_predicted_CMIP6_each_model
     def save_predicted_CMIP6_3hourly_parallel
-    def calc_predicted_CMIP6_metrics
+    def save_metrics
 '''
 
 __author__  = "Mengyuan Mu"
@@ -58,7 +58,7 @@ def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile
     # print("Minimum ", Minimum)
     # print("Maximum ", Maximum)
 
-    return (Median, P25, P75, Minimum, Maximum)
+    return Median, P25, P75, Minimum, Maximum
 
 def get_PLUMBER2_curve_names(bounds):
 
@@ -243,24 +243,24 @@ def save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var
         pool.starmap(save_CMIP6_3hourly_each_model, [(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model, scenario,
                                                       var_name, day_time, region) for CMIP6_model in CMIP6_model_list])
 
-    # for i, CMIP6_model in enumerate(CMIP6_model_list):
-    #     if day_time:
-    #         input_file = f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv'
-    #     else:
-    #         input_file = f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv'
+    for i, CMIP6_model in enumerate(CMIP6_model_list):
+        if day_time:
+            input_file = f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv'
+        else:
+            input_file = f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv'
 
-    #     var_tmp =  pd.read_csv(input_file,na_values=[''])
+        var_tmp =  pd.read_csv(input_file,na_values=[''])
 
-    #     if i == 0:
-    #         var_output = var_tmp
-    #     else:
-    #         var_output = pd.concat([var_output, var_tmp], ignore_index=True)
+        if i == 0:
+            var_output = var_tmp
+        else:
+            var_output = pd.concat([var_output, var_tmp], ignore_index=True)
 
-    #     var_tmp    = None
-    # if day_time:
-    #     var_output.to_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{region["name"]}.csv')
-    # else:
-    #     var_output.to_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{region["name"]}.csv')
+        var_tmp    = None
+    if day_time:
+        var_output.to_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{region["name"]}.csv')
+    else:
+        var_output.to_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{region["name"]}.csv')
 
     return
 
@@ -342,13 +342,14 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
 
     return
 
-def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name='Qle',
-                                    day_time=False, region={'name':'global','lat':None, 'lon':None}):
+def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, model_in, var_name='Qle', day_time=False,
+                                    region={'name':'global','lat':None, 'lon':None}):
+
     # Read data
     if day_time:
-        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
+        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{region["name"]}.csv', na_values=[''])
     else:
-        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
+        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{region["name"]}.csv', na_values=[''])
 
     print('model', model_in)
     print('Check var_output', var_output)
@@ -409,49 +410,42 @@ def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model
     else:
         Qle_pred =  pd.DataFrame(np.concatenate((Qle_pred_02,Qle_pred_04,Qle_pred_06,Qle_pred_08,Qle_pred_10)),
                     columns=[model_in])
+
     if day_time:
-        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
     else:
-        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
 
     gc.collect()
 
     return
 
-def save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name='Qle',  day_time=False, region={'name':'global','lat':None, 'lon':None}):
+def save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, model_list, var_name='Qle',  day_time=False, region={'name':'global','lat':None, 'lon':None}):
 
     with multiprocessing.Pool() as pool:
-        pool.starmap(calc_predicted_CMIP6_each_model,
-                     [(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name, day_time, region)
-                     for model_in in model_list])
+        pool.starmap(calc_predicted_CMIP6_each_model, [ (CMIP6_txt_path, scenario, model_in, var_name, day_time, region) for model_in in model_list])
     return
 
-def calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile'):
+def save_metrics(CMIP6_txt_path, var_name, model_list, outlier_method='percentile'):
 
     # ============ Setting for plotting ============
-    input_files = []
-    var_input   = []
 
-    # Read all CMIP6 dataset
-    for i, CMIP6_model in enumerate(CMIP6_model_list):
-        print(CMIP6_model)
-        if day_time:
-            var_tmp = pd.read_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv', na_values=[''], usecols=[model_in])
-        else:
-            var_tmp = pd.read_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv', na_values=[''], usecols=[model_in])
-        # var_input.append(var_tmp[model_in])
-            
-        if i == 0:
-            var_input = var_tmp[model_in].values #np.array(var_tmp.values)
-        else:
-            var_input = np.concatenate((var_input, var_tmp[model_in].values))#np.array(var_tmp.values))
+    input_files = [ f'{CMIP6_txt_path}/predicted_{var_name}_historical_global.csv',
+                    f'{CMIP6_txt_path}/predicted_{var_name}_ssp245_global.csv',    ]
 
-    metrics  = pd.DataFrame(calc_stat(var_input, outlier_method=outlier_method), columns=[model_in])
+    output_files = [f'{CMIP6_txt_path}/metrics_predicted_{var_name}_historical_global.csv',
+                    f'{CMIP6_txt_path}/metrics_predicted_{var_name}_ssp245_global.csv',    ]
 
-    if day_time:
-        metrics.to_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
-    else:
-        metrics.to_csv(f'{CMIP6_txt_path}/metrics_CMIP6_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
+    for i, input_file in enumerate(input_files):
+        var_input = pd.read_csv(input_file, na_values=[''])
+
+        metrics   = pd.DataFrame([np.array(calc_stat(var_input['CMIP6'], outlier_method=outlier_method))],
+                        columns=['CMIP6'])
+
+        for model_in in model_list:
+            metrics[model_in] = np.array(calc_stat(var_input[model_in], outlier_method=outlier_method))
+
+        metrics.to_csv(output_files[i])
 
     return
 
@@ -476,31 +470,10 @@ if __name__ == "__main__":
     model_list = model_names['model_select']
 
     for scenario in scenarios:
-
         # Processing daily
         # calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_da_out_path, scenario, percent=percent, var_name=var_name)
 
         # Processing 3 hourly
-        # # east AU
-        # region = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
+        # save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region)
 
-        # # west EU
-        # region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
-
-        # North America 
-        region = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
-
-        save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region)
-
-        # Calculate predicted CMIP6
-        # CMIP6_model  =  ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
-        #                  'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
-
-        # save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name=var_name, region=region)
-
-        # Calculate metrics of the predicted CMIP6
-        # CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
-        #                     'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
-        # model_in    = 'CABLE-POP-CN'
-        # calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile')
-
+        save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, model_list, var_name=var_name, region=region)
