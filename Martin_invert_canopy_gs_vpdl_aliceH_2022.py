@@ -384,6 +384,6 @@ if __name__ == "__main__":
 
     site_names, IGBP_types, clim_types, model_names_list = load_default_list()
     # The site names
-    model_names        = model_names_list['model_select']
+    model_names        = model_names_list['model_select_new']
 
     main(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, site_names, model_names)

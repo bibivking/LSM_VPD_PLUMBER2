@@ -11,7 +11,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import joblib
-from pygam import LinearGAM, PoissonGAM, s, f
+from pygam import LinearGAM, PoissonGAM,GAM, GammaGAM, s, f, l
 from sklearn.model_selection import KFold
 from scipy import stats, interpolate
 from scipy.interpolate import griddata
@@ -110,7 +110,7 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
 def get_model_out_list(var_name):
 
     # Using AR-SLu.nc file to get the model namelist
-    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/old/AR-SLu.nc", mode='r')
+    f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
     if var_name == 'Gs':
         model_in_list = f.variables['Qle_models']
     else:
@@ -160,7 +160,7 @@ def calculate_VPD_by_RH(rh, tair):
 def calculate_VPD_by_Qair(qair, tair, press):
     '''
     calculate vpd
-    Input: 
+    Input:
           qair: kg/kg
           tair: K
           press: Pa
@@ -199,6 +199,36 @@ def calculate_VPD_by_Qair(qair, tair, press):
 
     return vpd
 
+def change_model_name(model_in):
+
+    if model_in == 'CABLE-POP-CN':
+        model_out = 'CABLE-POP'
+
+    elif model_in == 'CHTESSEL_Ref_exp1':
+        model_out = 'CHTESSEL_1'
+
+    elif model_in == 'CLM5a':
+        model_out = 'CLM5'
+
+    elif model_in == 'JULES_GL9_withLAI':
+        model_out = 'JULES_GL9_LAI'
+
+    elif model_in == 'NASAEnt':
+        model_out = 'EntTBM'
+
+    elif model_in == 'NoahMPv401':
+        model_out = 'NoahMP'
+
+    elif model_in == 'ORC2_r6593':
+        model_out = 'ORCHIDEE2'
+
+    elif model_in == 'ORC3_r8120':
+        model_out = 'ORCHIDEE3'
+
+    else:
+        model_out = model_in
+
+    return model_out
 
 def load_default_list():
 
@@ -230,20 +260,31 @@ def load_default_list():
                          'ORC3_r7245_NEE', 'ORC3_r8120', 'QUINCY',
                          'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
-    empirical_model  = ["1lin","3km27", "6km729","6km729lag",
+    model_names_new_select= ['CABLE', 'CABLE-POP-CN',
+                             'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL',
+                             'JULES_GL9', 'JULES_GL9_withLAI',
+                             'MATSIRO', 'MuSICA', 'NASAEnt',
+                             'NoahMPv401', 'ORC2_r6593',
+                             'ORC3_r8120', 'QUINCY',
+                             'STEMMUS-SCOPE', 'obs'] #"BEPS"
+
+    empirical_model   = ["1lin","3km27", "6km729","6km729lag",
                         "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",]
-    hydrological_model  = ["Manabe", "ManabeV2","PenmanMonteith",]
-    land_surface_model=["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                        "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                        "JULES_GL9_withLAI","JULES_test","MATSIRO",
-                        "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                        "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",]
+
+    hydrological_model= ["Manabe", "ManabeV2","PenmanMonteith",]
+
+    land_surface_model= ["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
+                         "CHTESSEL_Ref_exp1","CLM5a","GFDL",
+                         "JULES_GL9_withLAI","JULES_test","MATSIRO",
+                         "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
+                         "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",]
+
     ecosystem_model  = ["ACASA","LPJ-GUESS","MuSICA",
                         "NASAEnt","QUINCY", "SDGVM",]
 
-    model_names      = {
-                        'all_model': model_names_all,
+    model_names      = {'all_model': model_names_all,
                         'model_select':model_names_select,
+                        'model_select_new':model_names_new_select,
                         'empirical_model':empirical_model,
                         'hydrological_model':hydrological_model,
                         'land_surface_model':land_surface_model,
@@ -279,7 +320,7 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
 
     return x_series, y_pred, y_int
 
-def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values):
+def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
 
     # Remove nan values
     x_values_tmp = copy.deepcopy(x_values)
@@ -296,16 +337,27 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     if len(x_values) <= 10:
         print("Alarm! Not enought sample")
         return np.nan, np.nan, np.nan
-    
+
     # Set x_series
     x_series   = np.arange(x_bot, x_top, x_interval)
 
     # Define grid search parameters
 
-    # GAM parameter set 3:
+    # GAM parameter set 5:
     lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(3, 7, 1)   # Number of splines per smooth term range
+    n_splines  = np.arange(4, 11, 1)   # Number of splines per smooth term range
 
+    # # GAM parameter set 5:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # # GAM parameter set 4: => high VPD end surge quickly
+    # lam        = np.logspace(-1, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # # GAM parameter set 3:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 7, 1)   # Number of splines per smooth term range
 
     # # GAM parameter set 2:
     # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
@@ -331,41 +383,63 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
         y_train, y_test = y_values[train_index], y_values[test_index]
 
         X_train = X_train.reshape(-1, 1)
-        
+
         print('X_train.shape', X_train.shape)
         print('X_test.shape', X_test.shape)
         print('y_train.shape', y_train.shape)
         print('y_test.shape', y_test.shape)
 
         # Define and fit GAM model
-        gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+            # process4-4
+            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+            # process4-3
+            # for n_spline in n_splines:
+            #     gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave', spline_order=3, n_splines=n_spline)
+            #           + l(0)).gridsearch(X_train, y_train, lam=lam)
+            #     models.append(gam)
+
+            #     # Evaluate model performance (replace with your preferred metric)
+            #     score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+            #     scores.append(score)
+
+            # gam = GAM(s(0, edge_knots=[x_bot, x_top]),distribution='gamma', link='inverse').gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
         # LinearGAM(s(0)) creates a GAM with a spline term
-        # edge_knots: specify minimum and maximum domain of the spline function. 
+        # edge_knots: specify minimum and maximum domain of the spline function.
         #             To make GAM model covers the whole range of VPD, I manually set them as VPD boundaries
 
         # Alternative
         # gam = LinearGAM(s(0) + f(0)).fit(X_train, y_train)
         # Fits the GAM model to the data using default hyperparameters.
 
+        # process4-4
         models.append(gam)
-
         # Evaluate model performance (replace with your preferred metric)
         score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
         scores.append(score)
 
-    print('scores',scores)
     # Find the best model based on average score
     # For gam.score which calcuate deviance, the best model's score is closet to 0
     best_model_index = np.argmin(np.abs(scores))
-    print('best_model_index',best_model_index)
-    best_model = models[best_model_index]
-    print('best_model',best_model)
-    best_score = scores[best_model_index]
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print('scores',scores)
     print('best_score',best_score)
+    print('best_model_index',best_model_index)
+    print('best_model',best_model)
     print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
-    
+
     # Save the best model using joblib
-    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
     y_pred       = best_model.predict(x_series)
@@ -390,20 +464,141 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     plt.xlabel('VPD')
     plt.ylabel('Qle')
     plt.title('Check the GAM fitted curve')
+    plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
 
     # Add legend
     plt.legend()
 
-    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve.png')
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
 
     return x_series, y_pred, y_int
 
-def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values):
+
+def fit_GAM_complex_veg_lai(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
+
+    # Remove nan values
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    # copy.deepcopy: creates a complete, independent copy of an object
+    # and its entire internal structure, including nested objects and any
+    # references they contain.
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # Set x_series
+    x_max      = np.max(x_values)
+    x_series   = np.arange(x_bot, x_max, x_interval)
+
+    # Define grid search parameters
+
+    # GAM parameter set 5:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(4, 11, 1)   # Number of splines per smooth term range
+
+    # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
+    # n_splines: Number of spline basis functions (7 values between 3 and 9).
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Initialize empty lists for storing results
+    models = []
+    scores = []
+
+    # Perform grid search
+    for train_index, test_index in kf.split(x_values):
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
+
+        X_train = X_train.reshape(-1, 1)
+
+        print('X_train.shape', X_train.shape)
+        print('X_test.shape', X_test.shape)
+        print('y_train.shape', y_train.shape)
+        print('y_test.shape', y_test.shape)
+
+        # Define and fit GAM model
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            gam = GammaGAM(s(0)).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+        models.append(gam)
+        # Evaluate model performance (replace with your preferred metric)
+        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+        scores.append(score)
+
+    # Find the best model based on average score
+    # For gam.score which calcuate deviance, the best model's score is closet to 0
+    best_model_index = np.argmin(np.abs(scores))
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print('scores',scores)
+    print('best_score',best_score)
+    print('best_model_index',best_model_index)
+    print('best_model',best_model)
+    print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
+    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
+    y_pred       = best_model.predict(x_series)
+
+    # Note that The code calculates 95% confidence intervals, but remember that confidence
+    #           intervals should generally be calculated on the actual test data points,
+    #           not a new set of equally spaced values like x_series
+    y_int        = best_model.confidence_intervals(x_series, width=.95)
+
+    print('x_series',x_series)
+    print('y_pred',y_pred)
+    print('y_int',y_int)
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
+
+    return x_series, y_pred, y_int
+
+
+def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None):
     '''
-    Read the fitted GAM curve and based on x_values to calcuate predicted Y 
+    Read the fitted GAM curve and based on x_values to calcuate predicted Y
     '''
+
+    print('dist_type',dist_type)
+
     # Load the model using joblib
-    best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    if dist_type == None:
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    else:
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Predict using new data
     y_pred = best_model.predict(x_values)
@@ -757,6 +952,74 @@ def regrid_data(lat_in, lon_in, lat_out, lon_out, input_data, method='linear',th
 
     return Value
 
+def set_model_colors_Gs_based():
+
+    # file path
+    model_colors = {
+                    'obs': 'black',
+                    'CMIP6':'firebrick',
+                    'CABLE':'deepskyblue', # Medlyn
+                    'CABLE-POP-CN':'deepskyblue', # Medlyn
+                    'CHTESSEL_ERA5_3':'red', # No Gs model
+                    'CHTESSEL_Ref_exp1':'red', # No Gs model
+                    'CLM5a':'deepskyblue', # Medlyn
+                    'GFDL':'green', # Leuning
+                    'JULES_GL9_withLAI':'deepskyblue', # Medlyn
+                    'JULES_test':'deepskyblue', # Medlyn
+                    'LPJ-GUESS':'yellow', # Collatz
+                    'MATSIRO':'gold',# Ball-Berry
+                    'MuSICA':'green', # Leuning
+                    'NASAEnt':'gold', # Ball-Berry
+                    'NoahMPv401':'gold', # Ball-Berry
+                    'ORC2_r6593':'gold', # Ball-Berry
+                    'ORC2_r6593_CO2':'gold', # Ball-Berry
+                    'ORC3_r7245_NEE':'pink', # Yin and Struik
+                    'ORC3_r8120':'pink', # Yin and Struik
+                    'QUINCY':'deepskyblue', # Medlyn
+                    'SDGVM':'deepskyblue' , # Medlyn
+                    'STEMMUS-SCOPE':'grey' , # unknown
+                    }
+
+    # model_colors = {
+    #                 'obs': 'black',
+    #                 'obs_cor': 'dimgrey',
+    #                 '1lin': 'lightcoral' ,
+    #                 '3km27': 'indianred',
+    #                 '6km729': 'firebrick',
+    #                 '6km729lag':'red',
+    #                 'LSTM_eb': 'coral',
+    #                 'LSTM_raw': 'pink',
+    #                 'RF_eb': 'tomato',
+    #                 'RF_raw': 'deeppink',
+    #                 'Manabe':'violet',
+    #                 'ManabeV2':'darkviolet',
+    #                 'PenmanMonteith': 'purple',
+    #                 'CABLE':'darkblue',
+    #                 'CABLE-POP-CN':'blue',
+    #                 'CHTESSEL_ERA5_3':'cornflowerblue',
+    #                 'CHTESSEL_Ref_exp1':'dodgerblue',
+    #                 'CLM5a':'deepskyblue',
+    #                 'GFDL':'c',
+    #                 'JULES_GL9_withLAI':'aquamarine',
+    #                 'JULES_test':'lightseagreen',
+    #                 'MATSIRO':'darkcyan',
+    #                 'NoahMPv401':'darkolivegreen',
+    #                 'ORC2_r6593':'forestgreen',
+    #                 'ORC2_r6593_CO2':'limegreen',
+    #                 'ORC3_r7245_NEE':'lime',
+    #                 'ORC3_r8120':'lightgreen',
+    #                 'STEMMUS-SCOPE':'yellowgreen',
+    #                 'ACASA':'yellow',
+    #                 'LPJ-GUESS':'orange',
+    #                 'MuSICA':'gold',
+    #                 'NASAEnt': 'goldenrod',
+    #                 'QUINCY':'peru',
+    #                 'SDGVM':'sandybrown',
+    #                 }
+
+
+    return model_colors
+
 def set_model_colors():
 
     # file path
@@ -765,21 +1028,22 @@ def set_model_colors():
                     'CMIP6':'firebrick',
                     'CABLE':'darkblue',
                     'CABLE-POP-CN':'blue',
-                    'CHTESSEL_ERA5_3':'cornflowerblue',
-                    'CHTESSEL_Ref_exp1':'c',
+                    'CHTESSEL_ERA5_3':'coral',
+                    'CHTESSEL_Ref_exp1':'cornflowerblue',
                     'CLM5a':'deepskyblue',
-                    'GFDL':'aquamarine',
-                    'JULES_GL9_withLAI':'lime',
+                    'GFDL':'c',
+                    'JULES_GL9':'aquamarine',
+                    'JULES_GL9_withLAI':'yellowgreen',
                     'JULES_test':'forestgreen',
                     'LPJ-GUESS':'darkolivegreen',
-                    'MATSIRO':'limegreen',
-                    'MuSICA':'yellowgreen',
-                    'NASAEnt':'yellow'  ,
-                    'NoahMPv401':'gold',
+                    'MATSIRO':'forestgreen',
+                    'MuSICA':'lime',
+                    'NASAEnt':'yellow' ,
+                    'NoahMPv401':'gold' ,
                     'ORC2_r6593':'orange',
-                    'ORC2_r6593_CO2':'red',
-                    'ORC3_r7245_NEE':'coral',
-                    'ORC3_r8120':'pink',
+                    'ORC2_r6593_CO2':'limegreen',
+                    'ORC3_r7245_NEE':'pink',
+                    'ORC3_r8120':'red',
                     'QUINCY':'deeppink',
                     'SDGVM':'violet' ,
                     'STEMMUS-SCOPE':'darkviolet' ,
@@ -835,11 +1099,11 @@ def conduct_quality_control(varname, data_input,zscore_threshold=2, gap_fill='na
     data_output = np.where(z_scores > zscore_threshold, np.nan, data_input)
 
     if gap_fill=='interpolate':
-        
+
         print('Gap filling by linear interpolation')
 
         if 'EF' not in varname:
-            
+
             # Iterate through the data to replace NaN with the average of nearby non-NaN values
             for i in range(1, len(data_output) - 1):
                 if np.isnan(data_output[i]):
@@ -860,7 +1124,7 @@ def conduct_quality_control(varname, data_input,zscore_threshold=2, gap_fill='na
                         data_output[i] = (prev_non_nan + next_non_nan) / 2.0
 
         return data_output
-    
+
     elif gap_fill=='nan':
         print('Gap filling by NaN values')
         return data_output
@@ -890,6 +1154,7 @@ def get_model_soil_moisture_info():
     SM_names      = { 'CABLE':'SoilMoist', 'CABLE-POP-CN':'SoilMoist',
                       'CHTESSEL_ERA5_3':'SoilMoist', 'CHTESSEL_Ref_exp1':'SoilMoist',
                       'CLM5a':'mrlsl', 'GFDL':'SoilMoist', 'JULES_GL9_withLAI':'SoilMoist',
+                      'JULES_GL9_withLAI':'SoilMoist',
                       'JULES_test':'SoilMoist', 'MATSIRO':'SoilMoistV', 'MuSICA':'SoilMoist',
                       'NoahMPv401':'SoilMoist', 'ORC2_r6593':'SoilMoist','ORC3_r7245_NEE':'SoilMoist',
                       'ORC3_r8120':'SoilMoist','STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
@@ -900,6 +1165,7 @@ def get_model_soil_moisture_info():
                         'CHTESSEL_ERA5_3':[0.07, 0.21, 0.72, 1.89],
                         'CHTESSEL_Ref_exp1':[0.07, 0.21, 0.72, 1.89],
                         'JULES_test': [0.1, 0.25, 0.65, 2.0],
+                        'JULES_GL9': [0.1, 0.25, 0.65, 2.0],
                         'JULES_GL9_withLAI': [0.1, 0.25, 0.65, 2.0],
                         'MATSIRO': [0.05, 0.2, 0.75, 1., 2.],
                         'NoahMPv401': [0.10, 0.30, 0.60,1.],

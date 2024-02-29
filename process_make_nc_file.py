@@ -36,7 +36,7 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
 
         # print(var_name_dict[model_name])
 
-        # if the variable exists
+        # if the variable exists in current model
         if var_name_dict[model_name] != 'None':
 
             # add the model name into output list
@@ -187,8 +187,6 @@ def make_nc_file(PLUMBER2_path, var_name_dict, model_names, site_name, output_fi
             f.close()
             var_FillValue = None
             Var_tmp       = None
-
-
 
     # Form the model names array
     model_names_array = np.array(model_out_names, dtype="S20")
@@ -490,7 +488,7 @@ def add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     return
 
-def add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file):
+def add_rain_obs_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     # Set input file path
     file_path = glob.glob(PLUMBER2_met_path +"/*"+site_name+"*.nc")
@@ -513,7 +511,7 @@ def add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     return
 
-def add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file):
+def add_short_rad_obs_to_nc_file(PLUMBER2_met_path, site_name, output_file):
 
     # Set input file path
     file_path = glob.glob(PLUMBER2_met_path +"/*"+site_name+"*.nc")
@@ -803,22 +801,22 @@ if __name__ == "__main__":
     SM_names, soil_thicknesses = get_model_soil_moisture_info()
 
     # The name of models
-    model_names   = [   "1lin","3km27", "6km729","6km729lag",
-                        "ACASA", "CABLE", "CABLE-POP-CN",
-                        "CHTESSEL_ERA5_3","CHTESSEL_Ref_exp1","CLM5a",
-                        "GFDL","JULES_GL9_withLAI","JULES_test",
-                        "LPJ-GUESS","LSTM_eb","LSTM_raw","Manabe",
-                        "ManabeV2","MATSIRO","MuSICA","NASAEnt",
-                        "NoahMPv401","ORC2_r6593" ,  "ORC2_r6593_CO2",
-                        "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
-                        "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
+    # model_names   = [   "1lin","3km27", "6km729","6km729lag",
+    #                     "ACASA", "CABLE", "CABLE-POP-CN",
+    #                     "CHTESSEL_ERA5_3","CHTESSEL_Ref_exp1","CLM5a",
+    #                     "GFDL","JULES_GL9_withLAI","JULES_test","JULES_GL9",
+    #                     "LPJ-GUESS","LSTM_eb","LSTM_raw","Manabe",
+    #                     "ManabeV2","MATSIRO","MuSICA","NASAEnt",
+    #                     "NoahMPv401","ORC2_r6593" , "ORC2_r6593_CO2",
+    #                     "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
+    #                     "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
 
-    # model_names    = ["RF_eb"] #"BEPS"
+    model_names    = ["JULES_GL9"] #"BEPS"
 
-    # The site names
+    The site names
     # all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    site_names     =['AU-Cpr']
+    site_names     = ['AU-Tum']
                     # ['AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7', 'CN-Din', 'US-WCr', 'ZM-Mon',]
                     # ['CA-NS1', 'AR-SLu']
     # 'AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7',
@@ -828,7 +826,6 @@ if __name__ == "__main__":
         output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
         zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
                              # beyond 4 standard deviation, out of 99.349%
-
 
         varname       = "TVeg"
         # key_word      = "trans"
@@ -865,34 +862,33 @@ if __name__ == "__main__":
         make_nc_file(PLUMBER2_path, gpp_dict, model_names, site_name, output_file, varname, zscore_threshold)
         gc.collect()
 
-        add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_Qh_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_NEE_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
-        add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        gc.collect()
+        # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
 
         Qle_Qh_threshold=10
         add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
         gc.collect()
 
-        add_rain_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        gc.collect()
+        # add_rain_obs_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
 
-        add_short_rad_to_nc_file(PLUMBER2_met_path, site_name, output_file)
-        gc.collect()
+        # add_short_rad_obs_to_nc_file(PLUMBER2_met_path, site_name, output_file)
+        # gc.collect()
 
-        add_GPP_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
-        gc.collect()
+        # add_GPP_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
+        # gc.collect()
 
         add_SM_top1m_to_nc_file(PLUMBER2_path,output_file,site_name,SM_names,soil_thicknesses)
         gc.collect()
-
 
 
     # SM_var_dimensions= {'CABLE':'(time, soil, y, x)', 'CABLE-POP-CN':'(time, soil, patch, land)',

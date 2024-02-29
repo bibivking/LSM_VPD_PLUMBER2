@@ -40,7 +40,7 @@ def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile
     data_in     = data_in[notNan_mask]
 
     # calculate statistics
-    Median      = pd.Series(data_in).median()
+    Mean        = pd.Series(data_in).mean()
     P25         = pd.Series(data_in).quantile(0.25)
     P75         = pd.Series(data_in).quantile(0.75)
     IQR         = P75-P25
@@ -51,14 +51,7 @@ def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile
         Minimum     = pd.Series(data_in).quantile(min_percentile) # # the lowest data point excluding any outliers.
         Maximum     = pd.Series(data_in).quantile(max_percentile) # # the largest data point excluding any outliers. Ref: https://www.simplypsychology.org/boxplots.html#:~:text=When%20reviewing%20a%20box%20plot,whiskers%20of%20the%20box%20plot.&text=For%20example%2C%20outside%201.5%20times,Q3%20%2B%201.5%20*%20IQR).
 
-    # print("Median ", Median)
-    # print("P25 ", P25)
-    # print("P75 ", P75)
-    # print("IQR ", IQR)
-    # print("Minimum ", Minimum)
-    # print("Maximum ", Maximum)
-
-    return (Median, P25, P75, Minimum, Maximum)
+    return (Mean, P25, P75, Minimum, Maximum)
 
 def get_PLUMBER2_curve_names(bounds):
 
@@ -109,7 +102,7 @@ def get_PLUMBER2_curve_names(bounds):
 
     return folder_name, file_message
 
-def calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_out_path, scenario, percent=15, var_name='Qle'):
+def calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_out_path, scenario, percent=15, var_name='Qle', dist_type=None):
 
     # Read ACCESS-CM2 land fraction to divide land and sea
     f_landsea = nc.Dataset('/g/data/fs38/publications/CMIP6/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/fx/sftlf/gn/v20191108/sftlf_fx_ACCESS-CM2_historical_r1i1p1f1_gn.nc',
@@ -201,23 +194,23 @@ def calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_out_path, scenario, percent
             print('model', model_in)
             bounds = [0,0.2]
             folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-            Qle_pred_02 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_02)
+            Qle_pred_02 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_02, dist_type=dist_type)
             print('model', model_in, np.mean(Qle_pred_02))
             bounds = [0.2,0.4]
             folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-            Qle_pred_04 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_04)
+            Qle_pred_04 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_04, dist_type=dist_type)
 
             bounds = [0.4,0.6]
             folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-            Qle_pred_06 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_06)
+            Qle_pred_06 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_06, dist_type=dist_type)
 
             bounds = [0.6,0.8]
             folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-            Qle_pred_08 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_08)
+            Qle_pred_08 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_08, dist_type=dist_type)
 
             bounds = [0.8,1.]
             folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-            Qle_pred_10 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_10)
+            Qle_pred_10 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_10, dist_type=dist_type)
             Qle_pred    = np.concatenate((Qle_pred_02,Qle_pred_04,Qle_pred_06,Qle_pred_08,Qle_pred_10))
             Qle_mean[m,c] = np.mean(Qle_pred)
 
@@ -228,7 +221,7 @@ def calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_out_path, scenario, percent
     return EF
 
 def save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name='Qle', day_time=False,
-                                region={'name':'global','lat':None, 'lon':None}):
+                                region={'name':'global','lat':None, 'lon':None}, is_filter=False):
 
     # CMIP6 model list
     CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'MIROC-ES2L',  'MPI-ESM1-2-LR',
@@ -241,7 +234,7 @@ def save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var
         # Applies the process_site function to multiple arguments in parallel using the worker processes.
         # starmap is similar to map but unpacks arguments from tuples or lists.
         pool.starmap(save_CMIP6_3hourly_each_model, [(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model, scenario,
-                                                      var_name, day_time, region) for CMIP6_model in CMIP6_model_list])
+                                                      var_name, day_time, region, is_filter) for CMIP6_model in CMIP6_model_list])
 
     # for i, CMIP6_model in enumerate(CMIP6_model_list):
     #     if day_time:
@@ -265,7 +258,7 @@ def save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var
     return
 
 def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model, scenario, var_name='Qle', day_time=False,
-                                  region={'name':'global','lat':None, 'lon':None}):
+                                  region={'name':'global','lat':None, 'lon':None}, is_filter=False):
 
     '''
     Read data from CMIP6 nc file, remove sea pixels and select region to save as 1 D data
@@ -290,33 +283,39 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     if day_time:
         SWdown_tmp  = f_cmip.variables['SWdown'][:]
         # mask out ocean and night time
-        Qle_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), Qle_tmp, np.nan)
-        VPD_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), VPD_tmp, np.nan)
-        EF_tmp      = np.where((landsea_3d==1) & (SWdown_tmp>=5), EF_tmp, np.nan)
+        if is_filter:
+            Qle_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5) 
+                                   & (VPD_tmp>0.001) & (VPD_tmp<10), Qle_tmp, np.nan)
+            VPD_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5) 
+                                   & (VPD_tmp>0.001) & (VPD_tmp<10), VPD_tmp, np.nan)
+            EF_tmp      = np.where( (landsea_3d==1) & (SWdown_tmp>=5) 
+                                   & (VPD_tmp>0.001) & (VPD_tmp<10), EF_tmp, np.nan)
+        else:
+            Qle_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), Qle_tmp, np.nan)
+            VPD_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), VPD_tmp, np.nan)
+            EF_tmp      = np.where((landsea_3d==1) & (SWdown_tmp>=5), EF_tmp, np.nan)
     else:
         # mask out ocean
-        Qle_tmp     = np.where(landsea_3d==1, Qle_tmp, np.nan)
-        VPD_tmp     = np.where(landsea_3d==1, VPD_tmp, np.nan)
-        EF_tmp      = np.where(landsea_3d==1, EF_tmp, np.nan)
+        if is_filter:
+            Qle_tmp     = np.where((landsea_3d==1) & (VPD_tmp>0.001) & (VPD_tmp<10), Qle_tmp, np.nan)
+            VPD_tmp     = np.where((landsea_3d==1) & (VPD_tmp>0.001) & (VPD_tmp<10), VPD_tmp, np.nan)
+            EF_tmp      = np.where((landsea_3d==1) & (VPD_tmp>0.001) & (VPD_tmp<10), EF_tmp, np.nan)
+        else:
+            Qle_tmp     = np.where(landsea_3d==1, Qle_tmp, np.nan)
+            VPD_tmp     = np.where(landsea_3d==1, VPD_tmp, np.nan)
+            EF_tmp      = np.where(landsea_3d==1, EF_tmp, np.nan)
 
-    # Select region 
+    # Select region
     if region['name'] != 'global':
         print(CMIP6_model)
         # get lat and lon
         Lat_tmp  = f_cmip.variables['lat'][:]
         Lon_tmp  = f_cmip.variables['lon'][:]
         lon_2d, lat_2d = np.meshgrid(Lon_tmp, Lat_tmp)
-        
+
         lon_3d  = np.repeat(lon_2d[np.newaxis, :, :], ntime, axis=0)
         lat_3d  = np.repeat(lat_2d[np.newaxis, :, :], ntime, axis=0)
-        print('np.shape(lon_3d)',np.shape(lon_3d))
-        print('np.shape(lat_3d)',np.shape(lat_3d))
-        print('lon_3d[0,:,:]==lon_3d[1,:,:]',lon_3d[0,:,:]==lon_3d[1,:,:])
-        print('lat_3d[0,:,:]==lat_3d[1,:,:]',lat_3d[0,:,:]==lat_3d[1,:,:])
 
-        # lat_mask = (Lat_tmp >= region['lat'][0]) & (Lat_tmp <= region['lat'][1])
-        # lon_mask = (Lon_tmp >= region['lon'][0]) & (Lon_tmp <= region['lon'][1])
-        
         # select region
         Qle_tmp = np.where(np.all([lat_3d >= region['lat'][0],
                                    lat_3d <= region['lat'][1],
@@ -333,9 +332,6 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
                                    lon_3d >= region['lon'][0],
                                    lon_3d <= region['lon'][1]],axis=0),
                                    EF_tmp, np.nan)
-        
-        print('np.shape(Qle_tmp)',np.shape(Qle_tmp))
-        print('Qle_tmp',Qle_tmp)
 
     # To 1D
     Qle_1d     = Qle_tmp.flatten()
@@ -347,7 +343,6 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     EF_tmp      = None
     landsea_tmp = None
     landsea_3d  = None
-
 
     # Remove NaN values
     mask_all   = (~np.isnan(Qle_1d)) & (~np.isnan(VPD_1d)) & (~np.isnan(EF_1d))
@@ -366,24 +361,56 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     print('Check Qle_1d, VPD_1d, EF_1d', var_tmp)
 
     f_cmip.close()
+    
+    if is_filter:
+        message = 'filtered_by_VPD_'
+    else:
+        message = ''
 
     if day_time:
-        var_tmp.to_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+        var_tmp.to_csv(f'{CMIP6_txt_path}/CMIP6_DT_{message}{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
     else:
-        var_tmp.to_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+        var_tmp.to_csv(f'{CMIP6_txt_path}/CMIP6_{message}{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
 
     return
 
-def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name='Qle',
-                                    day_time=False, region={'name':'global','lat':None, 'lon':None}):
+def filter_CMIP6_by_VPD_parallel(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_models, scenario, var_name='Qle', day_time=False,
+                                  region={'name':'global','lat':None, 'lon':None}):
+
+    with multiprocessing.Pool() as pool:
+        pool.starmap(filter_each_CMIP6_by_VPD,
+                     [(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model, scenario, var_name, day_time, region)
+                     for CMIP6_model in CMIP6_models])
+
+    return
+
+def filter_each_CMIP6_by_VPD(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model, scenario, var_name='Qle', day_time=False,
+                                  region={'name':'global','lat':None, 'lon':None}):
+
+    if day_time:
+        var_tmp = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+    else:
+        var_tmp = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+
+    VPD_mask = (var_tmp['VPD'].values >= 0.001) & (var_tmp['VPD'].values <= 10)
+    # VPD_mask  = (var_tmp['VPD'].values <= 10)
+    var_input = var_tmp[VPD_mask]
+
+    if day_time:
+        var_input.to_csv(f'{CMIP6_txt_path}/CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+    else:
+        var_input.to_csv(f'{CMIP6_txt_path}/CMIP6_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv')
+
+    return
+
+def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name='Qle', day_time=False,
+                                    region={'name':'global','lat':None, 'lon':None}, dist_type=None):
+
     # Read data
     if day_time:
         var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
     else:
         var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
-
-    print('model', model_in)
-    print('Check var_output', var_output)
 
     # divide Qle_1d, VPD_1d and EF_1d by EF_1d values
     EF         = var_output['EF'][:]
@@ -419,42 +446,50 @@ def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model
 
     bounds = [0,0.2]
     folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-    Qle_pred_02 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_02)
+    Qle_pred_02 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_02, dist_type=dist_type)
 
     bounds = [0.2,0.4]
     folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-    Qle_pred_04 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_04)
+    Qle_pred_04 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_04, dist_type=dist_type)
 
     bounds = [0.4,0.6]
     folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-    Qle_pred_06 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_06)
+    Qle_pred_06 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_06, dist_type=dist_type)
 
     bounds = [0.6,0.8]
     folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-    Qle_pred_08 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_08)
+    Qle_pred_08 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_08, dist_type=dist_type)
 
     bounds = [0.8,1.]
     folder_name, file_message = get_PLUMBER2_curve_names(bounds)
-    Qle_pred_10 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_10)
+    Qle_pred_10 = read_best_GAM_model(var_name, model_in, folder_name, file_message, VPD_10, dist_type=dist_type)
+
     if model_in == 'CABLE':
         Qle_pred[model_in] = np.concatenate((Qle_pred_02,Qle_pred_04,Qle_pred_06,Qle_pred_08,Qle_pred_10))
     else:
         Qle_pred =  pd.DataFrame(np.concatenate((Qle_pred_02,Qle_pred_04,Qle_pred_06,Qle_pred_08,Qle_pred_10)),
                     columns=[model_in])
     if day_time:
-        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        if dist_type == None:
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        else:
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
     else:
-        Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        if dist_type == None:
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+        else:
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
 
     gc.collect()
 
     return
 
-def save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name='Qle',  day_time=False, region={'name':'global','lat':None, 'lon':None}):
+def save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name='Qle',  day_time=False,
+    region={'name':'global','lat':None, 'lon':None}, dist_type=None):
 
     with multiprocessing.Pool() as pool:
         pool.starmap(calc_predicted_CMIP6_each_model,
-                     [(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name, day_time, region)
+                     [(CMIP6_txt_path, scenario, CMIP6_model, model_in, var_name, day_time, region, dist_type)
                      for model_in in model_list])
     return
 
@@ -495,43 +530,53 @@ if __name__ == "__main__":
     CMIP6_da_out_path = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_daily/"
     CMIP6_3h_out_path = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
     CMIP6_txt_path    = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
-    scenarios         = ['ssp245'] # ,
-    # scenarios         = ['historical','ssp126','ssp245','ssp370']
+
+
+    # Set options
+    scenarios         = ['historical','ssp245'] # ['historical','ssp126','ssp245','ssp370']
     percent           = 15
     var_name          = 'Qle'
     day_time          = True
-    region            = {'name':'global', 'lat':None, 'lon':None}
-
+    region_name       = 'west_EU' # 'west_EU', 'north_Am'
+    dist_type         = 'Poisson' # 'Linear', None
+    is_filter         = True
+    
+    if region_name == 'global':
+        region = {'name':'global', 'lat':None, 'lon':None}
+    elif region_name == 'east_AU':
+        region = {'name':'east_AU', 'lat':[-44.5,-10], 'lon':[129,155]}
+    elif region_name == 'west_EU':
+        region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+    elif region_name == 'north_Am':
+        region = {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
 
     # Get model lists
     site_names, IGBP_types, clim_types, model_names = load_default_list()
-    model_list = model_names['model_select']
+    model_list = model_names['model_select_new']
 
     for scenario in scenarios:
 
         # Processing daily
         # calculate_LSM_lead_CMIP6_uncertainty_daily(CMIP6_da_out_path, scenario, percent=percent, var_name=var_name)
-
+        
         # Processing 3 hourly
-        ## east AU
-        #region = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
+        save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region, is_filter=is_filter)
 
-        # west EU
-        region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+        # Exclude data point with VPD >20 or VPD<0.05
+        # CMIP6_models  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2',]
+        # ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2',]
+        # ['EC-Earth3', 'KACE-1-0-G', 'MIROC6', 'MIROC-ES2L']
+        # ['MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+        #
+        # filter_CMIP6_by_VPD_parallel(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_models, scenario, var_name=var_name, day_time=day_time, region=region)
 
-        # # North America
-        # region = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
-
-        save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region)
-
-        # Calculate predicted CMIP6
+        # # Calculate predicted CMIP6
         # CMIP6_model  =  ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
         #                  'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
-
-        # save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name=var_name, region=region)
+        # save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name=var_name, region=region, dist_type=dist_type)
 
         # Calculate metrics of the predicted CMIP6
         # CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
         #                     'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
         # model_in    = 'CABLE-POP-CN'
-        # calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile')
+        # calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile', dist_type=dist_type)

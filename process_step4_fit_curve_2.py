@@ -554,19 +554,19 @@ if __name__ == "__main__":
     # method         = 'CRV_bins'
     dist_type      = 'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
 
-    # 0 < EF < 0.2
-    bounds         = [0,0.2] #30
-    folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-                                                standardize=standardize, country_code=country_code,
-                                                selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-                                                LAI_range=LAI_range, clarify_site=clarify_site) #
-    file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-    write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
-                bounds=bounds, day_time=day_time, clarify_site=clarify_site,
-                standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type,
-                models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
-    gc.collect()
+    # # 0 < EF < 0.2
+    # bounds         = [0,0.2] #30
+    # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+    #                                             standardize=standardize, country_code=country_code,
+    #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+    #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+    # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+    # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+    #             bounds=bounds, day_time=day_time, clarify_site=clarify_site,
+    #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type,
+    #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+    #             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+    # gc.collect()
 
     # # 0.2 < EF < 0.4
     # bounds         = [0.2,0.4] #30
@@ -583,19 +583,19 @@ if __name__ == "__main__":
     # gc.collect()
 
 
-    # # 0.4 < EF < 0.6
-    # bounds         = [0.4,0.6] #30
-    # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-    #                                             standardize=standardize, country_code=country_code,
-    #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-    #                                             LAI_range=LAI_range, clarify_site=clarify_site)
-    # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-    # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
-    #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method,
-    #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type,
-    #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
-    #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
-    # gc.collect()
+    # 0.4 < EF < 0.6
+    bounds         = [0.4,0.6] #30
+    folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                standardize=standardize, country_code=country_code,
+                                                selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                LAI_range=LAI_range, clarify_site=clarify_site)
+    file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+    write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method,
+                standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type,
+                models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+    gc.collect()
 
 
     # # 0.6 < EF < 0.8

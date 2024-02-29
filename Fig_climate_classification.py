@@ -215,7 +215,7 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
                 [178, 178, 178, 0.4], [102, 102, 102, 0.4] ]
     custom_cmap = ListedColormap(colors)
 
-    ax.coastlines(resolution="50m",linewidth=0.5)
+    ax.coastlines(resolution="50m",linewidth=0.3)
     # ax.add_feature(states, linewidth=.5, edgecolor="black")
     clevs = np.arange(-0.5,30.5,1)
     extent=(-180, 180, -90, 90)
@@ -240,11 +240,11 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
 
     cbar.ax.tick_params(labelsize=6, labelrotation=45)
 
-    reg_lats      = [  [-44.5,-22],         # East AU
+    reg_lats      = [  [-44.5,-10],    # East AU
                         [35,60],       # West EU
-                        [25,58]    ]   # North America 
+                        [25,52]    ]   # North America 
 
-    reg_lons      = [  [138,155],
+    reg_lons      = [  [129,155], # [138,155],
                         [-12,22],
                         [-125,-65]    ]
     
@@ -252,12 +252,19 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
     for i in np.arange(3):
         ax.add_patch(Polygon([[reg_lons[i][0], reg_lats[i][0]], [reg_lons[i][1], reg_lats[i][0]],
                                     [reg_lons[i][1], reg_lats[i][1]], [reg_lons[i][0], reg_lats[i][1]]],
-                                    closed=True,color=almost_black, fill=False,linewidth=0.8))
+                                    closed=True, color=almost_black, fill=False, linewidth=0.5))
 
     # Adding lat and lon
     lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
+
+    remove_site = ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']
+
     for site_name in site_names:
-        ax.plot(lon_dict[site_name], lat_dict[site_name], color='red', marker='s', markersize=0.2, transform=ccrs.PlateCarree())
+        if site_name in remove_site:
+            ax.plot(lon_dict[site_name], lat_dict[site_name], fillstyle='none', color='pink', marker='o', markersize=0.2, transform=ccrs.PlateCarree())
+        else:
+            ax.plot(lon_dict[site_name], lat_dict[site_name], fillstyle='none', color='black', marker='o', markersize=0.2, transform=ccrs.PlateCarree())
 
     plt.savefig('./plots/climate_classification.png',dpi=300)
     
@@ -277,12 +284,12 @@ if __name__ == '__main__':
     clim_class_path_low_res = "/g/data/w97/mm3972/data/Köppen-Geiger_climate_classification/Beck_KG_V1/Beck_KG_V1_present_0p5.tif"
     clim_class_out     = "/g/data/w97/mm3972/data/Köppen-Geiger_climate_classification/Beck_KG_V1/Beck_KG_V1_present_0p0083.nc"
 
-    # The name of models
-    model_names   = [ "CABLE","3km27","CABLE-POP-CN","CHTESSEL_Ref_exp1",
-                      "GFDL","MATSIRO","NASAEnt","ORCHIDEE_tag2.1",
-                      "QUINCY","ACASA","CHTESSEL_ERA5_3","CLM5a",
-                      "JULES_GL9","LSTM_raw","MuSICA","NoahMPv401","ORCHIDEE_tag3_2",
-                      "RF","STEMMUS-SCOPE","LPJ-GUESS","SDGVM", "BEPS",]
+    # # The name of models
+    # model_names   = [ "CABLE","3km27","CABLE-POP-CN","CHTESSEL_Ref_exp1",
+    #                   "GFDL","MATSIRO","NASAEnt","ORCHIDEE_tag2.1",
+    #                   "QUINCY","ACASA","CHTESSEL_ERA5_3","CLM5a",
+    #                   "JULES_GL9","LSTM_raw","MuSICA","NoahMPv401","ORCHIDEE_tag3_2",
+    #                   "RF","STEMMUS-SCOPE","LPJ-GUESS","SDGVM", "BEPS",]
 
     # The site names
     all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))

@@ -70,17 +70,17 @@ def write_filter_gs_parallel(site_names, model_names, zscore_threshold=4):
                                                     for site_name in site_names for model_name in model_names])
     return
 
-def write_gs_to_spatial_land_days(site_names, model_names,filter=False):
+def write_gs_to_spatial_land_days(site_names, model_names, filter=False):
 
     """Parallelized version of the function."""
 
     var_input = pd.read_csv(f'./txt/process1_output/Qle_all_sites.csv', na_values=[''], usecols=[
-         'time', 'CABLE_EF', 'CABLE-POP-CN_EF', 'CHTESSEL_ERA5_3_EF', 'CHTESSEL_Ref_exp1_EF', 
-         'CLM5a_EF', 'GFDL_EF', 'JULES_GL9_withLAI_EF', 'JULES_test_EF', 'MATSIRO_EF', 'MuSICA_EF', 
-         'NASAEnt_EF', 'NoahMPv401_EF', 'ORC2_r6593_EF', 'ORC2_r6593_CO2_EF', 'ORC3_r7245_NEE_EF', 
-         'ORC3_r8120_EF', 'QUINCY_EF', 'STEMMUS-SCOPE_EF', 'obs_EF', 'VPD', 'obs_Tair', 'obs_Qair',
-         'obs_Precip','obs_SWdown', 'NoahMPv401_greenness','month','hour','site_name','IGBP_type',
-         'climate_type', 'half_hrs_after_precip'])
+         'time', 'CABLE_EF', 'CABLE-POP-CN_EF', 'CHTESSEL_Ref_exp1_EF', 
+         'CLM5a_EF', 'GFDL_EF', 'JULES_GL9_EF', 'JULES_GL9_withLAI_EF', 'MATSIRO_EF', 'MuSICA_EF', 
+         'NASAEnt_EF', 'NoahMPv401_EF', 'ORC2_r6593_EF', 'ORC3_r8120_EF', 'QUINCY_EF', 
+         'STEMMUS-SCOPE_EF', 'obs_EF', 'VPD', 'obs_Tair', 'obs_Qair',
+         'obs_Precip','obs_SWdown', 'month', 'hour', 'site_name','IGBP_type',
+         'climate_type'])
     
     for model_in in model_names:
         if model_in == 'obs':
@@ -89,7 +89,7 @@ def write_gs_to_spatial_land_days(site_names, model_names,filter=False):
             header = 'model_'
         var_input[header+model_in]  = np.nan
         var_input[model_in+'_VPDl'] = np.nan
-    var_input['obs_Wind']       = np.nan
+    var_input['obs_Wind'] = np.nan
 
     for site_name in site_names:
 
@@ -141,7 +141,8 @@ if __name__ == "__main__":
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
     # # === Together ===
-    # write_filter_gs_parallel(site_names, model_names['model_select'], zscore_threshold=zscore_threshold)
+    # zscore_threshold = None
+    # write_filter_gs_parallel(site_names, model_names['model_select_new'], zscore_threshold=zscore_threshold)
     
     filter = True
-    write_gs_to_spatial_land_days(site_names, model_names['model_select'],filter=filter)
+    write_gs_to_spatial_land_days(site_names, model_names['model_select_new'],filter=filter)

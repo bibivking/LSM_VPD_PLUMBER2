@@ -542,7 +542,6 @@ if __name__ == "__main__":
     # The site names
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
-    # site_names      = ["AU-How","AU-Tum"]
 
     var_name          = 'Qle' #'Qle'
     add_LAI           = False
