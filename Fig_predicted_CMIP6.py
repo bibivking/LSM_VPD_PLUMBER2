@@ -173,7 +173,7 @@ def plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios
 
     return
 
-def plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, scenario,
+def plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
                                      region={'name':'global','lat':None, 'lon':None}, dist_type=None):
 
     # ============ Setting up plot ============
@@ -214,22 +214,24 @@ def plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, scena
 
     for i, model_in in enumerate(model_list):
 
-        if dist_type!=None:
-            file_in = f'{CMIP6_txt_path}/refuse/predicted_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}_{dist_type}_no_head.csv'
-        else:
-            file_in = f'{CMIP6_txt_path}/refuse/predicted_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}.csv'
+        for CMIP6_model in CMIP6_models:
+            
+            if dist_type!=None:
+                file_in = f'{CMIP6_txt_path}/predicted_CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}_no_head.csv'
+            else:
+                file_in = f'{CMIP6_txt_path}/predicted_CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv'
 
-        if model_in == 'CABLE':
-            var_tmp           = pd.read_csv(file_in, header=None, names=['index','CMIP6', model_in], na_values=[''], usecols=[1, 2])#,nrows=200)
-        else:
-            var_tmp[model_in] = pd.read_csv(file_in, header=None, names=['index', model_in], na_values=[''], usecols=[1])#,nrows=200)
+            if model_in == 'CABLE':
+                var_tmp           = pd.read_csv(file_in, header=None, names=['index','CMIP6', model_in], na_values=[''], usecols=[2])#,nrows=200)
+            else:
+                var_tmp[model_in] = pd.read_csv(file_in, header=None, names=['index', model_in], na_values=[''], usecols=[1])#,nrows=200)
 
 
     for model_in in model_list:
-        # if model_in != 'obs':
-        #     var_input[model_in] = var_input[model_in] - var_input['obs']
-        var_temp          = var_tmp[model_in].values - var_tmp['CMIP6'].values
-        var_tmp[model_in] = np.where(np.abs(var_temp)<1000., var_temp, np.nan)
+        if model_in != 'obs':
+            var_tmp[model_in] = var_tmp[model_in].values - var_tmp['obs'].values
+            # var_temp          = var_tmp[model_in].values - var_tmp['CMIP6'].values
+            var_tmp[model_in] = np.where(np.abs(var_tmp[model_in].values)<1000., var_tmp[model_in].values, np.nan)
 
     for model_in in model_list:
         if model_in == 'CABLE':
@@ -238,7 +240,7 @@ def plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, scena
         else:
             var_t             = pd.DataFrame(var_tmp[model_in].values,columns=['diff'])
             var_t['model_in'] = model_in
-            var_diff          = pd.concat([var_diff, var_t], ignore_index=True) 
+            var_diff          = pd.concat([var_diff, var_t], ignore_index=True)
             var_t             = None
         # var_diff = var_tmp.pop("CMIP6")
 
@@ -252,13 +254,22 @@ def plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, scena
                                x0='model_in'))#,ax=ax)
     # ax.set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
     # ax.set_xlabel("Land surface models", fontsize=12)
-    
+
+    # Add labels and legend (replace placeholders with actual labels)
+    plot.update_layout(
+        xaxis_title="Land surface models",
+        yaxis_title="Latent Heat (W m^-2)",
+        legend_title="Model",
+        legend_title_textfont_size=14,
+    )
+
     if dist_type !=None:
         plot.write_image(f"./plots/plot_predicted_CMIP6_violin_{region['name']}_{dist_type}.png")
+        # plot.savefig(f"./plots/plot_predicted_CMIP6_violin_{region['name']}_{dist_type}.png")
     else:
         plot.write_image(f"./plots/plot_predicted_CMIP6_violin_{region['name']}.png")
+        # plot.savefig(f"./plots/plot_predicted_CMIP6_violin_{region['name']}.png")
 
-    
     # # Method 2:
     # import altair as alt
     # from vega_datasets import data
@@ -379,16 +390,16 @@ if __name__ == "__main__":
     # Get model lists
     CMIP6_txt_path    = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
     site_names, IGBP_types, clim_types, model_names = load_default_list()
-    model_list = model_names['model_select']
+    model_list = model_names['model_select_new']
     scenarios  = ['historical','ssp245']
     var_name   = 'Qle'
-    dist_type  = "Poisson" #None # 'Poisson'
+    dist_type  = "Gamma" #None # 'Poisson'
 
     model_list.append('CMIP6')
 
-    region     = {'name':'global', 'lat':None, 'lon':None}
+    # region     = {'name':'global', 'lat':None, 'lon':None}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region, dist_type=dist_type)
-    # region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+    region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region)
     # region     = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region)
@@ -400,8 +411,8 @@ if __name__ == "__main__":
                      'MRI-ESM2-0']
 
     scenario      = 'ssp245'
-    model_list    = ['CABLE','CABLE-POP-CN']
-    plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, scenario,
+    model_list    = model_names['model_select_new']
+    plot_predicted_CMIP6_diff_violin(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
                                      region=region, dist_type=dist_type)
 
     # region_list = ['global','east_AU','west_EU','north_Am',]
