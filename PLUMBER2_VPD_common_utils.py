@@ -113,6 +113,8 @@ def get_model_out_list(var_name):
     f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
     if var_name == 'Gs':
         model_in_list = f.variables['Qle_models']
+    elif var_name == 'nonTVeg':
+        model_in_list = f.variables['TVeg_models']
     else:
         model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
@@ -322,6 +324,12 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
 
 def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
 
+    print(model_out_name, 'x_top',x_top)
+
+    # In case no VPD bin has data points >= VPD_num_threshold
+    if np.isnan(x_top):
+        return np.nan, np.nan, np.nan
+
     # Remove nan values
     x_values_tmp = copy.deepcopy(x_values)
     y_values_tmp = copy.deepcopy(y_values)
@@ -342,10 +350,13 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     x_series   = np.arange(x_bot, x_top, x_interval)
 
     # Define grid search parameters
+    # # GAM parameter set 6 for Gs QUINCY ENF EBF:
+    # lam        = np.logspace(-3, 3, 21)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 15, 1)   # Number of splines per smooth term range
 
-    # GAM parameter set 5:
+    # GAM parameter set 5 -- final for sample_larger_200:
     lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(4, 11, 1)   # Number of splines per smooth term range
+    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
 
     # # GAM parameter set 5:
     # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
@@ -395,10 +406,13 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
         elif dist_type=='Poisson':
             gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
         elif dist_type=='Gamma':
-            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
 
-            # process4-4
-            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            # concave assumption
+            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+            # no concave assumption
+            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
 
             # process4-3
             # for n_spline in n_splines:
@@ -474,119 +488,6 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
     return x_series, y_pred, y_int
 
-
-def fit_GAM_complex_veg_lai(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
-
-    # Remove nan values
-    x_values_tmp = copy.deepcopy(x_values)
-    y_values_tmp = copy.deepcopy(y_values)
-
-    # copy.deepcopy: creates a complete, independent copy of an object
-    # and its entire internal structure, including nested objects and any
-    # references they contain.
-
-    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
-    x_values    = x_values_tmp[nonnan_mask]
-    y_values    = y_values_tmp[nonnan_mask]
-
-    if len(x_values) <= 10:
-        print("Alarm! Not enought sample")
-        return np.nan, np.nan, np.nan
-
-    # Set x_series
-    x_max      = np.max(x_values)
-    x_series   = np.arange(x_bot, x_max, x_interval)
-
-    # Define grid search parameters
-
-    # GAM parameter set 5:
-    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(4, 11, 1)   # Number of splines per smooth term range
-
-    # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
-    # n_splines: Number of spline basis functions (7 values between 3 and 9).
-
-    # Set up KFold cross-validation
-    kf = KFold(n_splits=5, shuffle=True, random_state=42)
-
-    # Initialize empty lists for storing results
-    models = []
-    scores = []
-
-    # Perform grid search
-    for train_index, test_index in kf.split(x_values):
-        X_train, X_test = x_values[train_index], x_values[test_index]
-        y_train, y_test = y_values[train_index], y_values[test_index]
-
-        X_train = X_train.reshape(-1, 1)
-
-        print('X_train.shape', X_train.shape)
-        print('X_test.shape', X_test.shape)
-        print('y_train.shape', y_train.shape)
-        print('y_test.shape', y_test.shape)
-
-        # Define and fit GAM model
-        if dist_type=='Linear':
-            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
-        elif dist_type=='Poisson':
-            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
-        elif dist_type=='Gamma':
-            gam = GammaGAM(s(0)).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
-
-        models.append(gam)
-        # Evaluate model performance (replace with your preferred metric)
-        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
-        scores.append(score)
-
-    # Find the best model based on average score
-    # For gam.score which calcuate deviance, the best model's score is closet to 0
-    best_model_index = np.argmin(np.abs(scores))
-    best_model       = models[best_model_index]
-    best_score       = scores[best_model_index]
-
-    print('scores',scores)
-    print('best_score',best_score)
-    print('best_model_index',best_model_index)
-    print('best_model',best_model)
-    print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
-
-    # Save the best model using joblib
-    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
-
-    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
-    y_pred       = best_model.predict(x_series)
-
-    # Note that The code calculates 95% confidence intervals, but remember that confidence
-    #           intervals should generally be calculated on the actual test data points,
-    #           not a new set of equally spaced values like x_series
-    y_int        = best_model.confidence_intervals(x_series, width=.95)
-
-    print('x_series',x_series)
-    print('y_pred',y_pred)
-    print('y_int',y_int)
-
-    # Create the scatter plot for X and Y
-    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
-
-    # Plot the line for X_predict and Y_predict
-    plt.plot(x_series, y_pred, color='red', label='Predicted line')
-    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
-
-    # Add labels and title
-    plt.xlabel('VPD')
-    plt.ylabel('Qle')
-    plt.title('Check the GAM fitted curve')
-    plt.xlim(0, 10)  # Set x-axis limits
-    plt.ylim(0, 800)  # Set y-axis limits
-
-    # Add legend
-    plt.legend()
-
-    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
-
-    return x_series, y_pred, y_int
-
-
 def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None):
     '''
     Read the fitted GAM curve and based on x_values to calcuate predicted Y
@@ -596,9 +497,9 @@ def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_v
 
     # Load the model using joblib
     if dist_type == None:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
     else:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Predict using new data
     y_pred = best_model.predict(x_values)
@@ -664,7 +565,7 @@ def get_key_words(varname):
     match varname:
         case 'TVeg':
             key_word      = "trans"
-            key_word_not  = ["evap","transmission","pedo","electron",]
+            key_word_not  = ["evap","transmission","pedo","electron","stomatal","elasticity"]
         case 'Qle':
             key_word      = 'latent'
             key_word_not  = ['None']
@@ -964,6 +865,7 @@ def set_model_colors_Gs_based():
                     'CHTESSEL_Ref_exp1':'red', # No Gs model
                     'CLM5a':'deepskyblue', # Medlyn
                     'GFDL':'green', # Leuning
+                    'JULES_GL9':'deepskyblue', # Medlyn
                     'JULES_GL9_withLAI':'deepskyblue', # Medlyn
                     'JULES_test':'deepskyblue', # Medlyn
                     'LPJ-GUESS':'yellow', # Collatz
@@ -1038,15 +940,15 @@ def set_model_colors():
                     'LPJ-GUESS':'darkolivegreen',
                     'MATSIRO':'forestgreen',
                     'MuSICA':'lime',
-                    'NASAEnt':'yellow' ,
-                    'NoahMPv401':'gold' ,
-                    'ORC2_r6593':'orange',
-                    'ORC2_r6593_CO2':'limegreen',
-                    'ORC3_r7245_NEE':'pink',
-                    'ORC3_r8120':'red',
-                    'QUINCY':'deeppink',
-                    'SDGVM':'violet' ,
-                    'STEMMUS-SCOPE':'darkviolet' ,
+                    'NASAEnt':'gold' , # 'yellow'
+                    'NoahMPv401':'orange' ,
+                    'ORC2_r6593':'pink',#'limegreen'
+                    'ORC2_r6593_CO2':'pink',
+                    'ORC3_r7245_NEE':'red',
+                    'ORC3_r8120':'deeppink',
+                    'QUINCY':'mediumorchid',
+                    'SDGVM': 'darkviolet',
+                    'STEMMUS-SCOPE':'purple',# ,
                     }
 
     # model_colors = {
@@ -1216,9 +1118,9 @@ def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
     data = data.ravel()
 
     boot_indexes = bootstrap_ids(data, n_samples)
-    print('boot_indexes',boot_indexes)
+    # print('boot_indexes',boot_indexes)
     stat         = np.asarray([statfunction(data[_ids]) for _ids in boot_indexes])
-    print('stat',stat)
+    # print('stat',stat)
     stat.sort(axis=0)
 
     return stat[nvals]
