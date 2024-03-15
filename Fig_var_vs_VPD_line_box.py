@@ -197,8 +197,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                 # add error range of obs (I think top and bot boundary should be set to 1 sigema)
                 fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
                                         color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
-
-            elif np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+            
+            elif np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
                 if model_out_name == 'obs':
                     lw=2.5
                 else:
@@ -269,6 +269,18 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
             ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
             ax[0,1].set_ylim(0,100)
+    elif 'TVeg' in var_name:
+        # ax[0,0].set_xlim(-0.1,10.5)
+        ax[0,0].set_xlim(-0.1,5.5)
+        ax[0,0].set_xticks([0,1,2,3,4,5])
+        ax[0,0].set_xticklabels(['0','1','2', '3','4','5'],fontsize=12)
+        ax[0,0].set_ylim(0,350)
+
+        # ax[0,1].set_xlim(-0.1,10.5)
+        ax[0,1].set_xlim(-0.1,7.5)
+        ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
+        ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
+        ax[0,1].set_ylim(0,100)
 
     # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
@@ -462,8 +474,9 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
                 # add error range of obs (I think top and bot boundary should be set to 1 sigema)
                 fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
                                         color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
-
-            elif np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+            
+            elif np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # elif np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
                 if model_out_name == 'obs':
                     lw=2.5
                 else:
@@ -518,19 +531,15 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,0].set_xticks([0,1,2,3,4,5,6.,7.])
     ax[0,0].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,0].set_xlim(-0.1,7.1)
-
-    if var_name == 'Qle':
-        if time_scale == 'daily':
-            ax[0,0].set_ylim(0,100)
-        elif time_scale == 'hourly':
-            ax[0,0].set_ylim(0,300)
-
+    ax[0,0].set_ylim(0,300)
+    
     # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
     # ax[0,1].set_xlim(-0.1,5.1)
     ax[0,1].set_xticks([0,1,2,3,4,5,6.,7.])
     ax[0,1].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,1].set_xlim(-0.1,7.1)
+    ax[0,1].set_ylim(0,300)
 
     if var_name == 'Qle':
         if time_scale == 'daily':
@@ -545,6 +554,7 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,2].set_xticks([0,1,2,3,4,5,6.,7.])
     ax[0,2].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,2].set_xlim(-0.1,7.1)
+    ax[0,2].set_ylim(0,300)
 
     if var_name == 'Qle':
         if time_scale == 'daily':
@@ -765,8 +775,9 @@ def plot_var_VPD_uncertainty_veg_LAI_eight(var_name=None, day_time=False, energy
                 # add error range of obs (I think top and bot boundary should be set to 1 sigema)
                 fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
                                         color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
-
-            if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+            
+            elif np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
                 if model_out_name == 'obs':
                     lw=2.5
                 else:
@@ -1039,8 +1050,9 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                 # add error range of obs (I think top and bot boundary should be set to 1 sigema)
                 fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
                                         color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
-
-            elif np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+            
+            elif np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # elif np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
                 if model_out_name == 'obs':
                     lw=2.5
                 else:
@@ -1255,7 +1267,8 @@ def plot_var_VPD_uncertainty_veg_LAI(var_name=None, day_time=False, energy_cor=F
             value          = value[above_thres]
 
             # Plot if the data point > num_threshold
-            if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
+            if np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # if np.sum(var[model_out_name+'_vpd_num']-num_threshold) > 0:
                 if model_out_name == 'obs':
                     lw=2
                 else:
@@ -1486,7 +1499,8 @@ def plot_var_VPD_line_box(bin_by=None, window_size=11, order=3,
             value          = value[above_thres]
 
             # Plot if the data point > 200
-            if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
+            if np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
                 if model_out_name == 'obs':
                     lw=3
                 else:
@@ -1790,7 +1804,8 @@ def plot_var_VPD_line_box_three_col(bin_by=None, window_size=11, order=3,
             value          = value[above_thres]
 
             # Plot if the data point > 200
-            if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
+            if np.any(var[model_out_name+'_vpd_num'].values > num_threshold):
+            # if np.sum(var[model_out_name+'_vpd_num']-200) > 0:
 
                 plot = ax[row,col].plot(var_vpd_series, value, lw=2.0, color=line_color,
                                         alpha=0.8, label=change_model_name(model_out_name)) #edgecolor='none', c='red' .rolling(window=10).mean()
@@ -1888,28 +1903,28 @@ if __name__ == "__main__":
 
 
     # =========== plot_var_VPD_uncertainty ===========
-    day_time    = True
-    energy_cor  = False
-    time_scale  = 'hourly'
-    country_code= None
-    selected_by = 'EF_model'
-    veg_fraction= None#[0.7,1.]
-    standardize = None
-    uncertain_type='UCRTN_bootstrap'
-    # method      = 'CRV_bins'
-    method       = 'CRV_fit_GAM_complex'
-    dist_type    = 'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
+    day_time      = True
+    energy_cor    = False
+    time_scale    = 'hourly'
+    country_code  = None
+    selected_by   = 'EF_model'
+    veg_fraction  = None#[0.7,1.]
+    standardize   = None
+    uncertain_type= 'UCRTN_bootstrap'
+    method        = 'CRV_bins'
+    # method        = 'CRV_fit_GAM_complex'
+    dist_type     = None #'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
 
-    IGBP_type   = None
-    clim_type   = None
-    clarify_site={'opt': True,
+    IGBP_type     = None
+    clim_type     = None
+    clarify_site  ={'opt': True,
                   'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
-    var_name    = 'Qle'
-    num_threshold=200
+    var_name      = 'Qle'
+    num_threshold = 200
     
     # # ======== Plot EF wet & dry ========
-    var_name = 'Qle'
+    var_name = 'TVeg'
     class_by = None #'gs_eq'
 
     plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,

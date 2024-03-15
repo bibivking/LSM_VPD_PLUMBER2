@@ -810,10 +810,15 @@ if __name__ == "__main__":
     #                     "NoahMPv401","ORC2_r6593" , "ORC2_r6593_CO2",
     #                     "ORC3_r7245_NEE", "ORC3_r8120","PenmanMonteith",
     #                     "QUINCY", "RF_eb","RF_raw","SDGVM","STEMMUS-SCOPE"] #"BEPS"
+    model_names   = [   "CABLE", "CABLE-POP-CN",
+                        "CHTESSEL_Ref_exp1","CLM5a",
+                        "GFDL","JULES_GL9","JULES_GL9_withLAI",
+                        "MATSIRO","MuSICA","NASAEnt",
+                        "NoahMPv401","ORC2_r6593", "ORC3_r8120",
+                        "QUINCY", "STEMMUS-SCOPE"] #"BEPS"
+    # model_names    = ["JULES_GL9"] #"BEPS"
 
-    model_names    = ["JULES_GL9"] #"BEPS"
-
-    The site names
+    # The site names
     # all_site_path  = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     # site_names     = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     site_names     = ['AU-Tum']
@@ -831,36 +836,37 @@ if __name__ == "__main__":
         # key_word      = "trans"
         # key_word_not  = ["evap","transmission","pedo","electron",]
         trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        print(trans_dict)
         gc.collect()
 
-        varname       = "Qle"
-        # key_word      = 'latent'
-        # key_word_not  = ['None']
-        qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qle"
+        # # key_word      = 'latent'
+        # # key_word_not  = ['None']
+        # qle_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
+        # make_nc_file(PLUMBER2_path, qle_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "Qh"
-        # key_word      = 'sensible'
-        # key_word_not  = ['vegetation','soil',] # 'corrected'
-        qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "Qh"
+        # # key_word      = 'sensible'
+        # # key_word_not  = ['vegetation','soil',] # 'corrected'
+        # qh_dict       = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
+        # make_nc_file(PLUMBER2_path, qh_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "NEE"
-        # key_word      = 'exchange'
-        # key_word_not  = ['None']
-        nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "NEE"
+        # # key_word      = 'exchange'
+        # # key_word_not  = ['None']
+        # nee_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
+        # make_nc_file(PLUMBER2_path, nee_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
-        varname       = "GPP"
-        # key_word      = "gross primary"
-        # key_word_not  = ['wrt','from']
-        gpp_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        make_nc_file(PLUMBER2_path, gpp_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        gc.collect()
+        # varname       = "GPP"
+        # # key_word      = "gross primary"
+        # # key_word_not  = ['wrt','from']
+        # gpp_dict      = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
+        # make_nc_file(PLUMBER2_path, gpp_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # gc.collect()
 
         # add_Qle_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
         # gc.collect()
@@ -874,9 +880,9 @@ if __name__ == "__main__":
         # add_met_to_nc_file(PLUMBER2_met_path, site_name, output_file)
         # gc.collect()
 
-        Qle_Qh_threshold=10
-        add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
-        gc.collect()
+        # Qle_Qh_threshold=10
+        # add_EF_to_nc_file(output_file, zscore_threshold, Qle_Qh_threshold)
+        # gc.collect()
 
         # add_rain_obs_to_nc_file(PLUMBER2_met_path, site_name, output_file)
         # gc.collect()
@@ -887,8 +893,8 @@ if __name__ == "__main__":
         # add_GPP_obs_to_nc_file(PLUMBER2_flux_path, site_name, output_file)
         # gc.collect()
 
-        add_SM_top1m_to_nc_file(PLUMBER2_path,output_file,site_name,SM_names,soil_thicknesses)
-        gc.collect()
+        # add_SM_top1m_to_nc_file(PLUMBER2_path,output_file,site_name,SM_names,soil_thicknesses)
+        # gc.collect()
 
 
     # SM_var_dimensions= {'CABLE':'(time, soil, y, x)', 'CABLE-POP-CN':'(time, soil, patch, land)',

@@ -36,8 +36,16 @@ import multiprocessing
 def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile=0.95):
 
     # Delete nan values
-    notNan_mask = ~ np.isnan(data_in)
-    data_in     = data_in[notNan_mask]
+    data_tmp = []
+    for dt_in in data_in:
+        if not np.isnan(dt_in):  # Assuming dt_in is a single value
+            data_tmp.append(dt_in)
+    data_in = data_tmp
+
+    # # Delete nan values
+    # notNan_mask = ~ np.isnan(data_in)
+    # print('notNan_mask',notNan_mask)
+    # data_in     = data_in[notNan_mask]
 
     # calculate statistics
     Mean        = pd.Series(data_in).mean()
@@ -284,11 +292,11 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
         SWdown_tmp  = f_cmip.variables['SWdown'][:]
         # mask out ocean and night time
         if is_filter:
-            Qle_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5) 
+            Qle_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5)
                                    & (VPD_tmp>0.001) & (VPD_tmp<10), Qle_tmp, np.nan)
-            VPD_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5) 
+            VPD_tmp     = np.where(  (landsea_3d==1) & (SWdown_tmp>=5)
                                    & (VPD_tmp>0.001) & (VPD_tmp<10), VPD_tmp, np.nan)
-            EF_tmp      = np.where( (landsea_3d==1) & (SWdown_tmp>=5) 
+            EF_tmp      = np.where( (landsea_3d==1) & (SWdown_tmp>=5)
                                    & (VPD_tmp>0.001) & (VPD_tmp<10), EF_tmp, np.nan)
         else:
             Qle_tmp     = np.where((landsea_3d==1) & (SWdown_tmp>=5), Qle_tmp, np.nan)
@@ -361,7 +369,7 @@ def save_CMIP6_3hourly_each_model(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_model
     print('Check Qle_1d, VPD_1d, EF_1d', var_tmp)
 
     f_cmip.close()
-    
+
     if is_filter:
         message = 'filtered_by_VPD_'
     else:
@@ -408,9 +416,9 @@ def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model
 
     # Read data
     if day_time:
-        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
+        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
     else:
-        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
+        var_output = pd.read_csv(f'{CMIP6_txt_path}/CMIP6_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{region["name"]}.csv', na_values=[''])
 
     # divide Qle_1d, VPD_1d and EF_1d by EF_1d values
     EF         = var_output['EF'][:]
@@ -471,14 +479,14 @@ def calc_predicted_CMIP6_each_model(CMIP6_txt_path, scenario, CMIP6_model, model
                     columns=[model_in])
     if day_time:
         if dist_type == None:
-            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
         else:
-            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
     else:
         if dist_type == None:
-            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
         else:
-            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
+            Qle_pred.to_csv(f'{CMIP6_txt_path}/predicted_CMIP6_filtered_by_VPD_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv')
 
     gc.collect()
 
@@ -522,6 +530,7 @@ def calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model
 
     return
 
+
 if __name__ == "__main__":
 
     # Read files
@@ -537,8 +546,8 @@ if __name__ == "__main__":
     percent           = 15
     var_name          = 'Qle'
     day_time          = True
-    region_name       = 'global' # 'west_EU', 'north_Am'
-    dist_type         = 'Poisson' # 'Linear', None
+    region_name       = 'east_AU' # 'west_EU', 'north_Am' 'east_AU'
+    dist_type         = 'Gamma' #'Poisson' # 'Linear', None
     is_filter         = True
 
     if region_name == 'global':
@@ -563,14 +572,13 @@ if __name__ == "__main__":
         # save_CMIP6_3hourly_parallel(CMIP6_3h_out_path, CMIP6_txt_path, scenario, var_name=var_name, day_time=day_time, region=region, is_filter=is_filter)
 
         # Filtering, excluding VPD >=10 or VPD<=0.001
-        # CMIP6_models  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2',]
-        # ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2',]
-        # ['EC-Earth3', 'KACE-1-0-G', 'MIROC6', 'MIROC-ES2L']
-        # ['MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
-        #
-        # filter_CMIP6_by_VPD_parallel(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_models, scenario, var_name=var_name, day_time=day_time, region=region)
+        CMIP6_models  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2',
+                         'EC-Earth3', 'KACE-1-0-G', 'MIROC6', 'MIROC-ES2L',
+                         'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
 
-        # # Calculate predicted CMIP6
+        filter_CMIP6_by_VPD_parallel(CMIP6_3h_out_path, CMIP6_txt_path, CMIP6_models, scenario, var_name=var_name, day_time=day_time, region=region)
+
+        # # # Calculate predicted CMIP6
         # CMIP6_model  =  ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
         #                  'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
         # save_predicted_CMIP6_3hourly_parallel(CMIP6_txt_path, scenario, CMIP6_model, model_list, var_name=var_name, region=region, dist_type=dist_type)
@@ -580,3 +588,9 @@ if __name__ == "__main__":
         #                     'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
         # model_in    = 'CABLE-POP-CN'
         # calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile', dist_type=dist_type)
+
+        # Calculate metrics of the predicted CMIP6
+        # CMIP6_model_list  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
+        #                     'MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+        # model_in    = 'CABLE-POP-CN'
+        # calc_predicted_CMIP6_diff_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model_list, outlier_method='percentile', dist_type=dist_type)
