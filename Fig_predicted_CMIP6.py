@@ -641,16 +641,16 @@ if __name__ == "__main__":
     min_percentile= 0.15
     max_percentile= 0.85
 
-    # save_predicted_metrics_CMIP6_diff(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
-    #                             region=region, dist_type=dist_type, reduce_sample=reduce_sample,
-    #                             min_percentile=min_percentile, max_percentile=max_percentile,
-    #                             outlier_method=outlier_method)
+    save_predicted_metrics_CMIP6_diff(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
+                                region=region, dist_type=dist_type, reduce_sample=reduce_sample,
+                                min_percentile=min_percentile, max_percentile=max_percentile,
+                                outlier_method=outlier_method)
 
     # region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
     region     = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
     # region     = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
 
-    plot_predicted_CMIP6_diff_boxplot(CMIP6_txt_path, var_name, model_list, region=region, dist_type=dist_type)
+    # plot_predicted_CMIP6_diff_boxplot(CMIP6_txt_path, var_name, model_list, region=region, dist_type=dist_type)
 
     # region_list = ['global','east_AU','west_EU','north_Am',]
     # plot_predicted_CMIP6_regions(CMIP6_txt_path, var_name, model_list, region_list, scenarios)

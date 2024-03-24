@@ -220,10 +220,10 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
     clevs = np.arange(-0.5,30.5,1)
     extent=(-180, 180, -90, 90)
     clim_class = np.where(clim_class==0,np.nan,clim_class)
-    plot1 = ax.imshow(clim_class[::-1,:], origin="lower", extent=extent, interpolation="none", vmin=0.5, vmax=29.5, transform=ccrs.PlateCarree(), cmap=custom_cmap) # resample=False, 
+    # plot1 = ax.imshow(clim_class[::-1,:], origin="lower", extent=extent, interpolation="none", vmin=0.5, vmax=29.5, transform=ccrs.PlateCarree(), cmap=custom_cmap) # resample=False, 
     ax.add_feature(OCEAN,edgecolor='none', facecolor="white")
 
-    # plot1 = ax.contourf(lon, lat, clim_class, clevs, transform=ccrs.PlateCarree(), cmap=cmap, extend='neither')
+    plot1 = ax.contourf(lon, lat, clim_class, clevs, transform=ccrs.PlateCarree(), cmap=cmap, extend='neither')
 
     cbar  = plt.colorbar(plot1, ax=ax, ticklocation="right", pad=0.01, orientation="horizontal",
                         aspect=40, shrink=1.) # cax=cax,
@@ -270,6 +270,161 @@ def plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res):
     
     return 
 
+
+def plot_clim_class_new(site_names, PLUMBER2_met_path, clim_class_path_low_res):
+
+    # for opening the raster read-only and saving it on f variable.
+    f  = gdal.Open(clim_class_path_low_res, gdal.GA_ReadOnly)
+    # print('f',f)
+
+    # Copy the transformation to a variable, it will be useful later.
+    gt = f.GetGeoTransform()
+    print('gt',gt)
+
+    # Get the projection
+    projection = f.GetProjection()
+
+    # Read the bands of your raster using GetRasterBand
+    clim_class = f.ReadAsArray()
+    # clim_class = f.GetRasterBand(1)
+    print( 'clim_class', clim_class)
+
+    # Read the size of your array
+    size1, size2 = clim_class.shape
+    print('size1,size2=',size1,size2)
+    print(clim_class)
+
+    # Calculate lat and lon
+    print('calculate lat and lon')
+    lat = np.zeros((size1))
+    lon = np.zeros((size2))
+    
+    for y in np.arange(size1):
+        lat[:] = gt[3] + y * gt[5]
+    for x in np.arange(size2):
+        lon[:] = gt[0] + x * gt[1] 
+
+    # ____ plotting ____
+    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=[5,5],sharex=True, sharey=True, squeeze=True,
+                            subplot_kw={'projection': ccrs.PlateCarree()})
+    plt.subplots_adjust(wspace=0., hspace=-0.05) # left=0.15,right=0.95,top=0.85,bottom=0.05,
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 10
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # set the box type of sequence number
+    props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+
+    # ======================= Set colormap =======================
+    cmap  = plt.cm.gist_ncar #rainbow
+
+    colors = [  'white', 'white' ]
+    custom_cmap = ListedColormap(colors)
+
+    ax.coastlines(resolution="50m",linewidth=0.3)
+    # ax.add_feature(states, linewidth=.5, edgecolor="black")
+    clevs = np.arange(-0.5,30.5,1)
+    extent=(-180, 180, -90, 90)
+    clim_class = np.where(clim_class==0,np.nan,clim_class)
+    # plot1 = ax.imshow(clim_class[::-1,:], origin="lower", extent=extent, interpolation="none", vmin=0.5, vmax=29.5, transform=ccrs.PlateCarree(), cmap=custom_cmap) # resample=False, 
+    ax.add_feature(OCEAN,edgecolor='none', facecolor="white")
+
+    plot1 = ax.contourf(lon, lat, clim_class, clevs, transform=ccrs.PlateCarree(), cmap=cmap, extend='neither')
+
+    # cbar  = plt.colorbar(plot1, ax=ax, ticklocation="right", pad=0.01, orientation="horizontal",
+    #                     aspect=40, shrink=1.) # cax=cax,
+   
+    # cbar.set_ticks([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30])
+    # cbar.set_ticklabels(['Af', 'Am', 'Aw', 'BWh', 
+    #                         'BWk', 'BSh','BSk', 'Csa',
+    #                         'Csb','Csc', 'Cwa', 'Cwb',
+    #                         'Cwc', 'Cfa', 'Cfb', 'Cfc',
+    #                         'Dsa', 'Dsb', 'Dsc', 'Dsd',
+    #                         'Dwa', 'Dwb', 'Dwc', 'Dwd',
+    #                         'Dfa', 'Dfb', 'Dfc', 'Dfd',
+    #                         'ET', 'EF'])
+
+    # cbar.ax.tick_params(labelsize=6, labelrotation=45)
+
+    reg_lats      = [  [-44.5,-10],    # East AU
+                        [35,60],       # West EU
+                        [25,52]    ]   # North America 
+
+    reg_lons      = [  [129,155], # [138,155],
+                        [-12,22],
+                        [-125,-65]    ]
+    
+    # Add boxes, lines
+    for i in np.arange(3):
+        ax.add_patch(Polygon([[reg_lons[i][0], reg_lats[i][0]], [reg_lons[i][1], reg_lats[i][0]],
+                                    [reg_lons[i][1], reg_lats[i][1]], [reg_lons[i][0], reg_lats[i][1]]],
+                                    closed=True, color=almost_black, fill=False, linewidth=0.5))
+
+    # Adding lat and lon
+    lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
+
+    remove_site = ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']
+
+    # Plot site the color based on IGBP
+    site_IGBP = read_IGBP_veg_type(site_names, PLUMBER2_met_path)    
+    IGBP_colors = set_IGBP_colors()
+
+
+    # Dictionary to store unique labels and corresponding colors
+    unique_labels = {}
+
+    for site_name in site_names:
+        color = IGBP_colors[site_IGBP[site_name]]
+
+        # Update unique_labels dictionary:
+        if site_IGBP[site_name] not in unique_labels.keys():
+            unique_labels[site_IGBP[site_name]] = color  # First occurrence, add label and color
+
+        if site_name in remove_site:
+            ax.plot(lon_dict[site_name], lat_dict[site_name], fillstyle='none', color='grey',  
+                    marker='o', markersize=2.5, markeredgewidth=0.8, transform=ccrs.PlateCarree())
+        else:
+            ax.plot(lon_dict[site_name], lat_dict[site_name], fillstyle='none', color=color, 
+                    marker='o', markersize=2.5, markeredgewidth=0.8, transform=ccrs.PlateCarree())
+
+    unique_labels['unused'] = 'grey'
+
+    # Create legend entries with unique labels and colors
+    legend_handles = []
+    for label, color in unique_labels.items():
+        legend_handles.append(plt.Line2D([], [], marker='o', color=color, markerfacecolor='none', markeredgewidth=0.8,
+                              markersize=2.5, label=label, linestyle='None'))
+
+    # Add the legend with unique entries
+    ax.legend(handles=legend_handles, fontsize=4, frameon=False, ncol=2)
+    
+    plt.savefig('./plots/climate_classification_new.png',dpi=300)
+    
+    return 
+
+
+
 if __name__ == '__main__':
 
     # Path of PLUMBER 2 dataset
@@ -298,5 +453,5 @@ if __name__ == '__main__':
     # lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
     # IGBP_dict = read_IGBP_veg_type(site_names, PLUMBER2_met_path)
 
-    read_clim_class(clim_class_path, clim_class_out)
-    plot_clim_class(site_names, PLUMBER2_met_path, clim_class_path_low_res)
+    # read_clim_class(clim_class_path, clim_class_out)
+    plot_clim_class_new(site_names, PLUMBER2_met_path, clim_class_path_low_res)

@@ -563,17 +563,17 @@ if __name__ == "__main__":
     if country_code != None:
         site_names = load_sites_in_country_list(country_code)
 
-    #============================================================================================
+    # ===========================================================================================
 
     # ========================================= 1D curve ========================================
 
     # ====================== Custom setting ========================
-    var_name       = 'TVeg'
+    var_name       = 'nonTVeg'
     uncertain_type = 'UCRTN_bootstrap'
     selected_by    = 'EF_model'
     method         = 'CRV_fit_GAM_complex'
     # method         = 'CRV_bins'
-    dist_type      = 'Linear'#None #'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
+    dist_type      = 'Linear' #None #'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
     VPD_num_threshold = 200
     vpd_top_type   = 'sample_larger_200' # 'to_10' #
 
@@ -646,7 +646,6 @@ if __name__ == "__main__":
                 models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
                 country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
     gc.collect()
-
 
     # LAI classification
     LAI_ranges     = [[0.,1.],

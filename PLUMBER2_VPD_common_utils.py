@@ -345,20 +345,17 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     if len(x_values) <= 10:
         print("Alarm! Not enought sample")
         return np.nan, np.nan, np.nan
+    else:
+        print('len(x_values)',len(x_values))
 
     # Set x_series
     x_series   = np.arange(x_bot, x_top, x_interval)
 
-    # Define grid search parameters
-    # # GAM parameter set 6 for Gs QUINCY ENF EBF:
-    # lam        = np.logspace(-3, 3, 21)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    # n_splines  = np.arange(3, 15, 1)   # Number of splines per smooth term range
-
-    # GAM parameter set 5 -- final for sample_larger_200:
+    # GAM parameter set 6 -- for TVeg & nonTVeg sample_larger_200:
     lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+    n_splines  = np.arange(5, 12, 1)   # Number of splines per smooth term range
 
-    # # GAM parameter set 5:
+    # # GAM parameter set 5 -- final for sample_larger_200:
     # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
     # n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
 
@@ -388,6 +385,9 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     models = []
     scores = []
 
+    # print('max(y_values)', max(y_values))
+    # print('min(y_values)', min(y_values))
+
     # Perform grid search
     for train_index, test_index in kf.split(x_values):
         X_train, X_test = x_values[train_index], x_values[test_index]
@@ -395,10 +395,8 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
         X_train = X_train.reshape(-1, 1)
 
-        print('X_train.shape', X_train.shape)
-        print('X_test.shape', X_test.shape)
-        print('y_train.shape', y_train.shape)
-        print('y_test.shape', y_test.shape)
+        # print('max(y_train)', max(y_train))
+        # print('min(y_train)', min(y_train))
 
         # Define and fit GAM model
         if dist_type=='Linear':
@@ -462,10 +460,6 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     #           intervals should generally be calculated on the actual test data points,
     #           not a new set of equally spaced values like x_series
     y_int        = best_model.confidence_intervals(x_series, width=.95)
-
-    print('x_series',x_series)
-    print('y_pred',y_pred)
-    print('y_int',y_int)
 
     # Create the scatter plot for X and Y
     plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
@@ -853,6 +847,25 @@ def regrid_data(lat_in, lon_in, lat_out, lon_out, input_data, method='linear',th
 
     return Value
 
+def set_IGBP_colors():
+
+    # file path
+    IGBP_colors = {
+                    'CRO':'gold',
+                    'GRA':'yellowgreen',
+                    'EBF':'lightgreen',
+                    'ENF':'forestgreen',
+                    'MF':'deepskyblue',
+                    'DBF':'aquamarine',#'brown',
+                    'OSH':'red',
+                    'CSH':'coral',
+                    'SAV':'pink',
+                    'WSA':'violet',
+                    'WET':'blue',
+                    }
+
+    return IGBP_colors
+
 def set_model_colors_Gs_based():
 
     # file path
@@ -864,20 +877,20 @@ def set_model_colors_Gs_based():
                     'CHTESSEL_ERA5_3':'red', # No Gs model
                     'CHTESSEL_Ref_exp1':'red', # No Gs model
                     'CLM5a':'deepskyblue', # Medlyn
-                    'GFDL':'green', # Leuning
-                    'JULES_GL9':'deepskyblue', # Medlyn
-                    'JULES_GL9_withLAI':'deepskyblue', # Medlyn
+                    'GFDL':'lightseagreen', # Wolf
+                    'JULES_GL9':'firebrick', # Jacobs
+                    'JULES_GL9_withLAI':'firebrick', # Jacobs
                     'JULES_test':'deepskyblue', # Medlyn
                     'LPJ-GUESS':'yellow', # Collatz
                     'MATSIRO':'gold',# Ball-Berry
                     'MuSICA':'green', # Leuning
                     'NASAEnt':'gold', # Ball-Berry
                     'NoahMPv401':'gold', # Ball-Berry
-                    'ORC2_r6593':'gold', # Ball-Berry
+                    'ORC2_r6593':'pink', # Yin and Struik
                     'ORC2_r6593_CO2':'gold', # Ball-Berry
                     'ORC3_r7245_NEE':'pink', # Yin and Struik
                     'ORC3_r8120':'pink', # Yin and Struik
-                    'QUINCY':'deepskyblue', # Medlyn
+                    'QUINCY':'gold', # Ball-Berry
                     'SDGVM':'deepskyblue' , # Medlyn
                     'STEMMUS-SCOPE':'grey' , # unknown
                     }

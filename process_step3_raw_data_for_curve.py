@@ -69,6 +69,8 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     else:
         # var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites'+message+'.csv',na_values=[''])
         var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}.csv',na_values=[''])
+    
+    print('Reading ',f'./txt/process1_output/{var_name}_all_sites{add_units}.csv')
 
     # print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
     #       np.any(~np.isnan(var_output["model_CABLE"])) )
@@ -79,7 +81,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         model_out_list = model_names['model_select_new']
     else:
         model_out_list = get_model_out_list(var_name)
-
 
     # Read LAI if needed
     if LAI_range !=None:
@@ -93,7 +94,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[model_out_name+'_LAI'] = LAI_input[model_out_name+'_LAI']
             except:
                 var_output[model_out_name+'_LAI'] = LAI_input['obs_LAI']
-
 
     # total site number
     site_num    = len(np.unique(var_output["site_name"]))
@@ -525,7 +525,7 @@ if __name__ == "__main__":
     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    var_name       = 'nonTVeg'      #'TVeg'
+    var_name       = 'TVeg'      #'TVeg'
     selected_by    = 'EF_model' #'EF_model' #'EF_obs'
     standardize    = None          # None
                                    # 'STD_LAI'

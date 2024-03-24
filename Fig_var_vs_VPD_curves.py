@@ -104,13 +104,20 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
         #     linestyle = 'solid'
 
         linestyle = 'solid'
-
-        if dist_type!=None:
-            file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}_{dist_type}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}_{dist_type}.csv',]
+        if "TVeg" in var_name:
+            if dist_type!=None:
+                file_names = [  f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message_wet}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message_dry}_{model_out_name}_{dist_type}.csv',]
+            else:
+                file_names = [  f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message_wet}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message_dry}_{model_out_name}.csv',]
         else:
-            file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}.csv',]
+            if dist_type!=None:
+                file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}_{dist_type}.csv',]
+            else:
+                file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}.csv',]
 
         for i, file_name in enumerate(file_names):
 
@@ -118,51 +125,52 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             row = int(i/2)
             col = i%2
 
-           # Read lines data
-            var = pd.read_csv(file_name)
+            if os.path.exists(file_name):
+                # Read lines data
+                var = pd.read_csv(file_name)
 
-            # ===== Drawing the lines =====
-            # Unify NEE units : upwards CO2 movement is positive values
+                # ===== Drawing the lines =====
+                # Unify NEE units : upwards CO2 movement is positive values
 
-            if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
-                print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
-                value        = var['y_pred']*(-1)
-                vals_bot_tmp = var['y_int_bot']
-                vals_top_tmp = var['y_int_top']
-            elif var_name=='Gs' and to_ms:
-                value        = var['y_pred']*mol2ms
-                vals_bot_tmp = var['y_int_bot']*mol2ms
-                vals_top_tmp = var['y_int_top']*mol2ms
-            else:
-                value        = var['y_pred']
-                vals_bot_tmp = var['y_int_bot']
-                vals_top_tmp = var['y_int_top']
+                if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                    print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                    value        = var['y_pred']*(-1)
+                    vals_bot_tmp = var['y_int_bot']
+                    vals_top_tmp = var['y_int_top']
+                elif var_name=='Gs' and to_ms:
+                    value        = var['y_pred']*mol2ms
+                    vals_bot_tmp = var['y_int_bot']*mol2ms
+                    vals_top_tmp = var['y_int_top']*mol2ms
+                else:
+                    value        = var['y_pred']
+                    vals_bot_tmp = var['y_int_bot']
+                    vals_top_tmp = var['y_int_top']
 
-            # smooth or not
-            if smooth_type != 'no_soomth':
-                value = smooth_vpd_series(value, window_size, order, smooth_type)
+                # smooth or not
+                if smooth_type != 'no_soomth':
+                    value = smooth_vpd_series(value, window_size, order, smooth_type)
 
-            var_vpd_series = var['vpd_pred']
-            vals_bot       = vals_bot_tmp
-            vals_top       = vals_top_tmp
+                var_vpd_series = var['vpd_pred']
+                vals_bot       = vals_bot_tmp
+                vals_top       = vals_top_tmp
 
-            # Plot if the data point > num_threshold
-            if model_out_name == 'obs':
-                lw=2.5
-            else:
-                lw=1.5
-            plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,linestyle=linestyle,
-                                    alpha=1., label=change_model_name(model_out_name)) #edgecolor='none', c='red' .rolling(window=10).mean()
+                # Plot if the data point > num_threshold
+                if model_out_name == 'obs':
+                    lw=2.5
+                else:
+                    lw=1.5
+                plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,linestyle=linestyle,
+                                        alpha=1., label=change_model_name(model_out_name)) #edgecolor='none', c='red' .rolling(window=10).mean()
 
-            # Plot uncertainty
-            # add error range of obs (I think top and bot boundary should be set to 1 sigema)
-            fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
-                                    color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
+                # Plot uncertainty
+                # add error range of obs (I think top and bot boundary should be set to 1 sigema)
+                fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                                        color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
 
-            ax[row,col].text(0.05, 0.92, order[i], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
+                ax[row,col].text(0.05, 0.92, order[i], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
 
-        if col == 1:
-            ax[row,col].legend(fontsize=7.2, frameon=False, ncol=2)
+                if col == 1:
+                    ax[row,col].legend(fontsize=7.2, frameon=False, ncol=2)
 
     ax[0,0].set_title("Wet (EF>0.8)", fontsize=16)
     ax[0,1].set_title("Dry (EF<0.2)", fontsize=16)
@@ -181,7 +189,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     ax[0,0].set_xlabel("VPD (kPa)", fontsize=12)
     ax[0,1].set_xlabel("VPD (kPa)", fontsize=12)
 
-    if var_name == 'Qle':
+    if var_name == 'Qle' or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,0].set_xlim(-0.1,2.7)
             ax[0,0].set_ylim(0,170)
@@ -200,6 +208,25 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
             ax[0,1].set_ylim(0,100)
 
+    elif var_name == 'Gs':
+        if time_scale == 'daily':
+            ax[0,0].set_xlim(-0.1,2.7)
+            ax[0,0].set_ylim(0,1.5)
+            ax[0,1].set_xlim(-0.1,5.1)
+            ax[0,1].set_ylim(0,1.5)
+        elif time_scale == 'hourly':
+            # ax[0,0].set_xlim(-0.1,10.5)
+            ax[0,0].set_xlim(-0.1,5.5)
+            ax[0,0].set_xticks([0,1,2,3,4,5])
+            ax[0,0].set_xticklabels(['0','1','2', '3','4','5'],fontsize=12)
+            ax[0,0].set_ylim(0,1.5)
+
+            # ax[0,1].set_xlim(-0.1,10.5)
+            ax[0,1].set_xlim(-0.1,7.5)
+            ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
+            ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
+            ax[0,1].set_ylim(0,1.5)
+
     # ax[0,1].set_xticks([0,0.5,1,1.5,2,2.5,3,3.5,4,4.5,5])
     # ax[0,1].set_xticklabels(['0','0.5','1','1.5','2','2.5','3','3.5','4','4.5','5'],fontsize=12)
 
@@ -212,7 +239,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
         message = ''
 
     if class_by !=None:
-        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}_color_{class_by}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
+        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}_color_{class_by}{message}_gs_eq.png",bbox_inches='tight',dpi=300) # '_30percent'
     else:
         fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
@@ -300,69 +327,81 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
 
         linestyle = 'solid'
 
-        if dist_type != None:
-            file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message1}_{model_out_name}_{dist_type}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}_{dist_type}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}_{dist_type}.csv',]
+        if "TVeg" in var_name:
+            if dist_type != None:
+                file_names = [  f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message1}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message2}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message3}_{model_out_name}_{dist_type}.csv',]
+            else:
+                file_names = [  f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message1}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message2}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message3}_{model_out_name}.csv',]
         else:
-            file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message1}_{model_out_name}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}.csv',
-                            f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}.csv',]
+            if dist_type != None:
+                file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message1}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}_{dist_type}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}_{dist_type}.csv',]
+            else:
+                file_names = [  f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message1}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}.csv',
+                                f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}.csv',]
 
         for i, file_name in enumerate(file_names):
-
             # set plot row and col
             row = int(i/3)
             col = i%3
 
-            # Read lines data
-            var = pd.read_csv(file_name)
+            if os.path.exists(file_name):
 
-            # ===== Drawing the lines =====
-            # Unify NEE units : upwards CO2 movement is positive values
+                # Read lines data
+                var = pd.read_csv(file_name)
 
-            if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
-                print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
-                value        = var['y_pred']*(-1)
-                vals_bot_tmp = var['y_int_bot']
-                vals_top_tmp = var['y_int_top']
-            elif var_name=='Gs' and to_ms:
-                value        = var['y_pred']*mol2ms
-                vals_bot_tmp = var['y_int_bot']*mol2ms
-                vals_top_tmp = var['y_int_top']*mol2ms
-            else:
-                value        = var['y_pred']
-                vals_bot_tmp = var['y_int_bot']
-                vals_top_tmp = var['y_int_top']
+                # ===== Drawing the lines =====
+                # Unify NEE units : upwards CO2 movement is positive values
 
-            # smooth or not
-            if smooth_type != 'no_soomth':
-                value = smooth_vpd_series(value, window_size, order, smooth_type)
+                if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                    print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                    value        = var['y_pred']*(-1)
+                    vals_bot_tmp = var['y_int_bot']
+                    vals_top_tmp = var['y_int_top']
+                elif var_name=='Gs' and to_ms:
+                    value        = var['y_pred']*mol2ms
+                    vals_bot_tmp = var['y_int_bot']*mol2ms
+                    vals_top_tmp = var['y_int_top']*mol2ms
+                else:
+                    value        = var['y_pred']
+                    vals_bot_tmp = var['y_int_bot']
+                    vals_top_tmp = var['y_int_top']
 
-            var_vpd_series = var['vpd_pred']
-            vals_bot       = vals_bot_tmp
-            vals_top       = vals_top_tmp
+                # smooth or not
+                if smooth_type != 'no_soomth':
+                    value = smooth_vpd_series(value, window_size, order, smooth_type)
 
-            # Plot
-            if model_out_name == 'obs':
-                lw=2.5
-            else:
-                lw=1.5
-            plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,linestyle=linestyle,
-                                    alpha=1., label=change_model_name(model_out_name)) #edgecolor='none', c='red' .rolling(window=10).mean()
+                var_vpd_series = var['vpd_pred']
+                vals_bot       = vals_bot_tmp
+                vals_top       = vals_top_tmp
 
-            # Plot uncertainty
-            # add error range of obs (I think top and bot boundary should be set to 1 sigema)
-            fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
-                                    color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
+                # Plot
+                if model_out_name == 'obs':
+                    lw=2.5
+                else:
+                    lw=1.5
+                plot = ax[row,col].plot(var_vpd_series, value, lw=lw, color=line_color,linestyle=linestyle,
+                                        alpha=1., label=change_model_name(model_out_name)) #edgecolor='none', c='red' .rolling(window=10).mean()
+
+                # Plot uncertainty
+                # add error range of obs (I think top and bot boundary should be set to 1 sigema)
+                fill = ax[row,col].fill_between(var_vpd_series,vals_bot,vals_top,
+                                        color=line_color, edgecolor="none", alpha=0.3) #  .rolling(window=10).mean()
 
 
-            # ===== Drawing the turning points =====
-            # Calculate turning points
-            # if turning_point['calc']:
-            #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
+                # ===== Drawing the turning points =====
+                # Calculate turning points
+                # if turning_point['calc']:
+                #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
 
-        ax[row,col].text(0.05, 0.92, order[i], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
+                if j == 0 :
+                    ax[row,col].text(0.05, 0.92, order[i], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
 
         if col == 2:
             ax[row,col].legend(fontsize=8, frameon=False, ncol=2)
@@ -396,31 +435,37 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,0].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,0].set_xlim(-0.1,7.1)
 
-    if var_name == 'Qle':
+    if var_name == 'Qle' or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,0].set_ylim(0,100)
         elif time_scale == 'hourly':
             ax[0,0].set_ylim(0,300)
+    elif var_name == 'Gs':
+        ax[0,0].set_ylim(0,1.5)
 
     ax[0,1].set_xticks([0,1,2,3,4,5,6.,7.])
     ax[0,1].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,1].set_xlim(-0.1,7.1)
 
-    if var_name == 'Qle':
+    if var_name == 'Qle' or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,1].set_ylim(0,100)
         elif time_scale == 'hourly':
             ax[0,1].set_ylim(0,300)
+    elif var_name == 'Gs':
+        ax[0,1].set_ylim(0,1.5)
 
     ax[0,2].set_xticks([0,1,2,3,4,5,6.,7.])
     ax[0,2].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,2].set_xlim(-0.1,7.1)
 
-    if var_name == 'Qle':
+    if var_name == 'Qle' or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,2].set_ylim(0,100)
         elif time_scale == 'hourly':
             ax[0,2].set_ylim(0,300)
+    elif var_name == 'Gs':
+        ax[0,2].set_ylim(0,1.5)
 
     ax[0,0].tick_params(axis='y', labelsize=12)
     ax[0,1].tick_params(axis='y', labelsize=12)
@@ -432,7 +477,7 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
         message = ""
 
     if class_by != None:
-        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message1}_color_{class_by}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
+        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message1}_color_{class_by}{message}_gs_eq.png",bbox_inches='tight',dpi=300) # '_30percent'
     else:
         fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message1}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
@@ -525,7 +570,10 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                             country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                             uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
-                file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                if 'TVeg' in var_name:
+                    file_names.append(f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                else:
+                    file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
 
             bounds = [0,0.2]
             for IGBP_type in IGBP_types:
@@ -533,7 +581,10 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                                                             IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                             country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                             uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
-                file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                if 'TVeg' in var_name:
+                    file_names.append(f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                else:
+                    file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
 
         if LAI_ranges!=None:
             # Loop veg types
@@ -543,8 +594,10 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                                                             LAI_range=LAI_range, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                             country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                             uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
-
-                file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                if 'TVeg' in var_name:
+                    file_names.append(f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                else:
+                    file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
 
             bounds = [0,0.2]
             for LAI_range in LAI_ranges:
@@ -553,15 +606,15 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                                                             country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                             uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
 
-                file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
-
+                if 'TVeg' in var_name:
+                    file_names.append(f'./txt/process4_output/{folder_name}/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
+                else:
+                    file_names.append(f'./txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_out_name}{message}.csv')
         for i, file_name in enumerate(file_names):
-
+            # set plot row and col
+            row = int(i/ncol)
+            col = i%ncol
             if os.path.exists(file_name):
-
-                # set plot row and col
-                row = int(i/ncol)
-                col = i%ncol
 
                 # Read lines data
                 var = pd.read_csv(file_name)
@@ -610,9 +663,7 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
                 #     ax[row,col].scatter(turning_points[model_out_name][0], turning_points[model_out_name][1], marker='o', color=line_color, s=20)
                 ax[row,col].text(0.05, 0.90, order[i], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
 
-                if row==0 and col == 1 and var_name =='Gs':
-                    ax[row,col].legend(fontsize=8, frameon=False, ncol=1)
-                if row==0 and col == 1 and var_name =='Qle':
+                if row==0 and col == 1:
                     ax[row,col].legend(fontsize=8, frameon=False, ncol=1)
 
                 if IGBP_types != None and row==0:
@@ -630,13 +681,16 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
 
                 if row == 1:
                     ax[row,col].set_xlim(-0.1,7.1)
-                    if var_name == 'Qle':
+                    if var_name == 'Qle' or 'TVeg' in var_name:
                         ax[row,col].set_ylim(0,120)
+                    elif var_name == 'Gs':
+                        ax[row,col].set_ylim(0,1.5)
                 else:
                     ax[row,col].set_xlim(-0.1,7.1)
-                    if var_name == 'Qle':
+                    if var_name == 'Qle' or 'TVeg' in var_name:
                         ax[row,col].set_ylim(0,400)
-
+                    elif var_name == 'Gs':
+                        ax[row,col].set_ylim(0,1.5)
                 if var_name == 'Qle':
                     ax[row,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
                 elif var_name == 'Gs' and to_ms:
@@ -654,7 +708,7 @@ def plot_var_VPD_uncertainty_veg_LAI_four(var_name=None, day_time=False, energy_
         message1 = "LAI"
 
     if class_by != None:
-        fig.savefig(f"./plots/Fig_{var_name}_VPD_wet_dry_{message1}_color_{class_by}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
+        fig.savefig(f"./plots/Fig_{var_name}_VPD_wet_dry_{message1}_color_{class_by}{message}_gs_eq.png",bbox_inches='tight',dpi=300) # '_30percent'
     else:
         fig.savefig(f"./plots/Fig_{var_name}_VPD_wet_dry_{message1}{message}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
@@ -696,9 +750,9 @@ if __name__ == "__main__":
     veg_fraction= None#[0.7,1.]
     standardize = None
     uncertain_type='UCRTN_bootstrap'
-    method      = 'CRV_bins'
-    # method       = 'CRV_fit_GAM_complex'
-    dist_type    = None #'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
+    # method      = 'CRV_bins'
+    method       = 'CRV_fit_GAM_complex'
+    dist_type    = 'Linear' #'Gamma' # None #'Linear' #'Poisson' # 'Gamma'
 
     IGBP_type   = None
     clim_type   = None
@@ -710,7 +764,7 @@ if __name__ == "__main__":
 
     # # ======== Plot EF wet & dry ========
     var_name = 'TVeg'
-    class_by = None # 'gs_eq'
+    class_by = 'gs_eq' # None #
 
     plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
                  selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize,
