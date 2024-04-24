@@ -611,18 +611,459 @@ def plot_predicted_CMIP6_regions(CMIP6_txt_path, var_name, model_list, region_li
 
     return
 
+def plot_predicted_CMIP6_global_and_diff_boxplot(CMIP6_txt_path, var_name, model_list, scenarios,
+                                 region={'name':'global','lat':None, 'lon':None}, dist_type=None,
+                                 panel1_type='diff'):
+    
+    # ============ Setting up plot ============
+    fig, ax  = plt.subplots(nrows=2, ncols=2, figsize=[18,14],sharex=False, sharey=False, squeeze=True)
+
+    plt.subplots_adjust(wspace=0.09, hspace=0.2)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+    order = ['(a)','(b)','(c)','(d)']
+
+    # ====================== ax[0,0] global ======================
+    if panel1_type == 'boxes': 
+
+        # read all metrics files
+        model_list.append('CMIP6')
+        
+        changed_name = []
+
+        for i, model_in in enumerate(model_list):
+            
+            changed_name.append(change_model_name(model_in))
+            # set line color
+            line_color = model_colors[model_in]
+
+            for scenario in scenarios:
+
+                if dist_type!=None:
+                    metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_{var_name}_{scenario}_{model_in}_global_{dist_type}.csv', na_values=[''])
+                else:
+                    metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_{var_name}_{scenario}_{model_in}_global.csv', na_values=[''])
+                mean     = metrics.loc[0,model_in]
+                p25      = metrics.loc[1,model_in]
+                p75      = metrics.loc[2,model_in]
+                min      = metrics.loc[3,model_in]
+                max      = metrics.loc[4,model_in]
+
+                # Set x-tick
+                if scenario == 'historical':
+                    xaxis_s = 0.5+i*3
+                    xaxis_e = 1.5+i*3
+                    alpha   = 1.
+                    mean_hist = mean
+                    p25_hist = p25
+                    p75_hist = p75
+                elif scenario == 'ssp245':
+                    xaxis_s = 1.5+i*3
+                    xaxis_e = 2.5+i*3
+                    alpha   = 0.65
+                    mean_diff = mean-mean_hist
+                    p25_diff = p25 - p25_hist
+                    p75_diff = p75 - p75_hist
+
+                # Draw the box
+                ax[0,0].add_patch(Polygon([[xaxis_s, p25], [xaxis_s, p75],
+                                    [xaxis_e, p75], [xaxis_e, p25]],
+                                    closed=True, color=line_color, fill=True, alpha=alpha, linewidth=0.1))
+
+                # Draw the mean line
+                ax[0,0].plot([xaxis_s,xaxis_e], [mean,mean], color = 'white', linewidth=1.)
+
+                # Draw the p25 p75
+                ax[0,0].plot([xaxis_s, xaxis_e], [p25, p25], color = almost_black, linewidth=1.)
+                ax[0,0].plot([xaxis_s, xaxis_e], [p75, p75], color = almost_black, linewidth=1.)
+
+                ax[0,0].plot([xaxis_s, xaxis_s], [p25, p75], color = almost_black, linewidth=1.)
+                ax[0,0].plot([xaxis_e, xaxis_e], [p25, p75], color = almost_black, linewidth=1.)
+
+                # Draw the max and min
+                # ax[0,0].plot([xaxis_s+0.1, xaxis_e-0.1], [min, min], color = almost_black, linewidth=0.5)
+                # ax[0,0].plot([xaxis_s+0.1, xaxis_e-0.1], [max, max], color = almost_black, linewidth=0.5)
+                # ax[0,0].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p75, max], color = almost_black, linewidth=0.5)
+                # ax[0,0].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p25, min], color = almost_black, linewidth=0.5)
+
+            ax[0,0].text(xaxis_s-0.8, p75+1 , f"{p25_hist:.0f}", va='bottom', ha='center', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+            ax[0,0].text(xaxis_s+0.7, p75+1 , f"{p25_diff:+.0f}", va='bottom', ha='center',c='red', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+
+            ax[0,0].text(xaxis_s-0.8, p75+5 , f"{mean_hist:.0f}", va='bottom', ha='center', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+            ax[0,0].text(xaxis_s+0.7, p75+5 , f"{mean_diff:+.0f}", va='bottom', ha='center',c='red', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+
+            ax[0,0].text(xaxis_s-0.8, p75+9 , f"{p75_hist:.0f}", va='bottom', ha='center', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+            ax[0,0].text(xaxis_s+0.7, p75+9 , f"{p75_diff:+.0f}", va='bottom', ha='center',c='red', rotation_mode='anchor',transform=ax[0,0].transData, fontsize=8)
+
+        ax[0,0].text(0.04, 0.94, order[0], va='bottom', ha='center', rotation_mode='anchor',transform=ax[0,0].transAxes, fontsize=16)
+        ax[0,0].set_xticks(np.arange(1.5,len(model_list)*3,3))
+        ax[0,0].set_xticklabels(changed_name,fontsize=11, ha='right',rotation=30)
+
+        ax[0,0].set_xlim(0.,0.2+len(model_list)*3)
+        ax[0,0].set_ylim(0,170)
+        ax[0,0].tick_params(axis='y', labelsize=12)
+
+    elif panel1_type == 'diff':
+        
+        # read all metrics files
+        percentile_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+        for i, model_in in enumerate(model_list):
+            print('model_in',model_in)
+            # set line color
+            line_color = model_colors[model_in]
+
+            if model_in == 'obs':
+                lw=2.5
+            else:
+                lw=1.5
+
+            hist_metrics    = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_Qle_historical_{model_in}_global.csv', na_values=[''])
+            hist_mean       = hist_metrics[model_in].values[-1]
+            hist_percentile = hist_metrics[model_in].values[:-1]
+
+            ssp_metrics    = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_Qle_ssp245_{model_in}_global.csv', na_values=[''])
+            ssp_mean       = ssp_metrics[model_in].values[-1]
+            ssp_percentile = ssp_metrics[model_in].values[:-1]
+
+            diff_mean      = ssp_mean - hist_mean
+            diff_percentile= ssp_percentile - hist_percentile
+
+            # Set x-tick
+            plot = ax[0,0].plot(percentile_vals, diff_percentile, lw=lw, color=line_color, linestyle='solid',
+                                    alpha=1., label=f'{change_model_name(model_in)}') #edgecolor='none', c='red' .rolling(window=10).mean()
+
+        plot = ax[0,0].axvline(x=0.15, color='gray', linestyle='--')
+        plot = ax[0,0].axvline(x=0.85, color='gray', linestyle='--')
+        ax[0,0].legend(fontsize=8, frameon=False, ncol=2)
+
+        ax[0,0].text(0.04, 0.94, order[0], va='bottom', ha='center', rotation_mode='anchor',transform=ax[0,0].transAxes, fontsize=16)
+        # ax[0,0].set_xticks(np.arange(1.5,len(model_list)*3,3))
+        # ax[0,0].set_xticklabels(changed_name,fontsize=11, ha='right',rotation=30)
+
+        # ax[0,0].set_xlim(0.,0.2+len(model_list)*3)
+        # ax[0,0].set_ylim(0,170)
+        ax[0,0].tick_params(axis='y', labelsize=12)
+
+    # =================== ax[0,1] ax[1,0] ax[1,1] ====================
+    model_list.remove('obs')
+    # model_list.remove('CMIP6')
+
+    scenario = 'ssp245'
+    regions  = [{'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]},
+                {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]},
+                {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}]
+
+    for r, region in enumerate(regions) :
+
+        row = int((r+1)/2)
+        col = (r+1)%2
+
+        # read all metrics files
+        changed_name = []
+        for i, model_in in enumerate(model_list):
+
+            # set line color
+            line_color = model_colors[model_in]
+
+            if dist_type!=None:
+                metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_filtered_by_VPD_{var_name}_diff_{scenario}_{region["name"]}_{dist_type}.csv', na_values=[''])
+            else:
+                metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_filtered_by_VPD_{var_name}_diff_{scenario}_{region["name"]}.csv', na_values=[''])
+
+            mean     = metrics.loc[0,model_in]
+            p25      = metrics.loc[1,model_in]
+            p75      = metrics.loc[2,model_in]
+            min      = metrics.loc[3,model_in]
+            max      = metrics.loc[4,model_in]
+
+            # Set x-tick
+            xaxis_s = 0.2+i*1
+            xaxis_e = 0.8+i*1
+            alpha   = 1.
+            mean_hist = mean
+            p25_hist = p25
+            p75_hist = p75
+
+            # Draw the box
+            ax[row,col].add_patch(Polygon([[xaxis_s, p25], [xaxis_s, p75],
+                                    [xaxis_e, p75], [xaxis_e, p25]],
+                                closed=True, color=line_color, fill=True, alpha=alpha, linewidth=0.1))
+
+            # Draw the mean line
+            ax[row,col].plot([xaxis_s,xaxis_e], [mean,mean], color = 'white', linewidth=1.)
+
+            # Draw the p25 p75
+            ax[row,col].plot([xaxis_s, xaxis_e], [p25, p25], color = almost_black, linewidth=1.)
+            ax[row,col].plot([xaxis_s, xaxis_e], [p75, p75], color = almost_black, linewidth=1.)
+
+            ax[row,col].plot([xaxis_s, xaxis_s], [p25, p75], color = almost_black, linewidth=1.)
+            ax[row,col].plot([xaxis_e, xaxis_e], [p25, p75], color = almost_black, linewidth=1.)
+
+            # Draw the max and min
+            ax[row,col].plot([xaxis_s+0.1, xaxis_e-0.1], [min, min], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([xaxis_s+0.1, xaxis_e-0.1], [max, max], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p75, max], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p25, min], color = almost_black, linewidth=0.8)
+            ax[row,col].axhline(y=0, color=almost_black, linestyle='--', linewidth=0.5)#
+      
+            changed_name.append(change_model_name(model_in))
+
+        # ax[row,col].legend(fontsize=9, frameon=False)#, ncol=2)
+        ax[row,col].text(0.04, 0.94, order[r+1], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=16)
+
+        # ax[row,col].set_xlabel("models", fontsize=12)
+
+        ax[row,col].set_xticks(np.arange(0.5,len(model_list),1))
+        ax[row,col].set_xticklabels(changed_name, fontsize=11, ha='right',rotation=30)
+
+        ax[row,col].set_xlim(0.,0.2+len(model_list)*1)
+        if r == 0:
+            ax[row,col].set_ylim(-50,43)
+            ax[row,col].set_yticks([-50,-40,-30,-20,-10,0,10,20,30,40])
+            ax[row,col].set_yticklabels(['-50','-40','-30','-20','-10','0','10','20','30','40'])
+        else:
+            ax[row,col].set_ylim(-60,35)
+            ax[row,col].set_yticks([-60,-50,-40,-30,-20,-10,0,10,20,30])
+            ax[row,col].set_yticklabels(['-60','-50','-40','-30','-20','-10','0','10','20','30'])
+
+        ax[row,col].tick_params(axis='y', labelsize=12)
+
+    ax[0,0].set_ylabel("LH (W m$\mathregular{^{-2}}$)", fontsize=12)
+    ax[1,0].set_ylabel("LH (W m$\mathregular{^{-2}}$)", fontsize=12)
+
+    if dist_type !=None:
+        fig.savefig(f"./plots/plot_predicted_CMIP6_global_region_boxplot_{dist_type}_{panel1_type}.png",bbox_inches='tight',dpi=300) # '_30percent'
+    else:
+        fig.savefig(f"./plots/plot_predicted_CMIP6_global_region_boxplot_{panel1_type}.png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    return
+
+def plot_predicted_CMIP6_changes_and_diff_boxplot(CMIP6_txt_path, var_name, model_list, scenarios,
+                                 region={'name':'global','lat':None, 'lon':None}, dist_type=None):
+    
+    # ============ Setting up plot ============
+    fig, ax  = plt.subplots(nrows=2, ncols=3, figsize=[18,12],sharex=False, sharey=False, squeeze=True)
+
+    plt.subplots_adjust(wspace=0.09, hspace=0.2)
+
+    plt.rcParams['text.usetex']     = False
+    plt.rcParams['font.family']     = "sans-serif"
+    plt.rcParams['font.serif']      = "Helvetica"
+    plt.rcParams['axes.linewidth']  = 1.5
+    plt.rcParams['axes.labelsize']  = 14
+    plt.rcParams['font.size']       = 14
+    plt.rcParams['legend.fontsize'] = 14
+    plt.rcParams['xtick.labelsize'] = 14
+    plt.rcParams['ytick.labelsize'] = 14
+
+    almost_black = '#262626'
+    # change the tick colors also to the almost black
+    plt.rcParams['ytick.color']     = almost_black
+    plt.rcParams['xtick.color']     = almost_black
+
+    # change the text colors also to the almost black
+    plt.rcParams['text.color']      = almost_black
+
+    # Change the default axis colors from black to a slightly lighter black,
+    # and a little thinner (0.5 instead of 1)
+    plt.rcParams['axes.edgecolor']  = almost_black
+    plt.rcParams['axes.labelcolor'] = almost_black
+
+    # Set the colors for different models
+    model_colors = set_model_colors()
+
+    props = dict(boxstyle="round", facecolor='white', alpha=0.0, ec='white')
+    order = ['(a)','(b)','(c)','(d)']
+
+    # =================== ax[1,0] ax[1,1] ax[1,2] ====================
+    # read all metrics files
+    model_list.append('CMIP6')
+    
+    changed_name = []
+
+    # for r, region in enumerate(regions):
+    region  = {"name":'global'}
+
+    for r in np.arange(3):
+        row = int(r/2)
+        col = r%2
+
+        for i, model_in in enumerate(model_list):
+            
+            changed_name.append(change_model_name(model_in))
+
+            # set line color
+            line_color = model_colors[model_in]
+            
+            # Calculate percentile difference
+            if dist_type!=None:
+                percentile_hist   = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_{var_name}_historical_{model_in}_{region["name"]}.csv', na_values=[''])
+                percentile_ssp245 = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_{var_name}_ssp245_{model_in}_{region["name"]}.csv', na_values=[''])
+            else:
+                percentile_hist   = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_{var_name}_historical_{model_in}_{region["name"]}.csv', na_values=[''])
+                percentile_ssp245 = pd.read_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_{var_name}_ssp245_{model_in}_{region["name"]}.csv', na_values=[''])
+
+            percentile_diff = percentile_ssp245 - percentile_hist
+            y         = np.arange(1,100,1)
+            x_line    = y
+            x_line[:] = i*10 + 1 
+            ax[row,col].plot(percentile_diff[:-1]+i*10+1, y, color = almost_black, linewidth=0.5)
+            ax[row,col].axvline(i*10+1, color=almost_black, ls='solid') 
+
+            ax[row,col].fill_betweenx(y, x_line, percentile_diff[:-1]+i*10+1, color=line_color, alpha=0.7)
+
+        ax[row,col].text(0.04, 0.94, order[r], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=16)
+        ax[row,col].set_xticks(np.arange(1,len(model_list)*10+1,10))
+        ax[row,col].set_xticklabels(changed_name,fontsize=11, ha='right',rotation=30)
+
+        ax[row,col].set_xlim(0.,2+len(model_list)*10)
+        ax[row,col].set_ylim(0,101)
+        ax[row,col].tick_params(axis='y', labelsize=12)
+
+    # =================== ax[1,0] ax[1,1] ax[1,2] ====================
+    model_list.remove('obs')
+    model_list.remove('CMIP6')
+
+    scenario = 'ssp245'
+    regions  = [{'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]},
+                {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]},
+                {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}]
+
+    for r, region in enumerate(regions):
+
+        row = int((r+3)/2)
+        col = (r+3)%2
+
+        # read all metrics files
+        changed_name = []
+        for i, model_in in enumerate(model_list):
+
+            # set line color
+            line_color = model_colors[model_in]
+
+            if dist_type!=None:
+                metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_filtered_by_VPD_{var_name}_diff_{scenario}_{region["name"]}_{dist_type}.csv', na_values=[''])
+            else:
+                metrics  = pd.read_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_filtered_by_VPD_{var_name}_diff_{scenario}_{region["name"]}.csv', na_values=[''])
+
+            mean     = metrics.loc[0,model_in]
+            p25      = metrics.loc[1,model_in]
+            p75      = metrics.loc[2,model_in]
+            min      = metrics.loc[3,model_in]
+            max      = metrics.loc[4,model_in]
+
+            # Set x-tick
+            xaxis_s = 0.2+i*1
+            xaxis_e = 0.8+i*1
+            alpha   = 1.
+            mean_hist = mean
+            p25_hist = p25
+            p75_hist = p75
+
+            # Draw the box
+            ax[row,col].add_patch(Polygon([[xaxis_s, p25], [xaxis_s, p75],
+                                    [xaxis_e, p75], [xaxis_e, p25]],
+                                closed=True, color=line_color, fill=True, alpha=alpha, linewidth=0.1))
+
+            # Draw the mean line
+            ax[row,col].plot([xaxis_s,xaxis_e], [mean,mean], color = 'white', linewidth=1.)
+
+            # Draw the p25 p75
+            ax[row,col].plot([xaxis_s, xaxis_e], [p25, p25], color = almost_black, linewidth=1.)
+            ax[row,col].plot([xaxis_s, xaxis_e], [p75, p75], color = almost_black, linewidth=1.)
+
+            ax[row,col].plot([xaxis_s, xaxis_s], [p25, p75], color = almost_black, linewidth=1.)
+            ax[row,col].plot([xaxis_e, xaxis_e], [p25, p75], color = almost_black, linewidth=1.)
+
+            # Draw the max and min
+            ax[row,col].plot([xaxis_s+0.1, xaxis_e-0.1], [min, min], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([xaxis_s+0.1, xaxis_e-0.1], [max, max], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p75, max], color = almost_black, linewidth=0.8)
+            ax[row,col].plot([(xaxis_s+xaxis_e)/2, (xaxis_s+xaxis_e)/2], [p25, min], color = almost_black, linewidth=0.8)
+            ax[row,col].axhline(y=0, color=almost_black, linestyle='--', linewidth=0.5)#
+      
+            changed_name.append(change_model_name(model_in))
+
+        # ax[row,col].legend(fontsize=9, frameon=False)#, ncol=2)
+        ax[row,col].text(0.04, 0.94, order[r+1], va='bottom', ha='center', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=16)
+
+        # ax[row,col].set_xlabel("models", fontsize=12)
+
+        ax[row,col].set_xticks(np.arange(0.5,len(model_list),1))
+        ax[row,col].set_xticklabels(changed_name, fontsize=11, ha='right',rotation=30)
+
+        ax[row,col].set_xlim(0.,0.2+len(model_list)*1)
+        if r == 0:
+            ax[row,col].set_ylim(-50,43)
+            ax[row,col].set_yticks([-50,-40,-30,-20,-10,0,10,20,30,40])
+            ax[row,col].set_yticklabels(['-50','-40','-30','-20','-10','0','10','20','30','40'])
+        else:
+            ax[row,col].set_ylim(-60,35)
+            ax[row,col].set_yticks([-60,-50,-40,-30,-20,-10,0,10,20,30])
+            ax[row,col].set_yticklabels(['-60','-50','-40','-30','-20','-10','0','10','20','30'])
+
+        ax[row,col].tick_params(axis='y', labelsize=12)
+
+    ax[0,0].set_ylabel("LH (W m$\mathregular{^{-2}}$)", fontsize=12)
+    ax[1,0].set_ylabel("LH (W m$\mathregular{^{-2}}$)", fontsize=12)
+
+    if dist_type !=None:
+        fig.savefig(f"./plots/plot_predicted_CMIP6_global_region_boxplot_{dist_type}.png",bbox_inches='tight',dpi=300) # '_30percent'
+    else:
+        fig.savefig(f"./plots/plot_predicted_CMIP6_global_region_boxplot.png",bbox_inches='tight',dpi=300) # '_30percent'
+
+    return
+
 if __name__ == "__main__":
 
     # Get model lists
-    CMIP6_txt_path    = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
+    CMIP6_txt_path = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
     site_names, IGBP_types, clim_types, model_names = load_default_list()
-    model_list = model_names['model_select_new']
-    scenarios  = ['historical','ssp245']
-    var_name   = 'Qle'
-    dist_type  = "Gamma" #None # 'Poisson'
-    outlier_method='percentile'
+    model_list     = model_names['model_select_new']
+    scenarios      = ['historical','ssp245']
+    var_name       = 'Qle'
+    dist_type      = "Gamma" #None # 'Poisson'
+    outlier_method = 'percentile'
+
+    # ====================== plot_predicted_CMIP6_global_and_diff_boxplot ========================
+    CMIP6_models  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2','EC-Earth3',
+                     'KACE-1-0-G', 'MIROC6', 'MIROC-ES2L','MPI-ESM1-2-HR', 'MPI-ESM1-2-LR',
+                     'MRI-ESM2-0']
+
+    model_list    = model_names['model_select_new']
+
+    plot_predicted_CMIP6_global_and_diff_boxplot(CMIP6_txt_path, var_name, model_list, scenarios,
+                                    dist_type=dist_type)
     
-    region     = {'name':'global', 'lat':None, 'lon':None}
+    # ====================== plot_predicted_CMIP6_boxplot ========================
+    # region     = {'name':'global', 'lat':None, 'lon':None}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region, dist_type=dist_type)
     # region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region)
@@ -631,26 +1072,25 @@ if __name__ == "__main__":
     # region     = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
     # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios, region=region)
 
-    CMIP6_models  = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2','EC-Earth3',
-                     'KACE-1-0-G', 'MIROC6', 'MIROC-ES2L','MPI-ESM1-2-HR', 'MPI-ESM1-2-LR',
-                     'MRI-ESM2-0']
+    # plot_predicted_CMIP6_boxplot(CMIP6_txt_path, var_name, model_list, scenarios,
+    #                              region=region, dist_type=dist_type)
 
-    scenario      = 'ssp245'
-    model_list    = model_names['model_select_new']
-    reduce_sample = False
-    min_percentile= 0.15
-    max_percentile= 0.85
+    # ====================== save_predicted_metrics_CMIP6_diff ========================
+    # scenario      = 'ssp245'
+    # model_list    = model_names['model_select_new']
+    # reduce_sample = False
+    # min_percentile= 0.15
+    # max_percentile= 0.85
+    # save_predicted_metrics_CMIP6_diff(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
+    #                             region=region, dist_type=dist_type, reduce_sample=reduce_sample,
+    #                             min_percentile=min_percentile, max_percentile=max_percentile,
+    #                             outlier_method=outlier_method)
 
-    save_predicted_metrics_CMIP6_diff(CMIP6_txt_path, var_name, model_list, CMIP6_models, scenario,
-                                region=region, dist_type=dist_type, reduce_sample=reduce_sample,
-                                min_percentile=min_percentile, max_percentile=max_percentile,
-                                outlier_method=outlier_method)
+    # ====================== plot_predicted_CMIP6_diff_boxplot ========================
+    # # region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+    # region     = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
+    # # region     = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
+    # # plot_predicted_CMIP6_diff_boxplot(CMIP6_txt_path, var_name, model_list, region=region, dist_type=dist_type)
 
-    # region     = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
-    region     = {'name':'north_Am', 'lat':[25,58], 'lon':[-125,-65]}
-    # region     = {'name':'east_AU', 'lat':[-44.5,-22], 'lon':[138,155]}
-
-    # plot_predicted_CMIP6_diff_boxplot(CMIP6_txt_path, var_name, model_list, region=region, dist_type=dist_type)
-
-    # region_list = ['global','east_AU','west_EU','north_Am',]
-    # plot_predicted_CMIP6_regions(CMIP6_txt_path, var_name, model_list, region_list, scenarios)
+    # # region_list = ['global','east_AU','west_EU','north_Am',]
+    # # plot_predicted_CMIP6_regions(CMIP6_txt_path, var_name, model_list, region_list, scenarios)

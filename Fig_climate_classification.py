@@ -351,21 +351,6 @@ def plot_clim_class_new(site_names, PLUMBER2_met_path, clim_class_path_low_res):
 
     plot1 = ax.contourf(lon, lat, clim_class, clevs, transform=ccrs.PlateCarree(), cmap=cmap, extend='neither')
 
-    # cbar  = plt.colorbar(plot1, ax=ax, ticklocation="right", pad=0.01, orientation="horizontal",
-    #                     aspect=40, shrink=1.) # cax=cax,
-   
-    # cbar.set_ticks([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30])
-    # cbar.set_ticklabels(['Af', 'Am', 'Aw', 'BWh', 
-    #                         'BWk', 'BSh','BSk', 'Csa',
-    #                         'Csb','Csc', 'Cwa', 'Cwb',
-    #                         'Cwc', 'Cfa', 'Cfb', 'Cfc',
-    #                         'Dsa', 'Dsb', 'Dsc', 'Dsd',
-    #                         'Dwa', 'Dwb', 'Dwc', 'Dwd',
-    #                         'Dfa', 'Dfb', 'Dfc', 'Dfd',
-    #                         'ET', 'EF'])
-
-    # cbar.ax.tick_params(labelsize=6, labelrotation=45)
-
     reg_lats      = [  [-44.5,-10],    # East AU
                         [35,60],       # West EU
                         [25,52]    ]   # North America 
@@ -389,7 +374,6 @@ def plot_clim_class_new(site_names, PLUMBER2_met_path, clim_class_path_low_res):
     # Plot site the color based on IGBP
     site_IGBP = read_IGBP_veg_type(site_names, PLUMBER2_met_path)    
     IGBP_colors = set_IGBP_colors()
-
 
     # Dictionary to store unique labels and corresponding colors
     unique_labels = {}
@@ -415,6 +399,11 @@ def plot_clim_class_new(site_names, PLUMBER2_met_path, clim_class_path_low_res):
     for label, color in unique_labels.items():
         legend_handles.append(plt.Line2D([], [], marker='o', color=color, markerfacecolor='none', markeredgewidth=0.8,
                               markersize=2.5, label=label, linestyle='None'))
+
+    ax.set_xticks(np.arange(-180, 181,30))  # Adjust step for desired frequency
+    ax.set_yticks(np.arange(-90, 91, 20))  # Adjust step for desired frequency
+    ax.set_xticklabels(np.arange(-180, 181,30), fontsize=8)  # Adjust step for desired labels
+    ax.set_yticklabels(np.arange(-90, 91,20), fontsize=8)  # Adjust step for desired labels
 
     # Add the legend with unique entries
     ax.legend(handles=legend_handles, fontsize=4, frameon=False, ncol=2)

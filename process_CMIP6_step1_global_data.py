@@ -319,13 +319,8 @@ def make_CMIP6_each_nc_file(CMIP6_data_path,  scenario, landsea_list, time_s, ti
     gc.collect()
     return
 
-def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e):
-    
-    # Get CMIP6 model list
-    model_list   = [ 'EC-Earth3']
-    
-    # ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G',
-    #  'MIROC6','MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
+def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e, model_list):
+
     landsea_list = {'ACCESS-CM2':'/g/data/fs38/publications/CMIP6/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/fx/sftlf/gn/v20191108',
                     'BCC-CSM2-MR':'/g/data/oi10/replicas/CMIP6/GMMIP/BCC/BCC-CSM2-MR/hist-resIPO/r1i1p1f1/fx/sftlf/gn/v20190613',
                     'CMCC-CM2-SR5':'/g/data/oi10/replicas/CMIP6/CMIP/CMCC/CMCC-CM2-SR5/historical/r1i1p1f1/fx/sftlf/gn/v20200616',
@@ -339,7 +334,7 @@ def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, tim
                     'MRI-ESM2-0':'/g/data/oi10/replicas/CMIP6/CMIP/MRI/MRI-ESM2-0/historical/r1i1p1f1/fx/sftlf/gn/v20190603'}
 
     with Pool() as pool:
-        pool.starmap(make_CMIP6_each_nc_file, [(CMIP6_data_path, scenario, landsea_list, time_s, time_e, model_name) 
+        pool.starmap(make_CMIP6_each_nc_file, [(CMIP6_data_path, scenario, landsea_list, time_s, time_e, model_name)
                      for model_name in model_list])
     return
 
@@ -582,13 +577,46 @@ def make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=15):
 
     return
 
+def add_hist_annual_daytime_EF(CMIP6_out_path, model_name, scenario):
+
+    # Open the nc file
+    output_file = CMIP6_out_path + scenario+'_'+model_name+'.nc'
+    f           = nc.Dataset(output_file, 'r+', format='NETCDF4')
+    EF          = f.variables['EF'][:]
+
+    # Calculate annual EF
+    EF_annual   = np.nanmean(EF, axis=0)
+
+    # === Set other variables ===
+    # Latent heat flux
+    ef_annual                = f.createVariable('EF_annual', 'f4', ('lat', 'lon'))
+    ef_annual.standard_name  = 'Annual mean daytime latent heat flux'
+    ef_annual.units          = 'W m-2'
+    ef_annual[:]             = EF_annual
+
+    f.close()
+
+    gc.collect()
+    return
+
+def add_hist_annual_daytime_EF_parallel(CMIP6_out_path, scenario, model_list):
+
+    with Pool() as pool:
+        pool.starmap(add_hist_annual_daytime_EF, [(CMIP6_out_path, model_name, scenario)
+                     for model_name in model_list])
+    return
+
 if __name__ == "__main__":
 
     # Read files
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
     CMIP6_data_path   = "/g/data/w97/mm3972/data/CMIP6_3hr_data/Processed_CMIP6_data/"
     CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
-    scenarios         = ['historical']# 'ssp245',
+    scenarios         = ['historical', 'ssp245']
+
+    # Get CMIP6 model list
+    model_list   = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G',
+                    'MIROC6','MIROC-ES2L', 'MPI-ESM1-2-HR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0']
 
     # read CMIP6 data
     for scenario in scenarios:
@@ -606,4 +634,6 @@ if __name__ == "__main__":
         # make_EF_extremes_nc_file(CMIP6_out_path, scenario, percent=percent)
         # gc.collect()
 
-        make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e)
+        # make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e, model_list)
+
+        add_hist_annual_daytime_EF_parallel(CMIP6_out_path, scenario, model_list)

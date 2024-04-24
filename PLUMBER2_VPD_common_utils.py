@@ -18,6 +18,7 @@ from scipy.interpolate import griddata
 from scipy.signal import savgol_filter
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import warnings
 
 def get_header(model_out_name):
     if 'obs' in model_out_name:
@@ -31,6 +32,19 @@ def check_server():
     print("Memory usage:", psutil.virtual_memory().percent, "%")
     print("Disk usage:", psutil.disk_usage("/").percent, "%")  # Replace "/" with the desired path
     return
+
+def get_region_info(region_name):
+
+    print(region_name)
+
+    if region_name == 'global':
+        return {'name':'global', 'lat':None, 'lon':None}
+    elif region_name == 'east_AU':
+        return {'name':'east_AU', 'lat':[-44.5,-10], 'lon':[129,155]}
+    elif region_name == 'west_EU':
+        return {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+    elif region_name == 'north_Am':
+        return {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
 
 def decide_filename(day_time=False, summer_time=False, energy_cor=False,
                     IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
@@ -227,6 +241,8 @@ def change_model_name(model_in):
     elif model_in == 'ORC3_r8120':
         model_out = 'ORCHIDEE3'
 
+    elif model_in == 'obs':
+        model_out = 'Observed'
     else:
         model_out = model_in
 
@@ -270,6 +286,14 @@ def load_default_list():
                              'ORC3_r8120', 'QUINCY',
                              'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
+    model_names_tveg  = ['CABLE', 'CABLE-POP-CN',
+                         'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL',
+                         'JULES_GL9_withLAI',
+                         'MATSIRO', 'MuSICA',
+                         'NoahMPv401', 'ORC2_r6593',
+                         'ORC3_r8120', 'QUINCY'] #"BEPS"
+
+
     empirical_model   = ["1lin","3km27", "6km729","6km729lag",
                         "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",]
 
@@ -287,6 +311,7 @@ def load_default_list():
     model_names      = {'all_model': model_names_all,
                         'model_select':model_names_select,
                         'model_select_new':model_names_new_select,
+                        'model_tveg': model_names_tveg,
                         'empirical_model':empirical_model,
                         'hydrological_model':hydrological_model,
                         'land_surface_model':land_surface_model,
@@ -345,19 +370,17 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     if len(x_values) <= 10:
         print("Alarm! Not enought sample")
         return np.nan, np.nan, np.nan
-    else:
-        print('len(x_values)',len(x_values))
 
     # Set x_series
     x_series   = np.arange(x_bot, x_top, x_interval)
 
-    # GAM parameter set 6 -- for TVeg & nonTVeg sample_larger_200:
-    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(5, 12, 1)   # Number of splines per smooth term range
-
-    # # GAM parameter set 5 -- final for sample_larger_200:
+    # # GAM parameter set 6 -- for TVeg & nonTVeg sample_larger_200:
     # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    # n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+    # n_splines  = np.arange(5, 12, 1)   # Number of splines per smooth term range
+
+    # GAM parameter set 5 -- final for sample_larger_200:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
 
     # # GAM parameter set 4: => high VPD end surge quickly
     # lam        = np.logspace(-1, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
@@ -385,9 +408,6 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     models = []
     scores = []
 
-    # print('max(y_values)', max(y_values))
-    # print('min(y_values)', min(y_values))
-
     # Perform grid search
     for train_index, test_index in kf.split(x_values):
         X_train, X_test = x_values[train_index], x_values[test_index]
@@ -395,8 +415,10 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
         X_train = X_train.reshape(-1, 1)
 
-        # print('max(y_train)', max(y_train))
-        # print('min(y_train)', min(y_train))
+        print('X_train.shape', X_train.shape)
+        print('X_test.shape', X_test.shape)
+        print('y_train.shape', y_train.shape)
+        print('y_test.shape', y_test.shape)
 
         # Define and fit GAM model
         if dist_type=='Linear':
@@ -444,11 +466,11 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     best_model       = models[best_model_index]
     best_score       = scores[best_model_index]
 
-    print('scores',scores)
-    print('best_score',best_score)
-    print('best_model_index',best_model_index)
-    print('best_model',best_model)
-    print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
+    print(model_out_name,'scores',scores)
+    print(model_out_name,'best_score',best_score)
+    print(model_out_name,'best_model_index',best_model_index)
+    print(model_out_name,'best_model',best_model)
+    print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
 
     # Save the best model using joblib
     joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
@@ -472,7 +494,7 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     plt.xlabel('VPD')
     plt.ylabel('Qle')
     plt.title('Check the GAM fitted curve')
-    plt.xlim(0, 10)  # Set x-axis limits
+    # plt.xlim(0, 10)  # Set x-axis limits
     plt.ylim(0, 800)  # Set y-axis limits
 
     # Add legend
@@ -481,6 +503,103 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
 
     return x_series, y_pred, y_int
+
+def fit_GAM_CMIP6_predict(model_out_name, file_output, x_series, x_values, y_values, dist_type='Linear'):
+    
+    # Remove nan values
+    
+    x_interval = x_series[1]-x_series[0]
+    x_bot      = x_series[0]-x_interval/2.
+    x_top      = x_series[-1]+x_interval/2.
+
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # GAM parameter set 5 -- final for sample_larger_200:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Initialize empty lists for storing results
+    models = []
+    scores = []
+
+    # Perform grid search
+    for train_index, test_index in kf.split(x_values):
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
+
+        X_train = X_train.reshape(-1, 1)
+
+        # Define and fit GAM model
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+        # process4-4
+        models.append(gam)
+        # Evaluate model performance (replace with your preferred metric)
+        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+        scores.append(score)
+
+    # Find the best model based on average score
+    # For gam.score which calcuate deviance, the best model's score is closet to 0
+    best_model_index = np.argmin(np.abs(scores))
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print(model_out_name,'scores',scores)
+    print(model_out_name,'best_score',best_score)
+    print(model_out_name,'best_model_index',best_model_index)
+    print(model_out_name,'best_model',best_model)
+    print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/CMIP6/GAM_fit/bestGAM_{file_output}.pkl")
+
+    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
+    y_pred       = best_model.predict(x_series)
+    y_int        = best_model.confidence_intervals(x_series, width=.95)
+
+    # Save output
+    var             = pd.DataFrame(x_series, columns=['bin_series'])
+    var['vals']     = y_pred
+    var['vals_top'] = y_int[:,0]
+    var['vals_bot'] = y_int[:,1]
+    var.to_csv(f'./txt/CMIP/GAM_fit/GAM_{file_output}.csv')
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+
+    plt.savefig(f'./check_plots/check_CMIP6_GAM_fitted_{file_out_message}_{dist_type}.png',dpi=600)
+
+    return
 
 def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None):
     '''
@@ -866,6 +985,38 @@ def set_IGBP_colors():
 
     return IGBP_colors
 
+def set_clim_colors():
+
+    # file path
+    clim_colors = {
+                    # A: Tropical
+                    'Af': 'forestgreen',      # Tropical rainforest climate
+                    'Am': 'darkolivegreen',   # Tropical monsoon climate
+                    'Aw': 'lightgreen',       # Tropical savanna climate
+                    # B: Dry red
+                    'BWh': 'red',  # Hot deserts
+                    'BWk': 'violet' ,  # Cold deserts
+                    'BSh': 'hotpink',  # Hot semi-arid
+                    'BSk': 'pink',  # Cold semi-arid
+                    # C: Temperate blue
+                    'Csa': 'peru', # Hot-summer Mediterranean climates
+                    'Csb': 'tan', # Warm-summer Mediterranean climates
+                    'Cwa': 'orange', # Dry-winter subtropical climates
+                    'Cfa': 'gold', # Humid subtropical climates
+                    'Cfb': 'yellow', # Oceanic climates
+                    # D: Continental brown/yellow
+                    'Dsb': 'c',  # Mediterranean-influenced warm-summer humid continental climate
+                    'Dwa': 'aqua', # Monsoon-influenced hot-summer humid continental climate
+                    'Dwb': 'deepskyblue',  # Monsoon-influenced warm-summer humid continental climate
+                    'Dfa': 'dodgerblue',  # Hot-summer humid continental climate
+                    'Dfb': 'royalblue',  # Warm-summer humid continental climate
+                    'Dfc': 'Navy',  # Subarctic climate
+                    # E: Polar
+                    'ET': 'gray', # Tundra climate;
+                    }
+
+    return clim_colors
+
 def set_model_colors_Gs_based():
 
     # file path
@@ -894,44 +1045,6 @@ def set_model_colors_Gs_based():
                     'SDGVM':'deepskyblue' , # Medlyn
                     'STEMMUS-SCOPE':'grey' , # unknown
                     }
-
-    # model_colors = {
-    #                 'obs': 'black',
-    #                 'obs_cor': 'dimgrey',
-    #                 '1lin': 'lightcoral' ,
-    #                 '3km27': 'indianred',
-    #                 '6km729': 'firebrick',
-    #                 '6km729lag':'red',
-    #                 'LSTM_eb': 'coral',
-    #                 'LSTM_raw': 'pink',
-    #                 'RF_eb': 'tomato',
-    #                 'RF_raw': 'deeppink',
-    #                 'Manabe':'violet',
-    #                 'ManabeV2':'darkviolet',
-    #                 'PenmanMonteith': 'purple',
-    #                 'CABLE':'darkblue',
-    #                 'CABLE-POP-CN':'blue',
-    #                 'CHTESSEL_ERA5_3':'cornflowerblue',
-    #                 'CHTESSEL_Ref_exp1':'dodgerblue',
-    #                 'CLM5a':'deepskyblue',
-    #                 'GFDL':'c',
-    #                 'JULES_GL9_withLAI':'aquamarine',
-    #                 'JULES_test':'lightseagreen',
-    #                 'MATSIRO':'darkcyan',
-    #                 'NoahMPv401':'darkolivegreen',
-    #                 'ORC2_r6593':'forestgreen',
-    #                 'ORC2_r6593_CO2':'limegreen',
-    #                 'ORC3_r7245_NEE':'lime',
-    #                 'ORC3_r8120':'lightgreen',
-    #                 'STEMMUS-SCOPE':'yellowgreen',
-    #                 'ACASA':'yellow',
-    #                 'LPJ-GUESS':'orange',
-    #                 'MuSICA':'gold',
-    #                 'NASAEnt': 'goldenrod',
-    #                 'QUINCY':'peru',
-    #                 'SDGVM':'sandybrown',
-    #                 }
-
 
     return model_colors
 
@@ -1043,7 +1156,6 @@ def conduct_quality_control(varname, data_input,zscore_threshold=2, gap_fill='na
     elif gap_fill=='nan':
         print('Gap filling by NaN values')
         return data_output
-
 
 def convert_into_kg_m2_s(data_input, var_units):
 

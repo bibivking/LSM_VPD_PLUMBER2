@@ -61,6 +61,27 @@ def calc_stat(data_in, outlier_method='IQR', min_percentile=0.05, max_percentile
 
     return (Mean, P25, P75, Minimum, Maximum)
 
+def calc_stat_percentile(data_in):
+
+    # Delete nan values
+    data_tmp = []
+    for dt_in in data_in:
+        if not np.isnan(dt_in):  # Assuming dt_in is a single value
+            data_tmp.append(dt_in)
+    data_in = data_tmp
+
+    # calculate statistics
+    Mean           = pd.Series(data_in).mean()
+    percentiles    = np.arange(1,100,1)
+    val_percentile = np.zeros(len(percentiles+1))
+
+    for i, percentile in enumerate(percentiles):
+        val_percentile[i] = pd.Series(data_in).quantile(percentile) 
+
+    val_percentile[-1] = Mean
+
+    return val_percentile
+
 def get_PLUMBER2_curve_names(bounds):
 
    # Path of PLUMBER 2 dataset
@@ -527,6 +548,35 @@ def calc_predicted_CMIP6_metrics(CMIP6_txt_path, var_name, model_in, CMIP6_model
         metrics.to_csv(f'{CMIP6_txt_path}/metrics_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
     else:
         metrics.to_csv(f'{CMIP6_txt_path}/metrics_CMIP6_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
+
+    return
+
+def calc_predicted_CMIP6_percentiles(CMIP6_txt_path, var_name, model_in, CMIP6_model_list):
+
+    # ============ Setting for plotting ============
+    input_files = []
+    var_input   = []
+
+    # Read all CMIP6 dataset
+    for i, CMIP6_model in enumerate(CMIP6_model_list):
+        print(CMIP6_model)
+        if day_time:
+            var_tmp = pd.read_csv(f'{CMIP6_txt_path}/predicted_CMIP6_DT_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv', na_values=[''], usecols=[model_in])
+        else:
+            var_tmp = pd.read_csv(f'{CMIP6_txt_path}/predicted_CMIP6_{var_name}_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv', na_values=[''], usecols=[model_in])
+        # var_input.append(var_tmp[model_in])
+
+        if i == 0:
+            var_input = var_tmp[model_in].values #np.array(var_tmp.values)
+        else:
+            var_input = np.concatenate((var_input, var_tmp[model_in].values))#np.array(var_tmp.values))
+
+    val_percentile  = pd.DataFrame(calc_stat_percentile(var_input), columns=[model_in])
+
+    if day_time:
+        val_percentile.to_csv(f'{CMIP6_txt_path}/percentile_CMIP6_DT_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
+    else:
+        val_percentile.to_csv(f'{CMIP6_txt_path}/percentile_CMIP6_{var_name}_{scenario}_{model_in}_{region["name"]}.csv')
 
     return
 
