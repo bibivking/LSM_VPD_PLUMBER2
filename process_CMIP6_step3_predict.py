@@ -127,7 +127,6 @@ if __name__ == "__main__":
     CMIP6_3h_out_path = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
     CMIP6_txt_path    = '/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/CMIP6'
 
-
     # Set options
     scenarios         = ['historical','ssp245'] # ['historical','ssp126','ssp245','ssp370']
     percent           = 15

@@ -386,9 +386,9 @@ if __name__ == '__main__':
     day_time       = True
     energy_cor     = False
 
-    clarify_site   = {'opt': True,
-                     'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
-                                     'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+    clarify_site      = {'opt': True,
+                         'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                         'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
     standardize    = None #'by_obs_mean' #None#'by_LAI'#'by_obs_mean'
 
 

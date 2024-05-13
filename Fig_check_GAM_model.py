@@ -109,11 +109,11 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
                                                     veg_fraction=veg_fraction, LAI_range=LAI_range, method=method,
                                                     uncertain_type=uncertain_type, clarify_site=clarify_site)
 
-        mean_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{var_name}{file_message}.csv',
+        mean_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message}.csv',
                                 usecols=['vpd_series',model_in+'_vals',model_in+'_bot',model_in+'_top'])
 
         # read the GAM model (VPD from 0.001 to last VPD with >200 samples)
-        dist_type      = 'Gamma'
+        dist_type      = 'Poisson'
         method         = 'CRV_fit_GAM_complex'
         uncertain_type = None
         folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, IGBP_type=IGBP_type,
@@ -122,12 +122,13 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
                                                     veg_fraction=veg_fraction, LAI_range=LAI_range, method=method,
                                                     uncertain_type=uncertain_type, clarify_site=clarify_site)
 
-        GAM_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/Gamma_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
+        GAM_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
                                  usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
 
         # read the concave GAM model (VPD 0.001 to 10.001)
-        GAM_curves_extent = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/Gamma_concave/{var_name}{file_message}_{dist_type}.csv',
-                                 usecols=['vpd_series',model_in+'_vals',model_in+'_bot',model_in+'_top'])
+        GAM_curves_extent = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
+                                 usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
+                                 # usecols=['vpd_series',model_in+'_vals',model_in+'_bot',model_in+'_top'])
 
         # process3 selected data points
         folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
@@ -173,16 +174,19 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
         ax[row,col].plot(GAM_curves['vpd_pred'], GAM_curves['y_pred'], color='gray', label='GAM', ls= 'dashed')
         ax[row,col].fill_between(GAM_curves['vpd_pred'], GAM_curves['y_int_bot'], GAM_curves['y_int_top'], color='gray', edgecolor="none", alpha=0.1) #  .
 
-        ax[row,col].plot(GAM_curves_extent['vpd_series'], GAM_curves_extent[model_in+'_vals'], color='black', label='GAM_concave', ls= 'dotted')
-        ax[row,col].fill_between(GAM_curves_extent['vpd_series'], GAM_curves_extent[model_in+'_bot'], GAM_curves_extent[model_in+'_top'], color='black', edgecolor="none", alpha=0.1) #  .
+        # ax[row,col].plot(GAM_curves_extent['vpd_series'], GAM_curves_extent[model_in+'_vals'], color='black', label='GAM_concave', ls= 'dotted')
+        # ax[row,col].fill_between(GAM_curves_extent['vpd_series'], GAM_curves_extent[model_in+'_bot'], GAM_curves_extent[model_in+'_top'], color='black', edgecolor="none", alpha=0.1) #  .
+
+        ax[row,col].plot(GAM_curves_extent['vpd_pred'], GAM_curves_extent['y_pred'], color='black', label='GAM_concave', ls= 'dotted')
+        ax[row,col].fill_between(GAM_curves_extent['vpd_pred'], GAM_curves_extent['y_int_bot'], GAM_curves_extent['y_int_top'], color='black', edgecolor="none", alpha=0.1) #  .
 
         # Add labels and title
         ax[row,col].text(0.05, 0.9, order[i]+' '+change_model_name(model_in), va='bottom', ha='left', rotation_mode='anchor',transform=ax[row,col].transAxes, fontsize=14)
 
         ax[row,col].set_xlim(0, 10)  # Set x-axis limits
 
-        ax[row,col].set_xticks(fontsize=12)
-        ax[row,col].set_yticks(fontsize=12)
+        # ax[row,col].set_xticks(fontsize=12)
+        # ax[row,col].set_yticks(fontsize=12)
 
         if bounds[0] == 0:
             ax[row,col].set_ylim(0, 200)  # Set y-axis limits
@@ -360,9 +364,9 @@ def plotting_clim_colors(model_in, bounds, LAI_range=None, veg_fraction=None):
     uncertain_type = 'UCRTN_bootstrap'
 
     # ===================== Default pre-processing =======================
-    clarify_site   = {'opt': True,
-                    'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
-                    'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+    clarify_site      = {'opt': True,
+                         'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                         'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
     models_calc_LAI= ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
 
     if time_scale == 'hourly':

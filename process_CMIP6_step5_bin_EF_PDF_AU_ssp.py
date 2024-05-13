@@ -160,20 +160,22 @@ def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'globa
                                    na_values=[''],usecols=['EF_annual_hist'])
         var_predict  = pd.read_csv(f'{CMIP6_path}/predict/predicted_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv',
                                    na_values=[''],usecols=[model_in])
-        bin_series   = np.arange(0.005, 1.005, 0.01)
+        # bin_series   = np.arange(0.005, 1.005, 0.01)
+        bin_series   = np.arange(0.05, 1.05, 0.1)
 
         if bin_method == 'bin':
-            file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv'
+            file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}_coarse.csv'
         elif  bin_method == 'GAM':
-            file_output  = f'GAM_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}'
+            file_output  = f'GAM_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv'
 
     elif bin_type=='EF':
         var_bin      = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['EF'])
         var_predict  = pd.read_csv(f'{CMIP6_path}/predict/predicted_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv',
                                    na_values=[''],usecols=[model_in])
-        bin_series   = np.arange(0.005, 1.005, 0.01)
-        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv'
+        # bin_series   = np.arange(0.005, 1.005, 0.01)
+        bin_series   = np.arange(0.05, 1.05, 0.1)
+        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}_coarse.csv'
 
     elif bin_type=='VPD':
         var_bin      = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{region["name"]}.csv',
@@ -196,24 +198,27 @@ def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'globa
                                    na_values=[''],usecols=['EF'])
         var_predict  = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['VPD'])
-        bin_series   = np.arange(0.005, 1.005, 0.01)
-        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}_{dist_type}.csv'
+        # bin_series   = np.arange(0.005, 1.005, 0.01)
+        bin_series   = np.arange(0.05, 1.05, 0.1)
+        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}_{dist_type}_coarse.csv'
 
     elif bin_type=='VPD_bin_by_EF_annual_hist':
         var_bin      = pd.read_csv(f'{CMIP6_path}/EF_annual_hist/CMIP6_DT_filtered_by_VPD_EF_annual_hist_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['EF_annual_hist'])
         var_predict  = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['VPD'])
-        bin_series   = np.arange(0.005, 1.005, 0.01)
-        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}_{dist_type}.csv'
+        # bin_series   = np.arange(0.005, 1.005, 0.01)
+        bin_series   = np.arange(0.05, 1.05, 0.1)
+        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_VPD_{scenario}_{region["name"]}_{dist_type}_coarse.csv'
 
     elif bin_type=='EF_bin_by_EF_annual_hist':
         var_bin      = pd.read_csv(f'{CMIP6_path}/EF_annual_hist/CMIP6_DT_filtered_by_VPD_EF_annual_hist_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['EF_annual_hist'])
         var_predict  = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_EF_{scenario}_{region["name"]}.csv',
                                    na_values=[''],usecols=['EF'])
-        bin_series   = np.arange(0.005, 1.005, 0.01)
-        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_EF_{scenario}_{region["name"]}_{dist_type}.csv'
+        # bin_series   = np.arange(0.005, 1.005, 0.01)
+        bin_series   = np.arange(0.05, 1.05, 0.1)
+        file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_EF_{scenario}_{region["name"]}_{dist_type}_coarse.csv'
 
     # if bin
 
@@ -229,7 +234,7 @@ def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'globa
         var_output.to_csv(f'./txt/CMIP6/binned/{file_output}')
 
     elif bin_method == 'GAM':
-        dist_type = 'Gamma'
+        dist_type = dist_type#'Gamma'
         fit_GAM_CMIP6_predict(model_in, file_output, bin_series, var_bin.values, var_predict.values, dist_type=dist_type)
 
     return
@@ -244,7 +249,7 @@ if __name__ == "__main__":
 
     # ========================================= 1D curve ========================================
     model_list     = model_names['model_select_new']
-    dist_type      = 'Gamma' #'Poisson' # 'Linear', None
+    dist_type      = 'Poisson' #'Gamma' #'Poisson' # 'Linear', None
     uncertain_type = 'UCRTN_bootstrap'
 
     CMIP6_list   =  ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
@@ -260,38 +265,39 @@ if __name__ == "__main__":
     #         put_all_CMIP6_EF_VPD_together(CMIP6_path, CMIP6_list, scenario, region=region, dist_type=dist_type)
 
     # # ======= Get CMIP6 model predict all together =======
+    # region_name = 'east_AU'
+    # scenario    = 'ssp245'
+    # region      = get_region_info(region_name)
+    # with mp.Pool() as pool:
+    #     pool.starmap(put_all_CMIP6_predict_together,
+    #                  [(CMIP6_path, model_in, CMIP6_list, scenario, region, dist_type) for model_in in model_list])
+
     # for region_name in region_names:
     #     region  = get_region_info(region_name)
     #     for scenario in scenarios:
     #         with mp.Pool() as pool:
     #             pool.starmap(put_all_CMIP6_predict_together,
     #                          [(CMIP6_path, model_in, CMIP6_list, scenario, region, dist_type) for model_in in model_list])
-
+    #
     # # ======= binning =======
-    # bin_type = 'VPD_bin_by_EF_annual_hist'
+    # region_name = 'east_AU'
+    # scenario    = 'ssp245'
+    #
+    # bin_method= 'bin'#'GAM'
+    # dist_type = 'Poisson'
+    # bin_type  = 'VPD_bin_by_EF_annual_hist'
+    # model_in  = None
+    # region    = get_region_info(region_name)
+    # write_var_binned(CMIP6_path, scenario, model_in, region, dist_type, uncertain_type, bin_type, bin_method)
+    #
+    # bin_type ='EF_bin_by_EF_annual_hist'
     # model_in = None
-    # for region_name in region_names:
-    #     region  = get_region_info(region_name)
-    #     for scenario in scenarios:
-    #         write_var_binned(CMIP6_path, scenario, model_in, region, dist_type, uncertain_type, bin_type)
-
-    # bin_type='EF_bin_by_EF_annual_hist'
-    # model_in = None
-    # for region_name in region_names:
-    #     region  = get_region_info(region_name)
-    #     for scenario in scenarios:
-    #         write_var_binned(CMIP6_path, scenario, model_in, region, dist_type, uncertain_type, bin_type)
+    # region   = get_region_info(region_name)
+    # write_var_binned(CMIP6_path, scenario, model_in, region, dist_type, uncertain_type, bin_type, bin_method)
 
     bin_type  = 'EF_annual_hist'
-    bin_method= 'GAM'
-    dist_type = 'Gamma'
-    # for region_name in region_names:
-    #     region  = get_region_info(region_name)
-    #     for scenario in scenarios:
-    #         with mp.Pool() as pool:
-    #             pool.starmap(write_var_binned, [(CMIP6_path, scenario, model_in, region,
-    #                         dist_type, uncertain_type, bin_type, bin_method, dist_type) for model_in in model_list])
-
+    bin_method= 'bin'#'GAM'
+    dist_type = 'Poisson'
     region_name = 'east_AU'
     scenario    = 'ssp245'
     region      = get_region_info(region_name)

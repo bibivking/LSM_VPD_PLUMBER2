@@ -30,6 +30,37 @@ from matplotlib import colors
 import matplotlib.ticker as mticker
 from PLUMBER2_VPD_common_utils import *
 
+def calc_thirty_year_mean_predict_LH(CMIP6_path, scenario, CMIP6_model, region, model_in, dist_type):
+
+    '''
+    bin_input, var_predict, bin_series: 1-d array
+    '''
+
+    # Read lat and lon
+    var_tmp         = pd.read_csv(f'{CMIP6_path}/lat_lon/CMIP6_DT_filtered_by_VPD_lat_lon_{scenario}_{CMIP6_model}_{region["name"]}.csv',na_values=[''], usecols=['lat','lon'])
+
+    # Read predict LH
+    var_predict     = pd.read_csv(f'{CMIP6_path}/predict/predicted_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}_{dist_type}.csv',
+                               na_values=[''],usecols=[model_in])
+    var_tmp[model_in]= var_predict[model_in].values
+
+    # Read EF_annual_hist
+    if model_in == 'CABLE':
+        EF_annual_hist  = pd.read_csv(f'{CMIP6_path}/EF_annual_hist/CMIP6_DT_filtered_by_VPD_EF_annual_hist_{scenario}_{CMIP6_model}_{region["name"]}.csv',na_values=[''], usecols=['EF_annual_hist'])
+        var_tmp['EF_annual_hist'] = EF_annual_hist['EF_annual_hist'].values
+
+    # Groupby
+    var             = var_tmp.groupby(['lat','lon']).mean()
+    print('var', var)
+    var_vals        = pd.Series(var[model_in].values, name=model_in)
+    var_vals.to_csv(f'./txt/CMIP6/thirty_year_mean_per_pixel/CMIP6_DT_filtered_by_VPD_Qle_30year_mean_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+
+    if model_in == 'CABLE':
+        var_EF_annual_hist = pd.Series(var['EF_annual_hist'].values, name='EF_annual_hist')
+        var_EF_annual_hist.to_csv(f'./txt/CMIP6/thirty_year_mean_per_pixel/CMIP6_DT_filtered_by_VPD_EF_annual_hist_30year_mean_{scenario}_{CMIP6_model}_{model_in}_{region["name"]}.csv')
+
+    return
+
 def bin_val_pdf(bin_input, bin_series, var_predict, uncertain_type='UCRTN_percentile'):
 
     '''
@@ -151,7 +182,7 @@ def put_all_CMIP6_predict_together(CMIP6_path, model_in, CMIP6_list, scenario, r
     return
 
 def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'global','lat':None, 'lon':None},
-                     dist_type=None, uncertain_type='UCRTN_bootstrap', bin_type='EF_annual_hist', 
+                     dist_type=None, uncertain_type='UCRTN_bootstrap', bin_type='EF_annual_hist',
                      bin_method=None):
 
     # Read in the selected raw data
@@ -161,11 +192,11 @@ def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'globa
         var_predict  = pd.read_csv(f'{CMIP6_path}/predict/predicted_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv',
                                    na_values=[''],usecols=[model_in])
         bin_series   = np.arange(0.005, 1.005, 0.01)
-        
+
         if bin_method == 'bin':
             file_output  = f'bin_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv'
         elif  bin_method == 'GAM':
-            file_output  = f'GAM_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}'
+            file_output  = f'GAM_{bin_type}_CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{model_in}_{region["name"]}_{dist_type}.csv'
 
     elif bin_type=='EF':
         var_bin      = pd.read_csv(f'{CMIP6_path}/save_csv/CMIP6_DT_filtered_by_VPD_Qle_{scenario}_{region["name"]}.csv',
@@ -227,7 +258,7 @@ def write_var_binned(CMIP6_path, scenario,  model_in=None, region={'name':'globa
         var_output['vals_top'] = vals_top
         var_output['vals_bot'] = vals_bot
         var_output.to_csv(f'./txt/CMIP6/binned/{file_output}')
-        
+
     elif bin_method == 'GAM':
         dist_type = 'Gamma'
         fit_GAM_CMIP6_predict(model_in, file_output, bin_series, var_bin.values, var_predict.values, dist_type=dist_type)
@@ -244,7 +275,7 @@ if __name__ == "__main__":
 
     # ========================================= 1D curve ========================================
     model_list     = model_names['model_select_new']
-    dist_type      = 'Gamma' #'Poisson' # 'Linear', None
+    dist_type      = 'Poisson' #'Poisson' # 'Linear', None
     uncertain_type = 'UCRTN_bootstrap'
 
     CMIP6_list   =  ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G', 'MIROC6',
@@ -282,19 +313,24 @@ if __name__ == "__main__":
     #     for scenario in scenarios:
     #         write_var_binned(CMIP6_path, scenario, model_in, region, dist_type, uncertain_type, bin_type)
 
-    bin_type  = 'EF_annual_hist'
-    bin_method= 'GAM'
-    dist_type = 'Gamma'
-    # for region_name in region_names:
-    #     region  = get_region_info(region_name)
-    #     for scenario in scenarios:
-    #         with mp.Pool() as pool:
-    #             pool.starmap(write_var_binned, [(CMIP6_path, scenario, model_in, region,
-    #                         dist_type, uncertain_type, bin_type, bin_method, dist_type) for model_in in model_list])
+    # bin_type  = 'EF_annual_hist'
+    # bin_method= 'GAM'
+    # dist_type = 'Gamma'
+    # # for region_name in region_names:
+    # #     region  = get_region_info(region_name)
+    # #     for scenario in scenarios:
+    # #         with mp.Pool() as pool:
+    # #             pool.starmap(write_var_binned, [(CMIP6_path, scenario, model_in, region,
+    # #                         dist_type, uncertain_type, bin_type, bin_method, dist_type) for model_in in model_list])
+    #
+    # region_name = region_names[1]
+    # scenario    = scenarios[1]
+    # region      = get_region_info(region_name)
+    # with mp.Pool() as pool:
+    #     pool.starmap(write_va/r_binned, [(CMIP6_path, scenario, model_in, region,
+    #                  dist_type, uncertain_type, bin_type, bin_method) for model_in in model_list])
 
-    region_name = region_names[1]
-    scenario    = scenarios[1]
+    region_name = region_names[2]
+    scenario    = scenarios[0]
     region      = get_region_info(region_name)
-    with mp.Pool() as pool:
-        pool.starmap(write_var_binned, [(CMIP6_path, scenario, model_in, region,
-                     dist_type, uncertain_type, bin_type, bin_method) for model_in in model_list])
+    calc_thirty_year_mean_predict_LH(CMIP6_path, scenario, CMIP6_list[0], region,'GFDL', dist_type)

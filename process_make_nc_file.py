@@ -798,7 +798,7 @@ if __name__ == "__main__":
 
     PLUMBER2_flux_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Flux/"
     PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
-    SM_names, soil_thicknesses = get_model_soil_moisture_info()
+    
 
     # The name of models
     # model_names   = [   "1lin","3km27", "6km729","6km729lag",
@@ -827,18 +827,22 @@ if __name__ == "__main__":
     # 'AU-Rob', 'AU-Wrr', 'CA-NS2', 'CA-NS6', 'CA-NS7',
     #                       'CN-Din', 'US-WCr', 'ZM-Mon',
     for site_name in site_names:
-        print('site_name',site_name)
-        output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
-        zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
-                             # beyond 4 standard deviation, out of 99.349%
 
-        varname       = "TVeg"
-        # key_word      = "trans"
-        # key_word_not  = ["evap","transmission","pedo","electron",]
-        trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
-        # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
-        print(trans_dict)
-        gc.collect()
+        SM_names, soil_thicknesses = get_model_soil_moisture_info(site_name)
+        
+        print(site_name,soil_thicknesses)
+        # print('site_name',site_name)
+        # output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
+        # zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%
+        #                      # beyond 4 standard deviation, out of 99.349%
+
+        # varname       = "TVeg"
+        # # key_word      = "trans"
+        # # key_word_not  = ["evap","transmission","pedo","electron",]
+        # trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)#, key_word, key_word_not)
+        # # make_nc_file(PLUMBER2_path, trans_dict, model_names, site_name, output_file, varname, zscore_threshold)
+        # print(trans_dict)
+        # gc.collect()
 
         # varname       = "Qle"
         # # key_word      = 'latent'

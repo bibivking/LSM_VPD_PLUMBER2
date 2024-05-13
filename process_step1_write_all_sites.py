@@ -468,7 +468,7 @@ def add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LA
 
     return
 
-def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path):
+def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path):
 
     # read the variables
     var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',usecols=['time','month',
@@ -479,11 +479,15 @@ def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names,
     # ntime        = len(var_output)
 
     # Initlize the model SMtop1m
+    SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
     for model_name in SM_names:
         var_output[model_name+'_SMtop1m'] = np.nan
 
     # Loop accross all sites
     for i, site_name in enumerate(site_names):
+        print(site_name)
+        SM_names, soil_thicknesses = get_model_soil_moisture_info(site_name)
+
         # Get site mask
         site_mask = (var_output['site_name'] == site_name)
 
@@ -549,13 +553,13 @@ if __name__ == "__main__":
     model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',
                          'GFDL':'lai', 'SDGVM':'lai','QUINCY':'LAI','NoahMPv401':'LAI'} #
 
-    SM_names, soil_thicknesses = get_model_soil_moisture_info()
+
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
 
-    # add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, SM_names, PLUMBER2_path)
+    add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path)
 
     # # === Together ===
     var_name          = 'LAI'

@@ -46,11 +46,36 @@ def get_region_info(region_name):
     elif region_name == 'north_Am':
         return {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
 
+def get_regional_site_list(region= {'name':'global','lat':None, 'lon':None}):
+
+    '''
+    Get the site name list for the selected region
+    '''
+
+    PLUMBER2_path      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+    all_site_path      = sorted(glob.glob(PLUMBER2_path+"/*.nc"))
+    site_names         = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
+    lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
+
+    sites              = []
+
+    for site_name in site_names:
+
+        within_region = ((lat_dict[site_name] >= region['lat'][0]) &
+                         (lat_dict[site_name] <= region['lat'][1]) &
+                         (lon_dict[site_name] >= region['lon'][0]) &
+                         (lon_dict[site_name] <= region['lon'][1]))
+        if within_region:
+            sites.append(site_name)
+    regional_sites = {'name':region['name'],'sites':sites}
+    return regional_sites
+
 def decide_filename(day_time=False, summer_time=False, energy_cor=False,
                     IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
                     country_code=None, selected_by=None, bounds=None, veg_fraction=None,
                     uncertain_type=None, method=None,LAI_range=None,
-                    clarify_site={'opt':False,'remove_site':None}):
+                    clarify_site={'opt':False,'remove_site':None},regional_sites=None):
 
     # file name
     file_message = ''
@@ -111,6 +136,9 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
     if uncertain_type != None and method == 'CRV_bins':
         file_message = file_message + '_' + uncertain_type
 
+    if regional_sites != None:
+        file_message = file_message+'_'+regional_sites['name']
+
     folder_name = 'original'
 
     if standardize != None:
@@ -129,6 +157,9 @@ def get_model_out_list(var_name):
         model_in_list = f.variables['Qle_models']
     elif var_name == 'nonTVeg':
         model_in_list = f.variables['TVeg_models']
+    elif var_name == 'SMtop1m':
+        SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
+        model_in_list = list(SM_names.keys())
     else:
         model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
@@ -141,7 +172,7 @@ def get_model_out_list(var_name):
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP']:
+    if var_name in ['Qle','Qh','NEE','GPP','EF']:
         model_out_list.append('obs')
 
     return model_out_list
@@ -374,9 +405,10 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     # Set x_series
     x_series   = np.arange(x_bot, x_top, x_interval)
 
-    # # GAM parameter set 6 -- for TVeg & nonTVeg sample_larger_200:
+    # GAM parameter set 6 -- new try since optimized n_spline mostly = 10,
+    # thus increase the range to find the best, sample_larger_200:
     # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    # n_splines  = np.arange(5, 12, 1)   # Number of splines per smooth term range
+    # n_splines  = np.arange(5, 14, 1)   # Number of splines per smooth term range
 
     # GAM parameter set 5 -- final for sample_larger_200:
     lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
@@ -424,6 +456,8 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
         if dist_type=='Linear':
             gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
         elif dist_type=='Poisson':
+            # concave assumption
+            # gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
             gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
         elif dist_type=='Gamma':
             gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
@@ -473,7 +507,7 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
 
     # Save the best model using joblib
-    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/Poisson_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
     y_pred       = best_model.predict(x_series)
@@ -505,9 +539,9 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     return x_series, y_pred, y_int
 
 def fit_GAM_CMIP6_predict(model_out_name, file_output, x_series, x_values, y_values, dist_type='Linear'):
-    
+
     # Remove nan values
-    
+
     x_interval = x_series[1]-x_series[0]
     x_bot      = x_series[0]-x_interval/2.
     x_top      = x_series[-1]+x_interval/2.
@@ -609,10 +643,15 @@ def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_v
     print('dist_type',dist_type)
 
     # Load the model using joblib
+    # if dist_type == None:
+    #     best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    # else:
+    #     best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
     if dist_type == None:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
     else:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Predict using new data
     y_pred = best_model.predict(x_values)
@@ -1175,16 +1214,44 @@ def convert_from_umol_m2_s_into_gC_m2_s(data_input, var_units):
 
     return data_output
 
-def get_model_soil_moisture_info():
+def get_model_soil_moisture_info(site_name):
 
+    '''
+    CLM5: Increased soil vertical resolution (20 soil layers + 5 bedrock layers), thus the last 5 layers
+        are bedrock layers which don't have soil moisture data. [The Community Land Model Version 5: Description
+        of New Features, Benchmarking, and Impact of Forcing Uncertainty]
+    MATSIRO: As the default setting, the soil has six layers whose thicknesses are defined by the depth boundaries
+        of 5, 20, 75, 100, 200, and 1000 cm from the surface. [Description of MATSIRO6]
+        However, I communicated with Qiang Guo, who worked in Tokyo University, he told the thickness are
+        0.05, 0.20, 0.75, 1., 2., 8 meter.
+    '''
     # Set models with simulated soil mositure
-    SM_names      = { 'CABLE':'SoilMoist', 'CABLE-POP-CN':'SoilMoist',
-                      'CHTESSEL_ERA5_3':'SoilMoist', 'CHTESSEL_Ref_exp1':'SoilMoist',
-                      'CLM5a':'mrlsl', 'GFDL':'SoilMoist', 'JULES_GL9_withLAI':'SoilMoist',
+    SM_names      = { 'CABLE':'SoilMoist',
+                      'CABLE-POP-CN':'SoilMoist',
+                    #   'CHTESSEL_ERA5_3':'SoilMoist',
+                      'CHTESSEL_Ref_exp1':'SoilMoist',
+                      'CLM5a':'mrlsl',
+                      'GFDL':'SoilMoist',
+                      'JULES_GL9':'SoilMoist',
                       'JULES_GL9_withLAI':'SoilMoist',
-                      'JULES_test':'SoilMoist', 'MATSIRO':'SoilMoistV', 'MuSICA':'SoilMoist',
-                      'NoahMPv401':'SoilMoist', 'ORC2_r6593':'SoilMoist','ORC3_r7245_NEE':'SoilMoist',
-                      'ORC3_r8120':'SoilMoist','STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
+                    #   'JULES_test':'SoilMoist',
+                      'MATSIRO':'SoilMoistV',
+                      'MuSICA':'SoilMoist',
+                      'NoahMPv401':'SoilMoist',
+                      'ORC2_r6593':'SoilMoist',
+                    #   'ORC3_r7245_NEE':'SoilMoist',
+                      'ORC3_r8120':'SoilMoist',
+                      'STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
+
+    # get soil thickness in MuSICA model
+    MuSICA_path = glob.glob(f"/g/data/w97/mm3972/data/PLUMBER2/MuSICA/{site_name}*.nc")
+
+    if MuSICA_path:
+        f                = nc.Dataset(MuSICA_path[0])
+        MuSICA_thickness = f.variables['dz_soil'][:]
+        MuSICA_thickness = MuSICA_thickness.tolist()
+    else:
+        MuSICA_thickness = [np.nan]
 
     # Set soil layer thickness
     soil_thicknesses = {'CABLE':[0.022,0.058, 0.154, 0.409, 1.085, 2.872],
@@ -1194,17 +1261,14 @@ def get_model_soil_moisture_info():
                         'JULES_test': [0.1, 0.25, 0.65, 2.0],
                         'JULES_GL9': [0.1, 0.25, 0.65, 2.0],
                         'JULES_GL9_withLAI': [0.1, 0.25, 0.65, 2.0],
-                        'MATSIRO': [0.05, 0.2, 0.75, 1., 2.],
+                        'MATSIRO': [0.05, 0.20, 0.75, 1., 2., 8],
                         'NoahMPv401': [0.10, 0.30, 0.60,1.],
                         'CLM5a':[0.02, 0.04, 0.06, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.36, 0.4,
                                  0.44, 0.54, 0.64, 0.74, 0.84, 0.94, 1.04, 1.14, 2.39, 4.675534, 7.63519,
                                  11.14, 15.11543],
                         'GFDL': [0.02,0.04,0.04,0.05,0.05,0.1,0.1,0.2,0.2,0.2,
                                   0.4,0.4,0.4,0.4,0.4,1,1,1,1.5,2.5],
-                        'MuSICA': [0.01695884, 0.01970336, 0.02289203, 0.02659675, 0.03090101,
-                                    0.03590186, 0.041712, 0.04846244, 0.05630532, 0.06541745, 0.07600423,
-                                    0.08830432, 0.102595, 0.1191984, 0.1384887, 0.160901, 0.1869402,
-                                    0.2171936, 0.2523429, 0.2931806],
+                        'MuSICA': MuSICA_thickness,
                         'ORC2_r6593':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
                                       0.09188661, 0.1857283, 0.3734115, 0.7487781, 1.499511, 2],
                         'ORC3_r7245_NEE':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
