@@ -16,6 +16,7 @@ from sklearn.model_selection import KFold
 from scipy import stats, interpolate
 from scipy.interpolate import griddata
 from scipy.signal import savgol_filter
+from sklearn.metrics import r2_score
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import warnings
@@ -158,8 +159,13 @@ def get_model_out_list(var_name):
     elif var_name == 'nonTVeg':
         model_in_list = f.variables['TVeg_models']
     elif var_name == 'SMtop1m':
-        SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
-        model_in_list = list(SM_names.keys())
+        model_in_list = f.variables['Qle_models']
+        # SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
+        # model_in_list = list(SM_names.keys())
+    elif var_name == 'SWdown':
+        model_in_list = f.variables['Qle_models']
+    elif var_name == 'LAI':
+        model_in_list = ['ORC2_r6593','ORC3_r8120','GFDL','QUINCY','NoahMPv401'] #'obs',
     else:
         model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
@@ -172,7 +178,7 @@ def get_model_out_list(var_name):
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP','EF']:
+    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','SWdown']:
         model_out_list.append('obs')
 
     return model_out_list
@@ -378,8 +384,14 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
 
     return x_series, y_pred, y_int
 
-def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
+def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
 
+    '''
+    In this method, it tests all parameter combinations to select the best parameter
+    combination for each fold, and select from all folds to get the best combination.
+    However, the best parameter combination should come from best average score of 5
+    folds. So I wrote a new function to replace def fit_GAM_complex_old.
+    '''
     print(model_out_name, 'x_top',x_top)
 
     # In case no VPD bin has data points >= VPD_num_threshold
@@ -538,6 +550,148 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
     return x_series, y_pred, y_int
 
+def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top,
+    x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
+
+    print(model_out_name, 'x_top',x_top)
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_name = f'{dist_type}_greater_200_samples'
+        concave        = False
+
+    elif vpd_top_type == 'to_10':
+        subfolder_name = f'{dist_type}_to_10'
+        concave        = True
+
+    # In case no VPD bin has data points >= VPD_num_threshold
+    if np.isnan(x_top):
+        return np.nan, np.nan, np.nan
+
+    # Remove nan values
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    # copy.deepcopy: creates a complete, independent copy of an object
+    # and its entire internal structure, including nested objects and any
+    # references they contain.
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # Set x_series
+    x_series   = np.arange(x_bot, x_top, x_interval)
+
+    # GAM parameter set7 -- lam -3,3; n_splines 3,11 doesn't work work well so change to new ranges:
+    lams           = np.logspace(-3, 2, 10)  # Smoothing parameter range
+    n_splines      = np.arange(3, 11, 1)     # Number of splines per smooth term range
+    parameter_grid = [(lam, n_spline) for lam in lams for n_spline in n_splines]
+
+    # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
+    # n_splines: Number of spline basis functions (7 values between 3 and 9).
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Store results for each parameter set
+    param_results = []
+
+    for lam, n_spline in parameter_grid:
+
+        print('lam',lam,'n_spline',n_spline)
+
+        fold_scores = []
+
+        try:
+            for train_index, test_index in kf.split(x_values):
+                X_train, X_test = x_values[train_index], x_values[test_index]
+                y_train, y_test = y_values[train_index], y_values[test_index]
+
+                X_train = X_train.reshape(-1, 1)
+
+                # Define and fit GAM model based on the dist_type
+                if dist_type == 'Linear':
+                    gam = LinearGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                elif dist_type == 'Poisson':
+                    if concave:
+                        gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                    else:
+                        gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                elif dist_type == 'Gamma':
+                    if concave:
+                        gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                    else:
+                        gam = GammaGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+
+                # Evaluate model performance
+                score = gam.score(X_test, y_test)  # compute explained deviance
+                fold_scores.append(score)
+
+        except Exception as e:
+            print(f'Error for {model_out_name}, lam={lam}, n_spline={n_spline}: {e}')
+            continue
+
+        # Calculate the average performance for the current parameter set
+        if fold_scores:
+            avg_score = np.mean(fold_scores)
+            param_results.append((lam, n_spline, avg_score))
+
+    # Find the parameter set with the best average performance
+
+    # Print the best parameters and their score
+    print(f"{model_out_name}, param_results: {param_results}")
+
+    best_params = min(param_results, key=lambda x: np.abs(x[2]))
+    best_lam, best_n_spline, best_score = best_params
+
+    # Print the best parameters and their score
+    print(f"Best Parameters: lam={best_lam}, n_splines={best_n_spline} with average score={best_score}")
+
+    # Fit the best model with the best parameters on the full dataset
+    if dist_type == 'Linear':
+        best_model = LinearGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+    elif dist_type == 'Poisson':
+        if concave:
+            best_model = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+        else:
+            best_model = PoissonGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+    elif dist_type == 'Gamma':
+        if concave:
+            best_model = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+        else:
+            best_model = GammaGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
+    # Generate predictions and confidence intervals
+    y_pred   = best_model.predict(x_series)
+    y_int    = best_model.confidence_intervals(x_series, width=.95)
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    # plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
+
+    return x_series, y_pred, y_int
+
 def fit_GAM_CMIP6_predict(model_out_name, file_output, x_series, x_values, y_values, dist_type='Linear'):
 
     # Remove nan values
@@ -635,7 +789,8 @@ def fit_GAM_CMIP6_predict(model_out_name, file_output, x_series, x_values, y_val
 
     return
 
-def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None):
+def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None,
+                        vpd_top_type='sample_larger_200',confidence_intervals=False):
     '''
     Read the fitted GAM curve and based on x_values to calcuate predicted Y
     '''
@@ -648,14 +803,24 @@ def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_v
     # else:
     #     best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_message= 'greater_200_samples'
+    elif vpd_top_type == 'to_10':
+        subfolder_message= 'to_10'
+
     if dist_type == None:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_{subfolder_message}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
     else:
-        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_{subfolder_message}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Predict using new data
     y_pred = best_model.predict(x_values)
-    return y_pred
+
+    if confidence_intervals:
+        y_int = best_model.confidence_intervals(x_values, width=.95)
+        return y_pred, y_int
+    else:
+        return y_pred
 
 def fit_spline(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
 
@@ -865,8 +1030,6 @@ def check_variable_units(PLUMBER2_path, varname, site_name, model_names, key_wor
                                 var_exist = True
                                 # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
                                 break  # Exit the loop once a variable is found
-
-
         except Exception as e:
             print(f"An error occurred: {e}")
 
@@ -1280,6 +1443,7 @@ def get_model_soil_moisture_info(site_name):
                                         0.05, 0.05, 0.05, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10,
                                         0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.15, 0.15,
                                         0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]}
+
     return SM_names, soil_thicknesses
 
 def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):

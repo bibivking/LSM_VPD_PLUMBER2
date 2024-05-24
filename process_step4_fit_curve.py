@@ -47,6 +47,7 @@ def bin_VPD(var_plot, model_out_list, uncertain_type='UCRTN_percentile', var_nam
     var_vals_top = np.zeros((model_tot, vpd_tot))
     var_vals_bot = np.zeros((model_tot, vpd_tot))
 
+    print('check columns name', var_plot.columns)
     # Binned by VPD
     for j, vpd_val in enumerate(vpd_series):
 
@@ -59,42 +60,51 @@ def bin_VPD(var_plot, model_out_list, uncertain_type='UCRTN_percentile', var_nam
             # Draw the line for different models
             for i, model_out_name in enumerate(model_out_list):
 
-                if var_name == 'Qle':
-                    if 'obs' in model_out_name:
-                        head = ''
-                    else:
-                        head = 'model_'
+                if 'obs' in model_out_name:
+                    head = ''
+                else:
+                    head = 'model_'
+
+                if var_name == 'Qle' or var_name == 'Gs' or 'TVeg' in var_name:
                     var_to_study = head+model_out_name
-
-                elif var_name == 'EF':
-                    var_to_study = model_out_name+'_EF'
-
-                    if 'obs' in model_out_name:
-                        head = ''
+                elif var_name == 'SWdown':
+                    var_to_study = model_out_name+'_'+var_name
+                    if model_out_name !='obs':
+                        # create new columns
+                        var_masked[var_to_study]    = np.where(np.isnan(var_masked[head+model_out_name]), np.nan, var_masked['obs_SWdown'])
                     else:
-                        head = 'model_'
-                    var_masked[var_to_study][:] = np.where(np.isnan(var_masked[head+model_out_name]), np.nan, var_masked[var_to_study])
-                
-                elif var_name == 'SMtop1m':
-                    var_to_study = model_out_name+'_SMtop1m'
+                        print('SWdown obs')
+                        # for obs
+                        var_masked[var_to_study][:] = np.where(np.isnan(var_masked[head+model_out_name]), np.nan, var_masked['obs_SWdown'])
+                else:
+                    var_to_study = model_out_name+'_'+var_name
+                    # be careful, for using loc, here needs to specify row number to use, e.g. ':'
+                    var_masked.loc[:,var_to_study] = np.where(np.isnan(var_masked[head+model_out_name]), np.nan, var_masked[var_to_study])
 
-                    if 'obs' in model_out_name:
-                        head = ''
-                    else:
-                        head = 'model_'
-                    var_masked[var_to_study][:] = np.where(np.isnan(var_masked[head+model_out_name]), np.nan, var_masked[var_to_study])
 
-                print('var_to_study',var_to_study)
-                
+                # # ==================== Testing ====================
+                # print(f"var_to_study: {var_to_study}")
+                # print(f"head: {head}, model_out_name: {model_out_name}")
+                # print("var_masked columns:", var_masked.columns)
+                # if head + model_out_name not in var_masked.columns:
+                #     raise KeyError(f"Column {head + model_out_name} does not exist in DataFrame")
+                #
+                # temp_result = np.where(np.isnan(var_masked[head + model_out_name]), np.nan, var_masked[var_to_study])
+                # print("temp_result shape:", temp_result.shape)
+                # print("var_masked[var_to_study] shape:", var_masked[var_to_study].shape)
+                #
+                # if temp_result.shape != var_masked[var_to_study].shape:
+                #     raise ValueError("Shapes of the result of np.where and var_masked[var_to_study] do not match")
+                # # ===================================================
+
                 # calculate mean value
                 var_vals[i,j] = var_masked[var_to_study].mean(skipna=True)
-                print('mean',var_vals[i,j])
+                print('mean', var_vals[i,j])
                 # # calculate median value
                 # var_vals[i,j] = var_masked[var_to_study].median(skipna=True)
 
                 vpd_num[i,j]  = np.sum(~np.isnan(var_masked[var_to_study]))
                 #print('model_out_name=',model_out_name,'j=',j,'vpd_num[i,j]=',vpd_num[i,j])
-
 
                 if uncertain_type=='UCRTN_one_std':
                     # using 1 std as the uncertainty
@@ -239,8 +249,11 @@ def write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=N
         model_out_list = get_model_out_list(var_name)
 
     # Read in the selected raw data
-    var_input = pd.read_csv(f'./txt/process3_output/curves/{file_input}',na_values=[''])
-    site_num  = len(np.unique(var_input["site_name"]))
+    var_input = pd.read_csv(f'./txt/process3_output/curves/{file_input}',na_values=[''],low_memory=False)
+    # site_num  = len(np.unique(var_input["site_name"]))
+
+    print('var_input is', var_input)
+    print("var_input['CABLE_SMtop1m']",var_input['CABLE_SMtop1m'])
 
     # ============ Choosing fitting or binning ============
     if method == 'CRV_bins':
@@ -268,7 +281,7 @@ def write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=N
                 var[model_out_name+'_bot']  = np.where(var[model_out_name+'_vpd_num'] >= VPD_num_threshold,
                                                   var_vals_bot[i,:], np.nan)
 
-        var['site_num']    = site_num
+        # var['site_num']    = site_num
 
     elif method == 'CRV_fit_GAM_simple' or method == 'CRV_fit_GAM_complex':
 
@@ -309,7 +322,7 @@ def write_var_VPD(var_name, site_names, file_input, PLUMBER2_path, selected_by=N
             var[model_out_name+'_vals'] = y_pred
             var[model_out_name+'_top']  = y_int[:,0]
             var[model_out_name+'_bot']  = y_int[:,1]
-        var['site_num']    = site_num
+        # var['site_num']    = site_num
 
     # ============ Set the output file name ============
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, IGBP_type=IGBP_type,
@@ -333,7 +346,7 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
                   clim_type=None, energy_cor=False,VPD_num_threshold=None, LAI_range=None,
                   uncertain_type='UCRTN_percentile', models_calc_LAI=None, veg_fraction=None,
                   clarify_site={'opt':False,'remove_site':None}, standardize=None, select_site=None,
-                  remove_strange_values=True, country_code=None, vpd_top_type='to_10',
+                  remove_strange_values=True, country_code=None, vpd_top_type='to_10',middle_day=None,
                   hours_precip_free=None, method='CRV_bins',dist_type='Linear'):
 
     '''
@@ -341,6 +354,8 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
     2. calculate var series against VPD changes
     3. write out the var series
     '''
+
+    print('file_input',file_input)
 
     # save data
     if var_name == 'NEE':
@@ -352,10 +367,11 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
         model_out_list = model_names['model_select_new']
     else:
         model_out_list = get_model_out_list(var_name)
+        print('model_out_list',model_out_list)
 
     # Read in the selected raw data
     var_input = pd.read_csv(f'./txt/process3_output/curves/{file_input}',na_values=[''])
-    site_num  = len(np.unique(var_input["site_name"]))
+    # site_num  = len(np.unique(var_input["site_name"]))
 
     # ============ Set the output file name ============
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, IGBP_type=IGBP_type,
@@ -399,11 +415,16 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
                 var[model_out_name+'_bot']  = np.where(var[model_out_name+'_vpd_num'] >= VPD_num_threshold,
                                                   var_vals_bot[i,:], np.nan)
 
-        var['site_num']    = site_num
-        if select_site != None:
-            var.to_csv(f'./txt/process4_output/{folder_name}/{var_name}{file_message}_{select_site}.csv')
+        if middle_day:
+            message_midday = '_midday'
         else:
-            var.to_csv(f'./txt/process4_output/{folder_name}/{var_name}{file_message}.csv')
+            message_midday = ''
+
+        # var['site_num']    = site_num
+        if select_site != None:
+            var.to_csv(f'./txt/process4_output/{folder_name}/{var_name}{file_message}_{select_site}{message_midday}.csv')
+        else:
+            var.to_csv(f'./txt/process4_output/{folder_name}/{var_name}{file_message}{message_midday}.csv')
 
     elif method == 'CRV_fit_GAM_simple' or method == 'CRV_fit_GAM_complex':
 
@@ -441,14 +462,14 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
 
                 with mp.Pool() as pool:
                     pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top[model_in], x_bot, x_interval,
-                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type)
+                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
                                 for model_in in model_out_list])
 
             elif vpd_top_type == 'to_10':
                 x_top      = 10.001
                 with mp.Pool() as pool:
                     pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top, x_bot, x_interval,
-                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type)
+                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
                                 for model_in in model_out_list])
 
         #
@@ -482,7 +503,8 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
     return
 
 def fit_GAM_for_model(folder_name, file_message, var_name, model_in, x_top, x_bot, x_interval,
-                      x_values, y_values, method='CRV_fit_GAM_simple', dist_type='Linear'):
+                      x_values, y_values, method='CRV_fit_GAM_simple', dist_type='Linear',
+                      vpd_top_type='to_10'):
 
     # Exclude VPD ==0
     x_values = np.where(x_values >0.05, x_values, np.nan)
@@ -495,14 +517,20 @@ def fit_GAM_for_model(folder_name, file_message, var_name, model_in, x_top, x_bo
             vpd_pred, y_pred, y_int = fit_GAM_simple(x_top,x_bot,x_interval,x_values,y_values,n_splines=7,spline_order=3)
         elif method == 'CRV_fit_GAM_complex':
             vpd_pred, y_pred, y_int = fit_GAM_complex(model_in, var_name, folder_name, file_message, \
-                                                    x_top,x_bot,x_interval,x_values,y_values,dist_type)
+                                                    x_top,x_bot,x_interval,x_values,y_values,dist_type,vpd_top_type)
         if ~np.all(np.isnan(vpd_pred)):
             var_fitted              = pd.DataFrame(vpd_pred, columns=['vpd_pred'])
             var_fitted['y_pred']    = y_pred
             var_fitted['y_int_top'] = y_int[:,0]
             var_fitted['y_int_bot'] = y_int[:,1]
 
-            var_fitted.to_csv(f'./txt/process4_output/{folder_name}/Poisson_to_10/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv')
+            if vpd_top_type == 'sample_larger_200':
+                subfolder_name = f'{dist_type}_greater_200_samples'
+
+            elif vpd_top_type == 'to_10':
+                subfolder_name = f'{dist_type}_to_10'
+
+            var_fitted.to_csv(f'./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv')
 
     return
 
@@ -526,8 +554,8 @@ def write_var_VPD_EF(var_name, site_names, file_input, PLUMBER2_path, selected_b
     model_out_list = get_model_out_list(var_name)
 
     # Read in the selected raw data
-    var_input   = pd.read_csv(f'./txt/process3_output/2d_grid/{file_input}',na_values=[''])
-    site_num    = len(np.unique(var_input["site_name"]))
+    var_input   = pd.read_csv(f'./txt/process3_output/2d_grid/{file_input}',na_values=[''],low_memory=False)
+    # site_num    = len(np.unique(var_input["site_name"]))
 
     # ========= Set output file namte =========
     folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor,
@@ -649,16 +677,312 @@ if __name__ == "__main__":
             gc.collect()
 
     # ======================= Curves for all sites =======================
-    var_name       = 'Qle'
-    uncertain_type = 'UCRTN_bootstrap'#'UCRTN_percentile' #
-    # selected_by    = 'EF_model'
-    # method         = 'CRV_fit_GAM_complex'
-    method         = 'CRV_bins'
-    dist_type      = None#'Poisson' #None #'Linear' #'Poisson' # 'Gamma'
-    VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
-    vpd_top_type   = 'sample_larger_200'#'to_10' #'sample_larger_200' #
 
-    # standardize    = 'STD_annual_obs'
+    # ======================= all sites ======================
+    if 1:
+        var_name       = 'Qle'
+        # standardize    = 'STD_SWdown_LAI_SMtop1m'
+        uncertain_type = 'UCRTN_bootstrap' #'UCRTN_percentile' #
+        # selected_by    = 'EF_obs'
+        # method         = 'CRV_fit_GAM_complex'
+        method         = 'CRV_bins'
+        dist_type      = None #'Poisson' #None #'Linear' #'Poisson' # 'Gamma'
+        VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
+        vpd_top_type   = 'sample_larger_200' #'sample_larger_200'#
+        LAI_range      = None
+        middle_day     = False
+
+        if middle_day:
+            message_midday = '_midday'
+        else:
+            message_midday = ''
+        
+        # 0 < EF < 0.1
+        var_name       = 'Gs'
+        # bounds         = [0,0.1] #30
+        bounds         = [0,0.2] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                    standardize=standardize, country_code=country_code,
+                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SMtop1m'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+                                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+                                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        gc.collect()
+    
+        # 0 < EF < 0.2
+        var_name       = 'Gs'
+        # bounds         = [0.1,0.2] #30
+        bounds         = [0.8,1.0] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                    standardize=standardize, country_code=country_code,
+                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SMtop1m'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+                                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+                                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        gc.collect()
+
+        # # 0 < EF < 0.2
+        # var_name       = 'Qle'
+        # bounds         = [0.2,0.3] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0 < EF < 0.2
+        # var_name       = 'Qle'
+        # bounds         = [0.3,0.4] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+    
+        # # 0 < EF < 0.2
+        # var_name       = 'Qle'
+        # bounds         = [0.4,0.5] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.8 < EF < 1.0
+        # var_name       = 'Qle'
+        # bounds         = [0.5,0.6] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.8 < EF < 1.0
+        # var_name       = 'Qle'
+        # bounds         = [0.6,0.7] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.8 < EF < 1.0
+        # var_name       = 'Qle'
+        # bounds         = [0.7,0.8] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.8 < EF < 1.0
+        # var_name       = 'Qle'
+        # bounds         = [0.8,0.9] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+
+        # # 0.8 < EF < 1.0
+        # var_name       = 'Qle'
+        # bounds         = [0.9,1.0] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                             standardize=standardize, country_code=country_code,
+        #                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #                             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #                             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #                             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #                             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+
+        # # 0.2 < EF < 0.4
+        # bounds         = [0.2,0.4] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+        #
+        # # 0.4 < EF < 0.6
+        # bounds         = [0.4,0.6] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site)
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+        #
+        # # 0.6 < EF < 0.8
+        # bounds         = [0.6,0.8] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site)
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+    # ======================= all sites-standardized by STD_LAI_SMtop1m or STD_SMtop1m ======================
+    if 0:
+        var_name       = 'TVeg'
+        standardize    = 'STD_SWdown_SMtop1m'
+        uncertain_type = 'UCRTN_bootstrap'#'UCRTN_percentile' #
+        method         = 'CRV_bins'
+        dist_type      = None #'Linear' #'Poisson' # 'Gamma'
+        VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
+        vpd_top_type   = 'sample_larger_200'#'to_10' #'sample_larger_200' #
+        LAI_range      = None
+
+        # 0 < EF < 0.2
+        bounds         = [0,0.2] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                    standardize=standardize, country_code=country_code,
+                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+                                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        gc.collect()
+
+        # # 0.2 < EF < 0.4
+        # bounds         = [0.2,0.4] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.4 < EF < 0.6
+        # bounds         = [0.4,0.6] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site)
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.6 < EF < 0.8
+        # bounds         = [0.6,0.8] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site)
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        # gc.collect()
+
+        # 0.8 < EF < 1.0
+        bounds         = [0.8,1.] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                    standardize=standardize, country_code=country_code,
+                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
 
     # ======================= climate types ======================
     if 0:
@@ -739,7 +1063,7 @@ if __name__ == "__main__":
             gc.collect()
 
     # ======================== EF ==============================
-    if 1:
+    if 0:
         LAI_range      = None
         veg_fraction   = None
         IGBP_type      = None
@@ -825,63 +1149,43 @@ if __name__ == "__main__":
                     country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
         gc.collect()
 
-    # ======================= SMtop1m ======================
+    # ======================== SWdown =============================
     if 0:
-        # 0 < EF < 0.2
-        var_name       = 'Qle'
-        bounds         = [0,0.2] #30
-        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-                                                    standardize=standardize, country_code=country_code,
-                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
-        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-        var_name       = 'SMtop1m'
-        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
-                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
-                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
-                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
-        gc.collect()
+        uncertain_type = 'UCRTN_bootstrap'#'UCRTN_percentile' #
+        method         = 'CRV_bins'
+        dist_type      = None #'Linear' #'Poisson' # 'Gamma'
+        VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
+        vpd_top_type   = 'sample_larger_200'#'to_10' #'sample_larger_200' #
 
-        # 0.8 < EF < 1.0
-        var_name       = 'Qle'
-        bounds         = [0.8,1.] #30
-        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-                                                    standardize=standardize, country_code=country_code,
-                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
-        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-        var_name       = 'SMtop1m'
-        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
-                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
-                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
-                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
-        gc.collect()
-    
-    # ======================= all sites ======================
-    if 0:
-        # 0 < EF < 0.2
-        bounds         = [0,0.2] #30
-        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-                                                    standardize=standardize, country_code=country_code,
-                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
-                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
-        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
-        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
-                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
-                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
-                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
-        gc.collect()
+        LAI_range      = None
+        veg_fraction   = None
+        IGBP_type      = None
+        clim_type      = None
+
+        # # 0 < EF < 0.2
+        # var_name       = 'Qle'
+        # bounds         = [0,0.2]
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code, selected_by=selected_by,
+        #                                             bounds=bounds, veg_fraction=veg_fraction, IGBP_type=IGBP_type, clarify_site=clarify_site)
+        # file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SWdown'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, clim_type=clim_type,
+        #             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
 
         # # 0.2 < EF < 0.4
+        # var_name       = 'Qle'
         # bounds         = [0.2,0.4] #30
         # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
         #                                             standardize=standardize, country_code=country_code,
         #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
         #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
         # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SWdown'
         # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
         #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
         #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
@@ -890,12 +1194,14 @@ if __name__ == "__main__":
         # gc.collect()
 
         # # 0.4 < EF < 0.6
+        # var_name       = 'Qle'
         # bounds         = [0.4,0.6] #30
         # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
         #                                             standardize=standardize, country_code=country_code,
         #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
         #                                             LAI_range=LAI_range, clarify_site=clarify_site)
         # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SWdown'
         # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
         #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
         #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
@@ -904,12 +1210,14 @@ if __name__ == "__main__":
         # gc.collect()
 
         # # 0.6 < EF < 0.8
+        # var_name       = 'Qle'
         # bounds         = [0.6,0.8] #30
         # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
         #                                             standardize=standardize, country_code=country_code,
         #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
         #                                             LAI_range=LAI_range, clarify_site=clarify_site)
         # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SWdown'
         # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
         #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
         #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
@@ -918,12 +1226,199 @@ if __name__ == "__main__":
         # gc.collect()
 
         # 0.8 < EF < 1.0
+        var_name       = 'Qle'
         bounds         = [0.8,1.] #30
         folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
                                                     standardize=standardize, country_code=country_code,
                                                     selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                     LAI_range=LAI_range, clarify_site=clarify_site) #
         file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'SWdown'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
+
+    # ======================== LAI ==============================
+    if 0:
+        uncertain_type = 'UCRTN_bootstrap' #'UCRTN_percentile' #
+        method         = 'CRV_bins'
+        dist_type      = None #'Linear' #'Poisson' # 'Gamma'
+        VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
+        vpd_top_type   = 'sample_larger_200'#'to_10' #'sample_larger_200' #
+
+        LAI_range      = None
+        veg_fraction   = None
+        IGBP_type      = None
+        clim_type      = None
+
+        # 0 < EF < 0.2
+        var_name       = 'Qle'
+        bounds         = [0,0.2]
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code, selected_by=selected_by,
+                                                    bounds=bounds, veg_fraction=veg_fraction, IGBP_type=IGBP_type, clarify_site=clarify_site)
+        file_input = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'LAI'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, clim_type=clim_type,
+                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        gc.collect()
+
+        # 0.2 < EF < 0.4
+        var_name       = 'Qle'
+        bounds         = [0.2,0.4] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'LAI'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
+
+        # 0.4 < EF < 0.6
+        var_name       = 'Qle'
+        bounds         = [0.4,0.6] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site)
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'LAI'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
+
+        # 0.6 < EF < 0.8
+        var_name       = 'Qle'
+        bounds         = [0.6,0.8] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site)
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'LAI'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
+
+        # 0.8 < EF < 1.0
+        var_name       = 'Qle'
+        bounds         = [0.8,1.] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'LAI'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, dist_type=dist_type)
+        gc.collect()
+
+    # ======================= SMtop1m ======================
+    if 0:
+        uncertain_type = 'UCRTN_bootstrap' #'UCRTN_percentile' #
+        method         = 'CRV_bins'
+        dist_type      = None #'Linear' #'Poisson' # 'Gamma'
+        VPD_num_threshold = 200 # for one site: 10 #for all sites: 200
+        vpd_top_type   = 'sample_larger_200'#'to_10' #'sample_larger_200' #
+
+        LAI_range      = None
+        veg_fraction   = None
+        IGBP_type      = None
+        clim_type      = None
+
+        # 0 < EF < 0.2
+        var_name       = 'Qle'
+        bounds         = [0,0.2] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'SMtop1m'
+        write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+                    bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+                    standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+                    models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+                    country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        gc.collect()
+
+        # # 0.2 < EF < 0.4
+        # var_name       = 'Qle'
+        # bounds         = [0.2,0.4] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SMtop1m'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.4 < EF < 0.6
+        # var_name       = 'Qle'
+        # bounds         = [0.4,0.6] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SMtop1m'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+
+        # # 0.6 < EF < 0.8
+        # var_name       = 'Qle'
+        # bounds         = [0.6,0.8] #30
+        # folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+        #                                             standardize=standardize, country_code=country_code,
+        #                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+        #                                             LAI_range=LAI_range, clarify_site=clarify_site) #
+        # file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        # var_name       = 'SMtop1m'
+        # write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
+        #             bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
+        #             standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
+        #             models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range,
+        #             country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type)
+        # gc.collect()
+
+        # 0.8 < EF < 1.0
+        var_name       = 'Qle'
+        bounds         = [0.8,1.] #30
+        folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
+                                                    standardize=standardize, country_code=country_code,
+                                                    selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
+                                                    LAI_range=LAI_range, clarify_site=clarify_site) #
+        file_input     = 'raw_data_'+var_name+'_VPD'+file_message+'.csv'
+        var_name       = 'SMtop1m'
         write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, selected_by=selected_by,
                     bounds=bounds, day_time=day_time, clarify_site=clarify_site, method=method, VPD_num_threshold=VPD_num_threshold,
                     standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,

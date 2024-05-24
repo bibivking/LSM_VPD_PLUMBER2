@@ -115,6 +115,58 @@ class PenmanMonteith(object):
 
         return transpiration
 
+    def calc_rnet_caused_to_LH_ratio(self, vpd, wind, rnet, tair, press, canht=None,
+                         ustar=None, G=None):
+        
+        """
+        Parameters:
+        -----------
+        vpd : float
+            vapour pressure def [Pa]
+        wind : float
+            average daytime wind speed [m s-1]
+        rnet : float
+            net radiation [W m-2]
+        tair : float
+            temperature [deg C]
+        press : float
+            average daytime pressure [Pa]
+        gs : float
+            stomatal conductance [mol m-2 s-1]
+        canht : float
+            canopy height [m]
+        ustar : float
+            friction velocity [m s-1]
+        G : float
+            soil heat flux [W m-2]
+
+        Returns:
+        --------
+        trans : float
+            transpiration [mol H20 m-2 s-1]
+        """
+
+        # use friction velocity
+        if self.use_ustar:
+            ga = self.calc_bdary_layer_conduc_from_ustar(wind, ustar, press,
+                                                         tair)
+        else:
+            ga = self.canopy_bdary_layer_conduct(canht, wind, press, tair)
+        lambdax = self.calc_latent_heat_of_vapourisation(tair)
+        gamma = self.calc_pyschrometric_constant(lambdax, press)
+        slope = self.calc_slope_of_sat_vapour_pressure_curve(tair)
+
+        # Total leaf conductance to water vapour
+        #gv = 1.0 / (1.0 / gs + 1.0 / ga)
+
+        if G is None:
+            G = 0.0 # ground heat flux
+
+        arg1 = slope * (rnet - G) + ga * self.MASS_AIR * self.CP * vpd
+        rnet_ratio = (slope * (rnet - G))/arg1
+
+        return rnet_ratio
+    
     def invert_penman(self, vpd, wind, rnet, tair, press, trans, canht=None,
                       ustar=None, G=None):
         """

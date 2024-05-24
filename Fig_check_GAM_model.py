@@ -26,7 +26,8 @@ def check_saved_GAM_model():
     print('lam',loaded_model.lam,'n_splines',loaded_model.n_splines)
     return
 
-def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
+def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None, use_model_pkl=False,
+                        confidence_intervals=False):
 
     # Path of PLUMBER 2 dataset
     # ======================= Setting =======================
@@ -43,7 +44,7 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
 
     # ===================== Default pre-processing =======================
     clarify_site   = {'opt': True,
-                    'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                    'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
                     'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
     models_calc_LAI= ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
 
@@ -90,9 +91,9 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
     plt.rcParams['axes.edgecolor']  = almost_black
     plt.rcParams['axes.labelcolor'] = almost_black
 
-    part_name = 'part1'
-    model_s   = 0
-    model_e   = 8
+    part_name = 'part2'
+    model_s   = 8#0
+    model_e   = 16#8
 
     for i, model_in in enumerate(model_list[model_s:model_e]):
 
@@ -121,14 +122,38 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
                                                     country_code=country_code, selected_by=selected_by, bounds=bounds,
                                                     veg_fraction=veg_fraction, LAI_range=LAI_range, method=method,
                                                     uncertain_type=uncertain_type, clarify_site=clarify_site)
+        if use_model_pkl:
 
-        GAM_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
-                                 usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
+            # Set up the VPD bins
+            vpd_top      = 10.001 #7.04
+            vpd_bot      = 0.001 #0.02
+            vpd_interval = 0.1 #0.04
+            vpd_series   = np.arange(vpd_bot,vpd_top,vpd_interval)
 
-        # read the concave GAM model (VPD 0.001 to 10.001)
-        GAM_curves_extent = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
-                                 usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
-                                 # usecols=['vpd_series',model_in+'_vals',model_in+'_bot',model_in+'_top'])
+            vpd_top_type = 'sample_larger_200'
+            y_pred, y_int = read_best_GAM_model(var_name, model_in, folder_name, file_message, vpd_series,
+            dist_type=dist_type,vpd_top_type=vpd_top_type,confidence_intervals=confidence_intervals)
+            GAM_curves              = pd.DataFrame(vpd_series, columns=['vpd_pred'])
+            GAM_curves['y_pred']    = y_pred
+            GAM_curves['y_int_bot'] = y_int[:,1]
+            GAM_curves['y_int_top'] = y_int[:,0]
+
+            vpd_top_type = 'to_10'
+            y_pred, y_int = read_best_GAM_model(var_name, model_in, folder_name, file_message, vpd_series,
+            dist_type=dist_type,vpd_top_type=vpd_top_type,confidence_intervals=confidence_intervals)
+            GAM_curves_extent              = pd.DataFrame(vpd_series, columns=['vpd_pred'])
+            GAM_curves_extent['y_pred']    = y_pred
+            GAM_curves_extent['y_int_bot'] = y_int[:,1]
+            GAM_curves_extent['y_int_top'] = y_int[:,0]
+
+        else:
+            GAM_curves = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
+                                     usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
+
+            # read the concave GAM model (VPD 0.001 to 10.001)
+            GAM_curves_extent = pd.read_csv(f'/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process4_output/{folder_name}/{dist_type}_to_10/GAM_fit/{var_name}{file_message}_{model_in}_{dist_type}.csv',
+                                     usecols=['vpd_pred','y_pred','y_int_bot','y_int_top'])
+                                     # usecols=['vpd_series',model_in+'_vals',model_in+'_bot',model_in+'_top'])
 
         # process3 selected data points
         folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
@@ -209,11 +234,11 @@ def plotting_in_one_fig(model_list, bounds, LAI_range=None, veg_fraction=None):
     fig.colorbar(dsartist, ax=ax[:,:], pad=0.5, cax=location, orientation="horizontal", aspect=60, shrink=1.)
 
     if LAI_range != None:
-        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_LAI_{LAI_range[0]}-{LAI_range[1]}_EF_{bounds[0]}-{bounds[1]}.png",bbox_inches='tight',dpi=300)
+        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_LAI_{LAI_range[0]}-{LAI_range[1]}_EF_{bounds[0]}-{bounds[1]}_test.png",bbox_inches='tight',dpi=300)
     elif IGBP_type != None:
-        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_IGBP={IGBP_type}_EF_{bounds[0]}-{bounds[1]}.png",bbox_inches='tight',dpi=300)
+        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_IGBP={IGBP_type}_EF_{bounds[0]}-{bounds[1]}_test.png",bbox_inches='tight',dpi=300)
     else:
-        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_EF_{bounds[0]}-{bounds[1]}.png",bbox_inches='tight',dpi=300)
+        fig.savefig(f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/plots/Check_GAM_model_{part_name}_EF_{bounds[0]}-{bounds[1]}_test.png",bbox_inches='tight',dpi=300)
 
 def plotting(model_in, bounds, LAI_range=None, veg_fraction=None):
 
@@ -541,15 +566,19 @@ if __name__ == "__main__":
                          'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
     # model_list        = ['QUINCY']#'CABLE-POP-CN']#, 'QUINCY',]
-    bounds_all    = [[0,0.2],[0.2,0.4],[0.4,0.6],[0.6,0.8],[0.8,1.]]
+    # bounds_all    = [[0,0.2],[0.2,0.4],[0.4,0.6],[0.6,0.8],[0.8,1.]]
+
+    bounds_all    = [[0,0.2],[0.8,1.]]
 
     for bounds in bounds_all:
 
         LAI_range     = None
         veg_fraction  = None
         clim_color    = True
-
-        plotting_in_one_fig(model_list, bounds=bounds, LAI_range=LAI_range, veg_fraction=veg_fraction)
+        use_model_pkl = True
+        confidence_intervals=True
+        plotting_in_one_fig(model_list, bounds=bounds, LAI_range=LAI_range, veg_fraction=veg_fraction,use_model_pkl=use_model_pkl,
+                            confidence_intervals=confidence_intervals)
 
         # plotting_parallel(model_list, bounds=bounds, LAI_range=LAI_range, veg_fraction=veg_fraction,
         #                 clim_color=clim_color)
