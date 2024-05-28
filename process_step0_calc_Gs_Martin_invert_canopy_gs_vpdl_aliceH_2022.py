@@ -12,6 +12,7 @@ __version__  = "1.0 (17.01.2024)"
 __email__    = "mu.mengyuan815@gmail.com"
 
 import os
+import gc
 import sys
 import glob
 import pandas as pd
@@ -26,27 +27,52 @@ import re
 from datetime import datetime
 from PLUMBER2_VPD_common_utils import *
 import pdb
+import multiprocessing as mp
 import Martin_constants as c
 from Martin_penman_monteith import PenmanMonteith
 
 def main(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, site_names, model_names, calc_ref=False):
 
-    for site_name in site_names:
+    # for site_name in site_names:
 
-        print('site_name',site_name)
-        Qle_dict = check_variable_exists(PLUMBER2_path, 'Qle', site_name, model_names)
-        Qh_dict  = check_variable_exists(PLUMBER2_path, 'Qh', site_name, model_names)
-        Qg_dict  = check_variable_exists(PLUMBER2_path, 'Qg', site_name, model_names)
-        GPP_dict = check_variable_exists(PLUMBER2_path, 'GPP', site_name, model_names)
-        Rnet_dict= check_variable_exists(PLUMBER2_path, 'Rnet', site_name, model_names)
+        # print('site_name',site_name)
+        # Qle_dict = check_variable_exists(PLUMBER2_path, 'Qle', site_name, model_names)
+        # Qh_dict  = check_variable_exists(PLUMBER2_path, 'Qh', site_name, model_names)
+        # Qg_dict  = check_variable_exists(PLUMBER2_path, 'Qg', site_name, model_names)
+        # GPP_dict = check_variable_exists(PLUMBER2_path, 'GPP', site_name, model_names)
+        # Rnet_dict= check_variable_exists(PLUMBER2_path, 'Rnet', site_name, model_names)
 
-        # calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
-        #                  Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict, calc_ref)
+        # print(site_name, Qg_dict)
+        # # calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
+        # #                  Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict, calc_ref)
 
-        calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
-                              Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict)
+        # calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
+        #                         Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict)
 
-        # pdb.set_trace()
+    site_start = 0
+    site_end   = 170
+    with mp.Pool() as pool:
+        pool.starmap(run_parallal, [(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, model_names, site_name)
+                                    for site_name in site_names[site_start:site_end]])
+
+    #     # pdb.set_trace()
+    return
+
+def run_parallal(PLUMBER2_path, PLUMBER2_met_path, PLUMBER2_flux_path, model_names, site_name, calc_ref=False):
+
+    print('site_name',site_name)
+    Qle_dict = check_variable_exists(PLUMBER2_path, 'Qle', site_name, model_names)
+    Qh_dict  = check_variable_exists(PLUMBER2_path, 'Qh', site_name, model_names)
+    Qg_dict  = check_variable_exists(PLUMBER2_path, 'Qg', site_name, model_names)
+    GPP_dict = check_variable_exists(PLUMBER2_path, 'GPP', site_name, model_names)
+    Rnet_dict= check_variable_exists(PLUMBER2_path, 'Rnet', site_name, model_names)
+
+    # calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
+    #                  Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict, calc_ref)
+
+    calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
+                            Qle_dict, Qh_dict, Qg_dict, Rnet_dict, GPP_dict)
+    gc.collect()
     return
 
 def calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_names,
@@ -64,7 +90,7 @@ def calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_nam
         read_obs_flux_variables(PLUMBER2_flux_path, site_name, message)
 
     for model_name in model_names:
-        message = 'Model '+model_name+'\n'
+        message = f'{message} Model {model_name}\n'
 
         # Give values to var_input
         var_input           = pd.DataFrame(VPD_obs/10., columns=['VPD']) # hPa=>kPa
@@ -89,10 +115,10 @@ def calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_nam
                 return
             else:
                 # Get model fluxes
-                Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = \
+                Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model, message = \
                         read_model_flux_variables(file_path, Qle_dict[model_name],
                                                 Qh_dict[model_name], Qg_dict[model_name],
-                                                Rnet_dict[model_name], GPP_dict[model_name])
+                                                Rnet_dict[model_name], GPP_dict[model_name], message)
 
                 # Check the time interval
                 ntime_obs   = len(Qle_obs)
@@ -185,7 +211,7 @@ def calc_gs_one_site(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, model_nam
         # var_input['VPD']= np.where(var_input['VPD']> 0.05, var_input['VPD'], np.nan)
         # MMY: VPD units is kPa
         #      When VPD == 0, the calcuated Gs can be very weird values, I don't screen
-        #      0 values here but in making plots VPD=0 need to be excluded, e.g. set the 
+        #      0 values here but in making plots VPD=0 need to be excluded, e.g. set the
         #      VPD bins start from 0.02 rather than 0.
 
         if calc_ref:
@@ -270,15 +296,18 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
     # Read obs met data
 
     message = 'Site '+site_name+'\n'
-    canht, VPD_obs, Tair_obs, Precip_obs, Wind_obs, Psurf_obs = \
-        read_met_variables(PLUMBER2_met_path, site_name)
-
+    # print(message)
+    canht, VPD_obs, Tair_obs, Precip_obs, Wind_obs, Psurf_obs, message = \
+        read_met_variables(PLUMBER2_met_path, site_name, message)
+    # print(message)
     # Read obs flux data
     Qle_obs, Qh_obs, GPP_obs, Rnet_obs, Qg_obs, Ustar_obs, message = \
         read_obs_flux_variables(PLUMBER2_flux_path, site_name, message)
-
+    # print(message)
+    
     for model_name in model_names:
-        message = 'Model '+model_name+'\n'
+        message = str(message) + model_name
+        print(model_name)
 
         # Give values to var_input
         var_input           = pd.DataFrame(VPD_obs/10., columns=['VPD']) # hPa=>kPa
@@ -293,6 +322,15 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
         var_input['Rnet']   = Rnet_obs # W/m2
         var_input['Ustar']  = Ustar_obs # m/s
 
+        # print('Rnet_obs is nan',np.sum(np.isnan(Rnet_obs)),
+        #       'Rnet is nan',np.sum(np.isnan(var_input['Rnet'])),)
+        # print('Rnet_obs',Rnet_obs)
+        # print("var_input['Rnet']",var_input['Rnet'])
+            #   'Wind is nan',np.sum(np.isnan(var_input['Wind'])),
+            #   'Tair is nan',np.sum(np.isnan(var_input['Tair'])),
+            #   'Psurf is nan',np.sum(np.isnan(var_input['Psurf'])),)
+            #   'ET is nan',np.sum(np.isnan(var_input['ET'])),)
+        
         # Read model flux data
         if model_name != 'obs':
 
@@ -303,10 +341,10 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
                 return
             else:
                 # Get model fluxes
-                Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = \
+                Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model, message = \
                         read_model_flux_variables(file_path, Qle_dict[model_name],
                                                 Qh_dict[model_name], Qg_dict[model_name],
-                                                Rnet_dict[model_name], GPP_dict[model_name])
+                                                Rnet_dict[model_name], GPP_dict[model_name], message)
 
                 # Check the time interval
                 ntime_obs   = len(Qle_obs)
@@ -399,7 +437,7 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
         # var_input['VPD']= np.where(var_input['VPD']> 0.05, var_input['VPD'], np.nan)
         # MMY: VPD units is kPa
         #      When VPD == 0, the calcuated Gs can be very weird values, I don't screen
-        #      0 values here but in making plots VPD=0 need to be excluded, e.g. set the 
+        #      0 values here but in making plots VPD=0 need to be excluded, e.g. set the
         #      VPD bins start from 0.02 rather than 0.
 
         if calc_ref:
@@ -415,7 +453,7 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
         # print(var_input)
 
         # To avoid crash in Gs calculation, set the row with any missing value in a column as np.nan
-        subset            = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf', 'ET']
+        subset            = ['VPD', 'Rnet', 'Wind', 'Tair', 'Psurf']
         var_input[subset] = var_input[subset].where(~var_input[subset].isna().any(axis=1), other=np.nan)
 
         # ==================
@@ -431,17 +469,25 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
                                         var_input['Psurf'].values,
                                         var_input['ET'].values, canht=28., G=G)
         """
-        if np.all(~np.isnan(var_input['Qg'])):
-            G = var_input['Qg']
-            message = '      Using Qg'
-        else:
-            G = None
+        # if np.all(~np.isnan(var_input['Qg'])):
+        #     G = var_input['Qg']
+        #     message = message + '      Using Qg\n'
+        # else:
+        #     G = None
+        #     message = message + '      Not using Qg\n'
 
-        if np.all(~np.isnan(var_input['Ustar'])):
-            PM = PenmanMonteith(use_ustar=True)
-            var_input['Rnet_caused_ratio'] = PM.calc_rnet_caused_to_LH_ratio(var_input['VPD'].values, var_input['Wind'].values,
-                                             var_input['Rnet'].values, var_input['Tair'].values,
-                                             var_input['Psurf'].values, ustar=var_input["Ustar"], G=G)
+        G = None
+        # if np.all(~np.isnan(var_input['Ustar'])):
+        #     PM = PenmanMonteith(use_ustar=True)
+        #     var_input['Rnet_caused_ratio'] = PM.calc_rnet_caused_to_LH_ratio(var_input['VPD'].values, var_input['Wind'].values,
+        #                                      var_input['Rnet'].values, var_input['Tair'].values,
+        #                                      var_input['Psurf'].values, ustar=var_input["Ustar"], G=G)
+
+        # else:
+        PM = PenmanMonteith(use_ustar=False)
+        var_input['Rnet_caused_ratio'] = PM.calc_rnet_caused_to_LH_ratio(var_input['VPD'].values, var_input['Wind'].values,
+                                            var_input['Rnet'].values, var_input['Tair'].values,
+                                            var_input['Psurf'].values, ustar=var_input["Ustar"], canht=canht, G=G)
 
         # screen for bad inverted data
         # MMY, I will filter these data in process_step1 so comment out them here
@@ -463,32 +509,62 @@ def calc_Rnet_caused_LH_ratio(PLUMBER2_met_path, PLUMBER2_flux_path, site_name, 
         message   = None
     return
 
-def read_met_variables(PLUMBER2_met_path, site_name):
+def read_met_variables(PLUMBER2_met_path, site_name, message1=None):
 
     '''
     Read met variable from PLUMBER2 met files: 'VPD', 'Tair', 'Precip', 'Wind', 'Psurf',
     Other variables may need: 'CO2air', 'CO2air_qc'
     '''
+    print('in read_met_variables')
+
+    message   = message1
 
     file_path = glob.glob(PLUMBER2_met_path+site_name+"*.nc")
     # print('file_path1',file_path)
     f         = nc.Dataset(file_path[0])
-    VPD       = np.squeeze(f.variables['VPD'][:])
-    Tair      = np.squeeze(f.variables['Tair'][:])
-    Precip    = np.squeeze(f.variables['Precip'][:])
-    Wind      = np.squeeze(f.variables['Wind'][:])
-    Psurf     = np.squeeze(f.variables['Psurf'][:])
-    canht     = np.squeeze(f.variables['canopy_height'][:])
+    try:
+        VPD       = np.squeeze(f.variables['VPD'][:])
+    except:
+        message = message + '         Met VPD not exist.\n'
 
-    return canht, VPD, Tair, Precip, Wind, Psurf
+    try:
+        Tair      = np.squeeze(f.variables['Tair'][:])
+    except:
+        message = message + '         Met Tair not exist.\n'
 
-def read_obs_flux_variables(PLUMBER2_flux_path, site_name, message):
+    try:
+        Precip    = np.squeeze(f.variables['Precip'][:])
+    except:
+        message = message + '         Met Precip not exist.\n'
+
+    try:
+        Wind      = np.squeeze(f.variables['Wind'][:])
+    except:
+        message = message + '         Met Wind not exist.\n'
+
+    try:
+        Psurf     = np.squeeze(f.variables['Psurf'][:])
+    except:
+        message = message + '         Met Psurf not exist.\n'
+
+    try:
+        canht     = np.squeeze(f.variables['canopy_height'][:])
+    except:
+        message = message + '         Met canopy_height not exist.\n'
+
+    return canht, VPD, Tair, Precip, Wind, Psurf, message
+
+def read_obs_flux_variables(PLUMBER2_flux_path, site_name, message1=None):
 
     '''
     Read obs from PLUMBER2 flux files: 'Qle', 'Qh', 'GPP', 'Rnet', 'Qg'
     Other variables may need: 'Qle_cor', 'Qh_cor', 'Qg_qc', 'Qle_qc', 'Qh_qc',
                               'Qle_cor_uc', 'Qh_cor_uc',
     '''
+
+    print('in read_obs_flux_variables')
+
+    message   = message1
 
     # Read model flux variables
     file_path = glob.glob(PLUMBER2_flux_path+site_name+"*.nc")
@@ -499,46 +575,59 @@ def read_obs_flux_variables(PLUMBER2_flux_path, site_name, message):
         Qle   = np.squeeze(f.variables['Qle'][:])
     except:
         Qle   = np.nan
-        message = '         Obs Qle not exist.\n'
+        message = message +'         Obs Qle not exist.\n'
 
     try:
         Qh    = np.squeeze(f.variables['Qh'][:])
     except:
         Qh    = np.nan
-        message = '         Obs Qh not exist.\n'
+        message = message +'         Obs Qh not exist.\n'
 
     try:
         GPP   = np.squeeze(f.variables['GPP'][:])
     except:
         GPP   = np.nan
-        message = '         Obs GPP not exist.\n'
+        message = message +'         Obs GPP not exist.\n'
 
     try:
-        Rnet  = np.squeeze(f.variables['Rnet'][:])
+        # print('Qle length', len(f.variables['Qle']),
+        #       'Qle is nan', np.sum(np.isnan(f.variables['Qle'][:])),
+        #       'Qh is nan', np.sum(np.isnan(f.variables['Qh'][:])),
+        #       'Qle+Qh is nan', np.sum(np.isnan(f.variables['Qle'][:]+f.variables['Qh'][:])),
+        #       'squeeze(Qle+Qh) is nan', np.sum(np.isnan(np.squeeze(f.variables['Qle'][:]+f.variables['Qh'][:]))))
+        Rnet  = np.squeeze(f.variables['Qle'][:]+f.variables['Qh'][:])
+        # Rnet  = np.squeeze(f.variables['Rnet'][:])
+        # print('Rnet is nan', np.sum(np.isnan(Rnet)))
     except:
         Rnet  = np.nan
-        message = '         Obs Rnet not exist.\n'
-
+        message = message +'         Obs Rnet not exist (for now Qle+Qh does not work).\n'
+        print('         Obs Rnet not exist (for now Qle+Qh does not work).\n')
     try:
-        Qg    = np.squeeze(f.variables['Qg'][:])
+        Qg    = np.nan
+        # Qg    = np.squeeze(f.variables['Qg'][:])
     except:
         Qg    = np.nan
-        # message = '         Obs Qg not exist.\n'
+        message = message +'         Obs Qg not exist.\n'
 
     try:
         Ustar = np.squeeze(f.variables['Ustar'][:])
     except:
         Ustar = np.nan
-        message = '         Obs Ustar not exist.\n'
+        message = message +'         Obs Ustar not exist.\n'
 
     return Qle, Qh, GPP, Rnet, Qg, Ustar, message
 
-def read_model_flux_variables(file_path, Qle_name=None, Qh_name=None, Qg_name=None, Rnet_name=None, GPP_name=None):
+def read_model_flux_variables(file_path, Qle_name=None, Qh_name=None, Qg_name=None, Rnet_name=None, 
+                              GPP_name=None, message1=None):
 
     '''
     Read obs from model files: 'Qle', 'Qh', 'GPP', 'Rnet', Qg'
     models with Qg: ACASA, CABLE, CABLE-POP-CN, MuSICA, ORC2_r6593, ORC2_r6593_CO2, STEMMUS-SCOPE
     '''
+
+    print('in read_model_flux_variables')
+
+    message   = message1
 
     try:
         f         = nc.Dataset(file_path[0])
@@ -546,34 +635,45 @@ def read_model_flux_variables(file_path, Qle_name=None, Qh_name=None, Qg_name=No
             Qle_model = np.squeeze(f.variables[Qle_name][:])
         else:
             Qle_model = np.nan
+            message = message + '       No model flux Qle\n'
 
         if not ('None' in Qh_name):
             Qh_model  = np.squeeze(f.variables[Qh_name][:])
         else:
             Qh_model  = np.nan
+            message = message + '       No model flux Qh\n'
 
         if not ('None' in Qg_name):
-            Qg_model  = np.squeeze(f.variables[Qg_name][:])
+            Qg_model  = np.nan
+            # Qg_model  = np.squeeze(f.variables[Qg_name][:])
+            message = message + '       No use model flux Qg\n'
         else:
             Qg_model  = np.nan
+            message = message + '       No model flux Qg\n'
 
         if not ('None' in GPP_name):
             GPP_model = np.squeeze(f.variables[GPP_name][:])
         else:
             GPP_model = np.nan
+            message = message + '       No model flux GPP\n'
 
         print('Rnet_name',Rnet_name)
-        if ('None' in Rnet_name):
-            Rnet_model = np.nan
-        elif len(Rnet_name) == 2:
-            Rnet_model = np.squeeze(f.variables[Rnet_name[0]][:]+f.variables[Rnet_name[1]][:])
-        else:
-            Rnet_model = np.squeeze(f.variables[Rnet_name][:])
+        try:
+            Rnet_model = np.squeeze(f.variables[Qle_name][:]+f.variables[Qh_name][:])
+        except:
+            message = message + '       Get trouble in using model flux Rnet = Qle+Qh\n'
+
+        # if ('None' in Rnet_name):
+        #     Rnet_model = np.nan
+        # elif len(Rnet_name) == 2:
+        #     Rnet_model = np.squeeze(f.variables[Rnet_name[0]][:]+f.variables[Rnet_name[1]][:])
+        # else:
+        #     Rnet_model = np.squeeze(f.variables[Rnet_name][:])
 
     except:
         Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model = np.nan, np.nan, np.nan, np.nan, np.nan
 
-    return Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model
+    return Qle_model, Qh_model, GPP_model, Rnet_model, Qg_model, message
 
 def latent_heat_vapourisation(tair):
     """

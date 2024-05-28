@@ -27,6 +27,41 @@ from PLUMBER2_VPD_common_utils import *
 import multiprocessing as mp
 import logging
 
+def write_qc_to_csv(PLUMBER2_flux_path, site_names):
+
+    """
+    Read Qle_qc and Qh_qc for flux files and write to csv.
+    """
+
+    var_input = pd.read_csv(f'./txt/process1_output/Qle_all_sites.csv', na_values=[''], usecols=[
+         'time', 'month', 'hour', 'site_name','IGBP_type', 'climate_type'])
+
+    var_input['Qle_qc']    = np.nan
+    var_input['Qh_qc']     = np.nan
+    var_input['Qle_Qh_qc'] = np.nan
+
+    for site_name in site_names:
+
+        site_mask  = (var_input['site_name'] == site_name)
+        file_path  = glob.glob(PLUMBER2_flux_path+"/*"+site_name+"*.nc")
+        print(file_path)
+        f          = nc.Dataset(file_path[0])
+        Qle_qc     = f.variables['Qle_qc'][:,0,0]
+        Qh_qc      = f.variables['Qh_qc'][:,0,0]
+
+        if os.path.exists(file_path[0]):
+            var_input.loc[site_mask, 'Qle_qc']    = np.where( Qle_qc<=2, Qle_qc, np.nan)
+            var_input.loc[site_mask, 'Qh_qc']     = np.where( Qh_qc<=2,  Qh_qc,  np.nan)
+            var_input.loc[site_mask, 'Qle_Qh_qc'] = np.where((Qle_qc<=2) & (Qh_qc<=2), 1, np.nan )
+        else:
+            print(f"{file_path[0]} doesn't exist")
+
+        gc.collect()
+
+    var_input.to_csv(f'./txt/process1_output/Qle_Qh_quality_control_all_sites.csv')
+
+    return
+
 def quality_control_process1_output(var_name, site_names, zscore_threshold=4, gap_fill='nan'):
 
     # read the variables
@@ -87,10 +122,11 @@ if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
     PLUMBER2_met_path   = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+    PLUMBER2_flux_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Flux/"
     PLUMBER2_path       = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
     PLUMBER2_path_input = "/g/data/w97/mm3972/data/PLUMBER2/"
 
-    # The site names
+    # The site names                                                                       
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
@@ -99,4 +135,6 @@ if __name__ == "__main__":
     zscore_threshold  = 3
     gap_fill          = 'nan'
     # quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
-    parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold, gap_fill=gap_fill)
+    # parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold, gap_fill=gap_fill)
+    
+    write_qc_to_csv(PLUMBER2_flux_path, site_names)

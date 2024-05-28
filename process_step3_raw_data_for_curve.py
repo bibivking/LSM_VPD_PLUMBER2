@@ -41,6 +41,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                             high_bound=70, day_time=False, summer_time=False, IGBP_type=None,
                             clim_type=None, energy_cor=False, VPD_num_threshold=None, select_site=None,
                             models_calc_LAI=None, veg_fraction=None, time_scale=None,
+                            add_Rnet_caused_ratio=False, quality_ctrl=False,
                             clarify_site={'opt':False,'remove_site':None}, standardize=None, add_LAI=False,
                             remove_strange_values=True, country_code=None, LAI_range=None, add_SMtop1m=False,
                             hours_precip_free=None, output_2d_grids_only=True, regional_sites=None, middle_day=False):
@@ -67,7 +68,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     if time_scale == 'daily':
         var_output = pd.read_csv(f'./txt/process2_output/daily/{var_name}_all_sites{message}{add_units}.csv',na_values=[''])
     else:
-        var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}_filtered.csv',na_values=[''])
+        var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}.csv',na_values=[''])
         # var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}.csv',na_values=[''])
 
     # print('Reading ',f'./txt/process1_output/{var_name}_all_sites{add_units}.csv')
@@ -108,6 +109,29 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[model_out_name+'_SMtop1m'] = np.nan
 
         var_output['model_mean_SMtop1m'] = SM_input['model_mean_SMtop1m']
+
+    if add_Rnet_caused_ratio:
+        LH_ratio_input = pd.read_csv(f'./txt/process1_output/Rnet_caused_ratio_all_sites.csv', na_values=[''])
+
+        for model_out_name in model_out_list:
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            try:
+                var_output[model_out_name+'_VPD_caused_ratio'] = 1. - LH_ratio_input[head+model_out_name]
+            except:
+                var_output[model_out_name+'_VPD_caused_ratio'] = np.nan
+
+    if add_qc:
+        qc_input = pd.read_csv(f'./txt/process1_output/Qle_Qh_quality_control_all_sites.csv', na_values=[''])
+        var_output['Qle_Qh_qc'] = qc_input['Qle_Qh_qc']
+
+    if quality_ctrl:
+
+        # Use radiation as threshold
+        qc_mask     = (~np.isnan(var_output['Qle_Qh_qc']))
+        var_output  = var_output[qc_mask]
 
     if standardize=='STD_Gs_ref':
 
@@ -631,6 +655,19 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output[head+model_out_name+'_Gs_ref']
 
+    if add_Rnet_caused_ratio:
+
+        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+        for i, model_out_name in enumerate(model_out_list):
+
+            # check whether the model has calculated LAI
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            var_output[model_out_name+'_VPD_caused'] = var_output[head+model_out_name]*var_output[model_out_name+'_VPD_caused_ratio']
+
     if output_2d_grids_only:
         mask_VPD_tmp       = (var_output['VPD'] != np.nan)
         var_output_raw_data= var_output[mask_VPD_tmp]
@@ -905,21 +942,25 @@ if __name__ == "__main__":
 
     # ========= wet & dry ==========
     if 1:
-        var_name       = 'Gs'
+        var_name       = 'Qle'
         veg_fraction   = None # [0,0.3] # low veg fraction
         LAI_range      = None # [0.,1.]
         IGBP_type      = None
         add_SMtop1m    = True
         add_LAI        = True
         middle_day     = False #True
+        
         selected_by    = 'EF_model' #'EF_model' #'EF_obs'
-        standardize    = 'STD_Gs_ref'
+        # standardize    = 'STD_Gs_ref'
         low_bound      = [0,0.2] #30
         high_bound     = [0.8,1.0] #70
+        add_Rnet_caused_ratio = True
+        add_qc         = True
+
         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
+                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
                         country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
                         middle_day=middle_day)
@@ -929,7 +970,7 @@ if __name__ == "__main__":
         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
+                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
                         country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
                         middle_day=middle_day)
@@ -939,7 +980,7 @@ if __name__ == "__main__":
         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
+                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
                         country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
                         middle_day=middle_day)

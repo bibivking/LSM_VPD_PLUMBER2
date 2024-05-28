@@ -87,15 +87,13 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                     '(e)','(f)','(g)','(h)']
 
     # ============ Set the input file name ============
-    # bounds = [0.8,1.]
-    # !!!!!!!!!!!! I changed the range !!!!!!!!!!!!!!!
-    bounds = [0.8,0.9]
+    bounds = [0.8,1.0]
     folder_name, file_message_wet = decide_filename(day_time=day_time, energy_cor=energy_cor,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                 uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
-    # bounds = [0,0.2]
-    bounds = [0,0.1]
+
+    bounds = [0,0.2]
     folder_name, file_message_dry = decide_filename(day_time=day_time, energy_cor=energy_cor,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
@@ -1160,13 +1158,13 @@ if __name__ == "__main__":
 
     # ======== Setting Plot EF wet & dry ========
     var_name    = 'Qle'
-    class_by    = None #'gs_eq' #
-    calc_correl = False#True
+    class_by    = None  #'gs_eq' #
+    calc_correl = False #True
     select_site = None
 
     # ======== Figure 1: EF wet & dry ========
     # standardize = 'STD_SWdown_LAI_SMtop1m'
-    var_name    = 'Gs'
+    var_name    = 'VPD_caused'
     middle_day  = False
     plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
                     selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,

@@ -164,6 +164,8 @@ def get_model_out_list(var_name):
         # model_in_list = list(SM_names.keys())
     elif var_name == 'SWdown':
         model_in_list = f.variables['Qle_models']
+    elif var_name == 'VPD_caused':
+        model_in_list = f.variables['Qle_models']
     elif var_name == 'LAI':
         model_in_list = ['ORC2_r6593','ORC3_r8120','GFDL','QUINCY','NoahMPv401'] #'obs',
     else:
@@ -178,7 +180,7 @@ def get_model_out_list(var_name):
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','SWdown']:
+    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','SWdown','VPD_caused']:
         model_out_list.append('obs')
 
     return model_out_list

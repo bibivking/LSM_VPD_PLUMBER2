@@ -319,6 +319,58 @@ def make_CMIP6_each_nc_file(CMIP6_data_path,  scenario, landsea_list, time_s, ti
     gc.collect()
     return
 
+def add_wind_CMIP6_each_nc_file(CMIP6_data_path, scenario, time_s, time_e, model_name):
+
+    '''
+    Process one CMIP6 model
+    '''
+
+    print('model', model_name)
+
+    # === Get variable from Processed_CMIP6_data ===
+    # latent heat flux (hfls) files
+    fname_vas  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/vas/{model_name}/*/*.nc'))[0]
+
+    # sensible heat flux (hfss) files
+    fname_uas  = sorted(glob.glob(f'{CMIP6_data_path}{scenario}/uas/{model_name}/*/*.nc'))[0]
+
+    # === Get the same griding and time period data ===
+    time_series, var_vas  = read_CMIP6(fname_vas, model_name, 'vas', time_s, time_e)
+    time_series, var_uas  = read_CMIP6(fname_uas, model_name, 'uas', time_s, time_e)
+
+    print('len(time_series)',len(time_series))
+
+    # === Create nc file ===
+    # if not os.path.exists(output_file):
+
+    output_file = CMIP6_out_path + scenario + '_'+model_name+'.nc'
+
+    # Create the nc file
+    f = nc.Dataset(output_file, 'r+', format='NETCDF4')
+
+    # === Set other variables ===
+    # # Set lat and lon out
+    # f.createDimension('lat', len(lat))
+    # f.createDimension('lon', len(lon))
+
+    # Latent heat flux
+    Uas                = f.createVariable('uas', 'f4', ('time', 'lat', 'lon'))
+    Uas.standard_name  = 'Eastward Near-Surface Wind'
+    Uas.units          = 'm s-1'
+    Uas[:]             = var_uas
+
+    # Sensible heat flux
+    Vas                = f.createVariable('vas', 'f4', ('time', 'lat', 'lon'))
+    Vas.standard_name  = 'Northward Near-Surface Wind'
+    Vas.units          = 'm s-1'
+    Vas[:]             = var_vas
+
+    f.close()
+
+    gc.collect()
+    return
+
+
 def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e, model_list):
 
     landsea_list = {'ACCESS-CM2':'/g/data/fs38/publications/CMIP6/CMIP/CSIRO-ARCCSS/ACCESS-CM2/historical/r1i1p1f1/fx/sftlf/gn/v20191108',
@@ -337,6 +389,16 @@ def make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, tim
         pool.starmap(make_CMIP6_each_nc_file, [(CMIP6_data_path, scenario, landsea_list, time_s, time_e, model_name)
                      for model_name in model_list])
     return
+
+def add_wind_CMIP6_multiple_nc_file_parallel(CMIP6_data_path, scenario, time_s, time_e, model_list):
+
+    add_wind_CMIP6_each_nc_file(CMIP6_data_path, scenario, time_s, time_e, 'ACCESS-CM2')
+    
+    # with Pool() as pool:
+    #     pool.starmap(add_wind_CMIP6_each_nc_file, [(CMIP6_data_path, scenario, time_s, time_e, model_name)
+    #                  for model_name in model_list])
+    return
+
 
 def make_CMIP6_ACCESS_nc_file(CMIP6_data_path, CMIP6_out_path, scenario, time_s, time_e, regrid_to="ACCESS-CM2"):
 
@@ -612,7 +674,7 @@ if __name__ == "__main__":
     PLUMBER2_met_path = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
     CMIP6_data_path   = "/g/data/w97/mm3972/data/CMIP6_3hr_data/Processed_CMIP6_data/"
     CMIP6_out_path    = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/CMIP6_3hourly/"
-    scenarios         = ['historical', 'ssp245']
+    scenarios         = ['historical']#, 'ssp245']
 
     # Get CMIP6 model list
     model_list   = ['ACCESS-CM2', 'BCC-CSM2-MR', 'CMCC-CM2-SR5', 'CMCC-ESM2', 'EC-Earth3', 'KACE-1-0-G',
@@ -635,5 +697,5 @@ if __name__ == "__main__":
         # gc.collect()
 
         # make_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e, model_list)
-
-        add_hist_annual_daytime_EF_parallel(CMIP6_out_path, scenario, model_list)
+        add_wind_CMIP6_multiple_nc_file_parallel(CMIP6_data_path,  scenario, time_s, time_e, model_list)
+        # add_hist_annual_daytime_EF_parallel(CMIP6_out_path, scenario, model_list)

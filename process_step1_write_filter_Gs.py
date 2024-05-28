@@ -142,6 +142,59 @@ def write_gs_to_spatial_land_days(site_names, model_names, filter=False, gs_ref=
 
     return
 
+def write_Rnet_caused_ratio_to_csv(site_names, model_names):
+
+    """Parallelized version of the function."""
+
+    var_input = pd.read_csv(f'./txt/process1_output/Qle_all_sites.csv', na_values=[''], usecols=[
+         'time', 'CABLE_EF', 'CABLE-POP-CN_EF', 'CHTESSEL_Ref_exp1_EF',
+         'CLM5a_EF', 'GFDL_EF', 'JULES_GL9_EF', 'JULES_GL9_withLAI_EF', 'MATSIRO_EF', 'MuSICA_EF',
+         'NASAEnt_EF', 'NoahMPv401_EF', 'ORC2_r6593_EF', 'ORC3_r8120_EF', 'QUINCY_EF',
+         'STEMMUS-SCOPE_EF', 'obs_EF', 'VPD', 'obs_Tair', 'obs_Qair',
+         'obs_Precip','obs_SWdown', 'month', 'hour', 'site_name','IGBP_type',
+         'climate_type'])
+
+    for model_in in model_names:
+        if model_in == 'obs':
+            header = ''
+        else:
+            header = 'model_'
+        var_input[header+model_in]  = np.nan
+
+    var_input['obs_Wind'] = np.nan
+
+    for site_name in site_names:
+
+        site_mask  = (var_input['site_name'] == site_name)
+
+        for i, model_in in enumerate(model_names):
+
+            print('site ', site_name, 'model', model_in)
+
+            if model_in == 'obs':
+                header = ''
+            else:
+                header = 'model_'
+
+            file_input = f'./txt/process1_output/Rnet_caused_LH_ratio/Rnet_caused_LH_ratio_{site_name}_{model_in}.csv'
+
+            if os.path.exists(file_input):
+
+                ratio_input  = pd.read_csv(file_input, na_values=[''], usecols=['Rnet_caused_ratio'])
+
+                try:
+                    var_input.loc[site_mask, header+model_in]  = ratio_input['Rnet_caused_ratio'].values
+                except:
+                    print(f'Missing {site_name}, {model_in}, ratio_input["Rnet_caused_ratio"]')
+            else:
+                print(f"{file_input} doesn't exist")
+
+            gc.collect()
+
+    var_input.to_csv(f'./txt/process1_output/Rnet_caused_ratio_all_sites.csv')
+
+    return
+
 if __name__ == "__main__":
 
     # Path of PLUMBER 2 dataset
@@ -157,4 +210,5 @@ if __name__ == "__main__":
     # write_filter_gs_parallel(site_names, model_names['model_select_new'], zscore_threshold=zscore_threshold,gs_ref=gs_ref)
 
     filter = True
-    write_gs_to_spatial_land_days(site_names, model_names['model_select_new'],filter=filter,gs_ref=gs_ref)
+    write_Rnet_caused_ratio_to_csv(site_names, model_names['model_select_new'])
+    # write_gs_to_spatial_land_days(site_names, model_names['model_select_new'],filter=filter,gs_ref=gs_ref)
