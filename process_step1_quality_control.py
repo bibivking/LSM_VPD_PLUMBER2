@@ -36,9 +36,11 @@ def write_qc_to_csv(PLUMBER2_flux_path, site_names):
     var_input = pd.read_csv(f'./txt/process1_output/Qle_all_sites.csv', na_values=[''], usecols=[
          'time', 'month', 'hour', 'site_name','IGBP_type', 'climate_type'])
 
-    var_input['Qle_qc']    = np.nan
-    var_input['Qh_qc']     = np.nan
-    var_input['Qle_Qh_qc'] = np.nan
+    var_input['Qle_qc']         = np.nan
+    var_input['Qh_qc']          = np.nan
+    var_input['Qle_Qh_qc']      = np.nan
+    var_input['Rnet_qc']        = np.nan
+    var_input['Qle_Qh_Rnet_qc'] = np.nan
 
     for site_name in site_names:
 
@@ -48,17 +50,32 @@ def write_qc_to_csv(PLUMBER2_flux_path, site_names):
         f          = nc.Dataset(file_path[0])
         Qle_qc     = f.variables['Qle_qc'][:,0,0]
         Qh_qc      = f.variables['Qh_qc'][:,0,0]
+        try:
+            Rnet_qc    = f.variables['Rnet_qc'][:,0,0]
+            Rnet_exist = True
+        except:
+            print(site_name,'has not Rnet_qc using Qle_qc & Qh_qc & Qg_qc')
+            Qg_qc      = f.variables['Qg_qc'][:,0,0]
+            Rnet_exist = False
 
         if os.path.exists(file_path[0]):
             var_input.loc[site_mask, 'Qle_qc']    = np.where( Qle_qc<=2, Qle_qc, np.nan)
             var_input.loc[site_mask, 'Qh_qc']     = np.where( Qh_qc<=2,  Qh_qc,  np.nan)
             var_input.loc[site_mask, 'Qle_Qh_qc'] = np.where((Qle_qc<=2) & (Qh_qc<=2), 1, np.nan )
+
+            if Rnet_exist:
+                var_input.loc[site_mask, 'Rnet_qc']   = np.where( Rnet_qc<=2,  Rnet_qc,  np.nan)
+                var_input.loc[site_mask, 'Qle_Qh_Rnet_qc'] = \
+                                                    np.where((Qle_qc<=2) & (Qh_qc<=2) & (Rnet_qc<=2), 1, np.nan )
+            else:
+                var_input.loc[site_mask, 'Qle_Qh_Rnet_qc'] = \
+                                                    np.where((Qle_qc<=2) & (Qh_qc<=2) & (Qg_qc<=2), 1, np.nan )
         else:
             print(f"{file_path[0]} doesn't exist")
 
         gc.collect()
 
-    var_input.to_csv(f'./txt/process1_output/Qle_Qh_quality_control_all_sites.csv')
+    var_input.to_csv(f'./txt/process1_output/Qle_Qh_Rnet_quality_control_all_sites.csv')
 
     return
 
@@ -82,9 +99,9 @@ def quality_control_for_site(site_name, var_output, zscore_threshold,gap_fill='n
     """
     Performs quality control for a single site.
     """
-    
+
     logging.info(f"Starting processing for site {site_name} (process ID: {os.getpid()})")
-    
+
     site_mask = (var_output['site_name'] == site_name)
     site_data = var_output[site_mask]
     for col_name in var_output.columns:
@@ -126,7 +143,7 @@ if __name__ == "__main__":
     PLUMBER2_path       = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
     PLUMBER2_path_input = "/g/data/w97/mm3972/data/PLUMBER2/"
 
-    # The site names                                                                       
+    # The site names
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
     # site_names      = ["AU-How","AU-Tum"]
@@ -136,5 +153,5 @@ if __name__ == "__main__":
     gap_fill          = 'nan'
     # quality_control_process1_output(var_name, site_names, zscore_threshold=zscore_threshold)
     # parallel_quality_control(var_name, site_names, zscore_threshold=zscore_threshold, gap_fill=gap_fill)
-    
+
     write_qc_to_csv(PLUMBER2_flux_path, site_names)

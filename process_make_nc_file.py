@@ -829,8 +829,13 @@ if __name__ == "__main__":
     for site_name in site_names:
 
         SM_names, soil_thicknesses = get_model_soil_moisture_info(site_name)
-        
-        print(site_name,soil_thicknesses)
+        # print(site_name,soil_thicknesses)
+                
+        varname       = "Rnet"
+        for site_name in site_names:
+            trans_dict    = check_variable_exists(PLUMBER2_path, varname, site_name, model_names)
+            print(site_name,trans_dict)
+            
         # print('site_name',site_name)
         # output_file      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"+site_name+".nc"
         # zscore_threshold = 3 # beyond 3 standard deviation, out of 99.7%

@@ -33,7 +33,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                  selected_by=None, veg_fraction=None, standardize=None, uncertain_type='UCRTN_percentile',
                  method='CRV_bins', IGBP_type=None, clim_type=None, clarify_site={'opt':False,'remove_site':None},
                  num_threshold=200, class_by=None, dist_type=None, calc_correl=False, select_site=None,
-                 VPD_num_threshold=200, middle_day=False):
+                 VPD_num_threshold=200, middle_day=False, LAI_range=None):
 
     # ============== convert units =================
     to_ms = False
@@ -87,14 +87,14 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                     '(e)','(f)','(g)','(h)']
 
     # ============ Set the input file name ============
-    bounds = [0.8,1.0]
-    folder_name, file_message_wet = decide_filename(day_time=day_time, energy_cor=energy_cor,
+    bounds = [0.7,1.0]
+    folder_name, file_message_wet = decide_filename(day_time=day_time, energy_cor=energy_cor,LAI_range=LAI_range,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                 uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
 
-    bounds = [0,0.2]
-    folder_name, file_message_dry = decide_filename(day_time=day_time, energy_cor=energy_cor,
+    bounds = [0.0,0.3]
+    folder_name, file_message_dry = decide_filename(day_time=day_time, energy_cor=energy_cor, LAI_range=LAI_range,
                                                 IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale, standardize=standardize,
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                                 uncertain_type=uncertain_type, method=method, clarify_site=clarify_site)
@@ -121,8 +121,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
         #         file_names = [  f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_obs_{dist_type}{site_info}.csv',
         #                         f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_obs_{dist_type}{site_info}.csv',]
         #     else:
-        #         file_names = [  f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_wet}_obs{site_info}.csv',
-        #                         f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_dry}_obs{site_info}.csv',]
+        #         file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}_obs{site_info}.csv',
+        #                         f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}_obs{site_info}.csv',]
         #     var1 = pd.read_csv(file_names[0])
         #     var2 = pd.read_csv(file_names[1])
         #     obs1 = var1['y_pred']
@@ -143,8 +143,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                 file_names = [  f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_obs_{dist_type}{site_info}.csv',
                                 f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_obs_{dist_type}{site_info}.csv',]
             else:
-                file_names = [  f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_wet}_obs{site_info}.csv',
-                                f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_dry}_obs{site_info}.csv',]
+                file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}_obs{site_info}.csv',
+                                f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}_obs{site_info}.csv',]
 
             var1 = pd.read_csv(file_names[0])
             var2 = pd.read_csv(file_names[1])
@@ -153,8 +153,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
 
     # # set uncertainty files
     # file_names_uncertain = \
-    #     [f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}_hourly_RM16_DT_EF_model_0-0.2_CRV_bins_UCRTN_percentile.csv',
-    #      f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}_hourly_RM16_DT_EF_model_0.8-1.0_CRV_bins_UCRTN_percentile.csv',]
+    #     [f'./txt/process4_output/{folder_name}/{var_name}_hourly_RM16_DT_EF_model_0-0.2_CRV_bins_UCRTN_percentile.csv',
+    #      f'./txt/process4_output/{folder_name}/{var_name}_hourly_RM16_DT_EF_model_0.8-1.0_CRV_bins_UCRTN_percentile.csv',]
 
     for j, model_out_name in enumerate(model_order):
 
@@ -171,8 +171,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
         #         file_names = [  f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}_{dist_type}{site_info}.csv',
         #                         f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}_{dist_type}{site_info}.csv',]
         #     else:
-        #         file_names = [  f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_wet}_{model_out_name}{site_info}.csv',
-        #                         f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_dry}_{model_out_name}{site_info}.csv',]
+        #         file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}_{model_out_name}{site_info}.csv',
+        #                         f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}_{model_out_name}{site_info}.csv',]
         if select_site != None:
             if dist_type!=None:
                 file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}_{dist_type}{site_info}.csv',
@@ -185,8 +185,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                 file_names = [  f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_wet}_{model_out_name}_{dist_type}{site_info}{message_midday}.csv',
                                 f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message_dry}_{model_out_name}_{dist_type}{site_info}{message_midday}.csv',]
             else:
-                file_names = [  f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_wet}{site_info}{message_midday}.csv',
-                                f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}{file_message_dry}{site_info}{message_midday}.csv',]
+                file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}{site_info}{message_midday}.csv',
+                                f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}{site_info}{message_midday}.csv',]
 
         print(file_names)
 
@@ -331,11 +331,13 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
         ax[0,0].set_ylabel("Net Ecosystem Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
     elif var_name == 'GPP':
         ax[0,0].set_ylabel("Gross Primary Production (g C m$\mathregular{^{-1}}$ h$\mathregular{^{-1}}$)", fontsize=12)
+    elif 'VPD_caused' in var_name:
+        ax[0,0].set_ylabel("VPD-driven latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
 
     ax[0,0].set_xlabel("VPD (kPa)", fontsize=12)
     ax[0,1].set_xlabel("VPD (kPa)", fontsize=12)
 
-    if var_name == 'Qle' or 'TVeg' in var_name:
+    if 'TVeg' in var_name or 'Qle' in var_name:
         if time_scale == 'daily':
             ax[0,0].set_xlim(-0.1,2.7)
             ax[0,0].set_ylim(0,170)
@@ -346,7 +348,14 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             ax[0,0].set_xlim(-0.1,5.5)
             ax[0,0].set_xticks([0,1,2,3,4,5])
             ax[0,0].set_xticklabels(['0','1','2', '3','4','5'],fontsize=12)
-            if standardize == 'STD_SMtop1m':
+
+            if standardize == 'STD_LAI_normalized_SMtopXm':
+                ax[0,0].set_ylim(0,250)
+            elif 'TVeg' in var_name:
+                ax[0,0].set_ylim(0,250)
+            elif 'SMtopXm' in standardize and 'Qle' in var_name:
+                ax[0,0].set_ylim(0,600)
+            elif standardize == 'STD_SMtop1m':
                 ax[0,0].set_ylim(0,2500)
             elif standardize == 'STD_SWdown':
                 ax[0,0].set_ylim(0,2.)
@@ -355,6 +364,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             elif standardize == 'STD_SWdown_LAI_SMtop1m':
                 print('STD_SWdown_LAI_SMtop1m')
                 # ax[0,0].set_ylim(0,10.)
+            elif 'VPD_caused' in var_name:
+                ax[0,0].set_ylim(0,350)
             elif clim_type == None:
                 ax[0,0].set_ylim(0,350)
                 # ax[0,0].set_ylim(0,1000)
@@ -365,7 +376,14 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             ax[0,1].set_xlim(-0.1,7.5)
             ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
             ax[0,1].set_xticklabels(['0','1','2', '3','4','5', '6','7'],fontsize=12)
-            if standardize == 'STD_SMtop1m':
+
+            if standardize == 'STD_LAI_normalized_SMtopXm':
+                ax[0,1].set_ylim(0,250)
+            elif 'TVeg' in var_name:
+                ax[0,1].set_ylim(0,80)
+            elif 'SMtopXm' in standardize and 'Qle' in var_name:
+                ax[0,1].set_ylim(0,200)
+            elif standardize == 'STD_SMtop1m':
                 ax[0,1].set_ylim(0,500)
             elif standardize == 'STD_SWdown':
                 ax[0,1].set_ylim(0,0.2)
@@ -374,6 +392,8 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             elif standardize == 'STD_SWdown_LAI_SMtop1m':
                 print('STD_SWdown_LAI_SMtop1m')
                 # ax[0,1].set_ylim(0,1.)
+            elif 'VPD_caused' in var_name:
+                ax[0,1].set_ylim(0,100)
             elif clim_type == None:
                 ax[0,1].set_ylim(0,100)
             else:
@@ -493,9 +513,9 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     #
     # # Read data uncertainties
     # file_names_uncertain = \
-    #     [f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}_hourly_RM16_DT_EF_model_0.2-0.4_CRV_bins_UCRTN_percentile.csv',
-    #      f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}_hourly_RM16_DT_EF_model_0.4-0.6_CRV_bins_UCRTN_percentile.csv',
-    #      f'./txt/process4_output/{folder_name}/VPD_bins/{var_name}_hourly_RM16_DT_EF_model_0.6-0.8_CRV_bins_UCRTN_percentile.csv',]
+    #     [f'./txt/process4_output/{folder_name}/{var_name}_hourly_RM16_DT_EF_model_0.2-0.4_CRV_bins_UCRTN_percentile.csv',
+    #      f'./txt/process4_output/{folder_name}/{var_name}_hourly_RM16_DT_EF_model_0.4-0.6_CRV_bins_UCRTN_percentile.csv',
+    #      f'./txt/process4_output/{folder_name}/{var_name}_hourly_RM16_DT_EF_model_0.6-0.8_CRV_bins_UCRTN_percentile.csv',]
     #
     # obs_2_tmp     = pd.read_csv(file_names_uncertain[0],usecols=['vpd_series','obs_vpd_num','obs_vals','obs_top','obs_bot'])
     # obs_4_tmp     = pd.read_csv(file_names_uncertain[1],usecols=['vpd_series','obs_vpd_num','obs_vals','obs_top','obs_bot'])
@@ -557,9 +577,10 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
                             f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}_{dist_type}.csv',
                             f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}_{dist_type}.csv',]
         else:
-            file_names = [  f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message1}_{model_out_name}.csv',
-                            f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message2}_{model_out_name}.csv',
-                            f'./txt/process4_output/{folder_name}/{dist_type}_greater_200_samples/GAM_fit/{var_name}{file_message3}_{model_out_name}.csv',]
+            file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message1}.csv',
+                            f'./txt/process4_output/{folder_name}/{var_name}{file_message2}.csv',
+                            f'./txt/process4_output/{folder_name}/{var_name}{file_message3}.csv',]
+        print('file_names:',file_names)
 
         for i, file_name in enumerate(file_names):
             # set plot row and col
@@ -573,26 +594,41 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
 
                 # ===== Drawing the lines =====
                 # Unify NEE units : upwards CO2 movement is positive values
-
-                if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
-                    print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
-                    value        = var['y_pred']*(-1)
-                    vals_bot_tmp = var['y_int_bot']
-                    vals_top_tmp = var['y_int_top']
-                elif var_name=='Gs' and to_ms:
-                    value        = var['y_pred']*mol2ms
-                    vals_bot_tmp = var['y_int_bot']*mol2ms
-                    vals_top_tmp = var['y_int_top']*mol2ms
+                if select_site==None and dist_type != None:
+                    if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                        print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                        value        = var['y_pred']*(-1)
+                        vals_bot_tmp = var['y_int_bot']
+                        vals_top_tmp = var['y_int_top']
+                    elif var_name=='Gs' and to_ms:
+                        value        = var['y_pred']*mol2ms
+                        vals_bot_tmp = var['y_int_bot']*mol2ms
+                        vals_top_tmp = var['y_int_top']*mol2ms
+                    else:
+                        value        = var['y_pred']
+                        vals_bot_tmp = var['y_int_bot']
+                        vals_top_tmp = var['y_int_top']
+                    var_vpd_series = var['vpd_pred']
                 else:
-                    value        = var['y_pred']
-                    vals_bot_tmp = var['y_int_bot']
-                    vals_top_tmp = var['y_int_top']
+                    if (var_name=='GPP') & ((model_out_name == 'CHTESSEL_ERA5_3') | (model_out_name == 'CHTESSEL_Ref_exp1')):
+                        print("(var_name=='GPP') & ('CHTESSEL' in model_out_name)")
+                        value        = var[model_out_name+'_vals']*(-1)
+                        vals_bot_tmp = var[model_out_name+'_bot']
+                        vals_top_tmp = var[model_out_name+'_top']
+                    elif var_name=='Gs' and to_ms:
+                        value        = var[model_out_name+'_vals']*mol2ms
+                        vals_bot_tmp = var[model_out_name+'_bot']*mol2ms
+                        vals_top_tmp = var[model_out_name+'_top']*mol2ms
+                    else:
+                        value        = var[model_out_name+'_vals']
+                        vals_bot_tmp = var[model_out_name+'_bot']
+                        vals_top_tmp = var[model_out_name+'_top']
+                    var_vpd_series = var['vpd_series']
 
                 # smooth or not
                 if smooth_type != 'no_soomth':
                     value = smooth_vpd_series(value, window_size, order, smooth_type)
 
-                var_vpd_series = var['vpd_pred']
                 vals_bot       = vals_bot_tmp
                 vals_top       = vals_top_tmp
 
@@ -640,6 +676,8 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
 
     if var_name == 'Qle':
         ax[0,0].set_ylabel("Latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
+    elif var_name == 'Qle_VPD_caused':
+        ax[0,0].set_ylabel("VPD-driven latent Heat (W m$\mathregular{^{-2}}$)", fontsize=12)
     elif var_name == 'Gs' and to_ms:
         ax[0,0].set_ylabel("Canopy Stomatal Conductance\n(m s$\mathregular{^{-1}}$)", fontsize=12)
     elif var_name == 'Gs':
@@ -671,7 +709,7 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,1].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,1].set_xlim(-0.1,7.1)
 
-    if var_name == 'Qle' or 'TVeg' in var_name:
+    if 'Qle' in var_name or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,1].set_ylim(0,100)
         elif time_scale == 'hourly':
@@ -683,7 +721,7 @@ def plot_var_VPD_uncertainty_three_cols(var_name=None, day_time=False, energy_co
     ax[0,2].set_xticklabels(['0','1','2','3','4','5','6','7'],fontsize=12)
     ax[0,2].set_xlim(-0.1,7.1)
 
-    if var_name == 'Qle' or 'TVeg' in var_name:
+    if 'Qle' in var_name or 'TVeg' in var_name:
         if time_scale == 'daily':
             ax[0,2].set_ylim(0,100)
         elif time_scale == 'hourly':
@@ -1163,52 +1201,62 @@ if __name__ == "__main__":
     select_site = None
 
     # ======== Figure 1: EF wet & dry ========
-    # standardize = 'STD_SWdown_LAI_SMtop1m'
-    var_name    = 'VPD_caused'
-    middle_day  = False
-    plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                    selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                    IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                    dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+    if 1:
+        selected_by    = 'EF_obs'
+        middle_day     = False
+        # standardize = 'STD_normalized_SMtopXm'
+        var_name       = 'Qle'
+        LAI_range      = None
+        
+        add_Xday_mean_EF=None
+        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
 
-    # var_name    = 'TVeg'
-    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-    #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-    #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
+        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
 
-    # var_name    = 'nonTVeg'
-    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-    #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-    #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
+        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
 
+        # var_name    = 'Qle_VPD_caused'
+        # LAI_range   = [4.,10.]
+        # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+        #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+        #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+        #                 LAI_range = LAI_range,
+        #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
 
-    # # ======== Figure 1: EF wet & dry ========
-    # var_name    = 'TVeg'
-    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-    #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-    #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
-    #
-    # var_name    = 'nonTVeg'
-    # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-    #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-    #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
+    # ======== Figure 2: TVeg and Esoil, Ecan ========
+    if 0:
+        plot_TVeg_noTVeg_VPD_uncertainty(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                    selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize,
+                    uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+                    clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by, dist_type=dist_type)
 
-    # # ======== Figure 2: TVeg and Esoil, Ecan ========
-    # class_by    = 'gs_eq' #
-    # plot_TVeg_noTVeg_VPD_uncertainty(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #              selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize,
-    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
-    #              clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by, dist_type=dist_type)
+    # ======== Figure S2: 0.2<EF<0.8 ========
+    if 0:
+        selected_by = 'EF_CABLE'#'EF_obs'
+        var_name    = 'Qle'
+        plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+                uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+                clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by, dist_type=dist_type)
 
-    # # ======== Figure S2: 0.2<EF<0.8 ========
-    # plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-    #              selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
-    #              uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
-    #              clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by, dist_type=dist_type)
+        # selected_by = 'EF_model'
+        # var_name    = 'Qle'
+        # plot_var_VPD_uncertainty_three_cols(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+        #         selected_by=selected_by, veg_fraction=veg_fraction,  standardize=standardize,
+        #         uncertain_type=uncertain_type, method=method, IGBP_type=IGBP_type, clim_type=clim_type,
+        #         clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by, dist_type=dist_type)
 
     # # =============== clim type ===============
     # dist_type    = None
@@ -1261,3 +1309,4 @@ if __name__ == "__main__":
     #                  selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
     #                  IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
     #                  dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
+   

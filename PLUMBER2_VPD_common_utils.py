@@ -75,7 +75,7 @@ def get_regional_site_list(region= {'name':'global','lat':None, 'lon':None}):
 def decide_filename(day_time=False, summer_time=False, energy_cor=False,
                     IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
                     country_code=None, selected_by=None, bounds=None, veg_fraction=None,
-                    uncertain_type=None, method=None,LAI_range=None,
+                    uncertain_type=None, method=None,LAI_range=None, add_Xday_mean_EF=None,
                     clarify_site={'opt':False,'remove_site':None},regional_sites=None):
 
     # file name
@@ -117,7 +117,9 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
     if selected_by !=None:
         # which criteria used for binning the data
         file_message = file_message +'_'+selected_by
-
+        if add_Xday_mean_EF != None:
+            file_message = file_message + '_' + add_Xday_mean_EF + 'day_mean'
+        
         if len(bounds) >1:
             # percentile
             if bounds[1] > 1:
@@ -156,15 +158,15 @@ def get_model_out_list(var_name):
     f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
     if var_name == 'Gs':
         model_in_list = f.variables['Qle_models']
-    elif var_name == 'nonTVeg':
+    elif 'TVeg' in var_name:
         model_in_list = f.variables['TVeg_models']
-    elif var_name == 'SMtop1m':
+    elif 'SMtop' in var_name:
         model_in_list = f.variables['Qle_models']
         # SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
         # model_in_list = list(SM_names.keys())
     elif var_name == 'SWdown':
         model_in_list = f.variables['Qle_models']
-    elif var_name == 'VPD_caused':
+    elif 'VPD_caused' in var_name:
         model_in_list = f.variables['Qle_models']
     elif var_name == 'LAI':
         model_in_list = ['ORC2_r6593','ORC3_r8120','GFDL','QUINCY','NoahMPv401'] #'obs',
@@ -180,7 +182,7 @@ def get_model_out_list(var_name):
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','SWdown','VPD_caused']:
+    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','Rnet','SWdown','Qle_VPD_caused']:
         model_out_list.append('obs')
 
     return model_out_list
@@ -386,7 +388,7 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
 
     return x_series, y_pred, y_int
 
-def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear'):
+def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
 
     '''
     In this method, it tests all parameter combinations to select the best parameter
@@ -395,6 +397,15 @@ def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_t
     folds. So I wrote a new function to replace def fit_GAM_complex_old.
     '''
     print(model_out_name, 'x_top',x_top)
+
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_name = f'{dist_type}_greater_200_samples'
+        concave        = False
+
+    elif vpd_top_type == 'to_10':
+        subfolder_name = f'{dist_type}_to_10'
+        concave        = True
 
     # In case no VPD bin has data points >= VPD_num_threshold
     if np.isnan(x_top):
@@ -471,13 +482,17 @@ def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_t
             gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
         elif dist_type=='Poisson':
             # concave assumption
-            # gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
-            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            if concave:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
         elif dist_type=='Gamma':
-            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            if concave:
+                # concave assumption
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
 
-            # concave assumption
-            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
 
             # no concave assumption
             # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
@@ -521,7 +536,7 @@ def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_t
     print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
 
     # Save the best model using joblib
-    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/Poisson_to_10/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
     y_pred       = best_model.predict(x_series)
@@ -552,7 +567,7 @@ def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_t
 
     return x_series, y_pred, y_int
 
-def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top,
+def fit_GAM_complex_new(model_out_name, var_name, folder_name, file_message, x_top,
     x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
 
     print(model_out_name, 'x_top',x_top)
@@ -960,7 +975,7 @@ def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_
     return var_name_in_model
 
 def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
-
+    print(varname)
     # get key words
     key_word, key_word_not = get_key_words(varname)
 
@@ -968,11 +983,13 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
     my_dict      = {}
 
     for j, model_name in enumerate(model_names):
+
         # print(model_name)
+        
         var_name_in_model = check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name,
                                                                key_word, key_word_not)
         # if Rnet doesn't exist
-        if var_name_in_model == 'None' and varname == 'Rnet':
+        if varname == 'Rnet' and var_name_in_model == 'None':
             SWnet_key_word, SWnet_key_word_not = get_key_words('SWnet')
             LWnet_key_word, LWnet_key_word_not = get_key_words('LWnet')
             SWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'SWnet', site_name, model_name,
@@ -983,12 +1000,35 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
             if SWnet_in_model == 'SinAng':
                 # correct the SWnet var name for ORC models
                 SWnet_in_model = 'SWnet'
-
-            if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
-                my_dict[model_name] = 'None'
+            
+            # if SWnet and LWnet don't exist the same time
+            if SWnet_in_model == 'None' or LWnet_in_model == 'None':
+                Qle_key_word, Qle_key_word_not = get_key_words('Qle')
+                Qh_key_word, Qh_key_word_not   = get_key_words('Qh')
+                Qg_key_word, Qg_key_word_not   = get_key_words('Qg')
+                
+                
+                Qle_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'Qle', site_name, model_name,
+                                                                   Qle_key_word, Qle_key_word_not)
+                Qh_in_model  = check_variable_exists_in_one_model(PLUMBER2_path, 'Qh', site_name, model_name,
+                                                                   Qh_key_word, Qh_key_word_not)      
+                Qg_in_model  = check_variable_exists_in_one_model(PLUMBER2_path, 'Qg', site_name, model_name,
+                                                                   Qg_key_word, Qg_key_word_not)      
+                
+                # print(Qle_in_model)
+                
+                # none of Qle, Qh, Qh exists, then use SWnet or LWnet
+                if Qle_in_model == 'None' and Qh_in_model == 'None' and Qg_in_model == 'None':
+                    if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
+                        my_dict[model_name] = 'None'
+                    else:
+                        my_dict[model_name] = [SWnet_in_model, LWnet_in_model]
+                else: # all of Qle, Qh, Qh exist
+                    my_dict[model_name] = [Qle_in_model, Qh_in_model, Qg_in_model]
+                    
             else:
                 my_dict[model_name] = [SWnet_in_model, LWnet_in_model]
-
+            
         else:
             my_dict[model_name] = var_name_in_model
 

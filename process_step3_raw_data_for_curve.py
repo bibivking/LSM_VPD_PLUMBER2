@@ -41,10 +41,12 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                             high_bound=70, day_time=False, summer_time=False, IGBP_type=None,
                             clim_type=None, energy_cor=False, VPD_num_threshold=None, select_site=None,
                             models_calc_LAI=None, veg_fraction=None, time_scale=None,
-                            add_Rnet_caused_ratio=False, quality_ctrl=False,
+                            add_Rnet_caused_ratio=False, quality_ctrl=False,add_qc=False,
                             clarify_site={'opt':False,'remove_site':None}, standardize=None, add_LAI=False,
-                            remove_strange_values=True, country_code=None, LAI_range=None, add_SMtop1m=False,
-                            hours_precip_free=None, output_2d_grids_only=True, regional_sites=None, middle_day=False):
+                            remove_strange_values=True, country_code=None, LAI_range=None, add_SMtopXm=None,
+                            add_normalized_SMtopXm=None, hours_precip_free=None, output_2d_grids_only=True,
+                            regional_sites=None, middle_day=False, VPD_sensitive=False,
+                            Tair_constrain=None, add_Xday_mean_EF=None ):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -69,12 +71,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         var_output = pd.read_csv(f'./txt/process2_output/daily/{var_name}_all_sites{message}{add_units}.csv',na_values=[''])
     else:
         var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}.csv',na_values=[''])
-        # var_output = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites{add_units}.csv',na_values=[''])
-
-    # print('Reading ',f'./txt/process1_output/{var_name}_all_sites{add_units}.csv')
-
-    # print( 'Check point 1, np.any(~np.isnan(var_output["model_CABLE"]))=',
-    #       np.any(~np.isnan(var_output["model_CABLE"])) )
 
     # Get model names
     if var_name == 'Gs':
@@ -98,17 +94,61 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 print(model_out_name,'use obs_LAI')
                 var_output[model_out_name+'_LAI'] = LAI_input['obs_LAI']
 
-    if add_SMtop1m:
+    if selected_by == 'SM_per_all_models':
 
-        SM_input = pd.read_csv(f'./txt/process1_output/SMtop1m_all_sites.csv', na_values=[''])
+        site_names, IGBP_types, clim_types, model_names = load_default_list()
+        model_names = model_names['model_select_new']
+
+        SM_percentile_input = pd.read_csv(f'./txt/process2_output/SMtop{add_SMtopXm}m_percentile_all_sites.csv', na_values=[''])
+
+        for model_out_name in model_names:
+            try:
+                var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = \
+                    SM_percentile_input[model_out_name]
+            except:
+                var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = np.nan
+
+    if add_SMtopXm != None:
+
+        SM_input = pd.read_csv('./txt/process1_output/SMtop'+str(add_SMtopXm)+'m_all_sites.csv', na_values=[''])
 
         for model_out_name in model_out_list:
             try:
-                var_output[model_out_name+'_SMtop1m'] = SM_input[model_out_name+'_SMtop1m']
+                var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'] = SM_input[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
             except:
-                var_output[model_out_name+'_SMtop1m'] = np.nan
+                var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'] = np.nan
 
-        var_output['model_mean_SMtop1m'] = SM_input['model_mean_SMtop1m']
+        var_output['model_mean_SMtop'+str(add_SMtopXm)+'m'] = SM_input['model_mean_SMtop'+str(add_SMtopXm)+'m']
+
+    if add_Xday_mean_EF != None:
+
+        # Replace the hourly/half-hour EF by the Xday mean EF, which is calcuated based on daily Qle and Qh
+        Xday_mean_EF_input = pd.read_csv(f'./txt/process2_output/EF_all_sites_{add_Xday_mean_EF}_day_mean.csv')
+
+        for model_out_name in model_out_list:
+            if model_out_name == 'obs':
+                head = ''
+            else:
+                head = 'model_'
+
+            try:
+                var_output.loc[:,model_out_name+'_EF'] = Xday_mean_EF_input[head+model_out_name]
+            except:
+                var_output.loc[:,model_out_name+'_EF'] = np.nan
+
+    if add_normalized_SMtopXm != None:
+
+        normalized_SM_input = pd.read_csv('./txt/process1_output/normalized_SMtop'+str(add_normalized_SMtopXm)+'m_all_sites.csv', na_values=[''])
+
+        for model_out_name in model_out_list:
+            try:
+                var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'] = \
+                    normalized_SM_input[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+            except:
+                var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'] = np.nan
+
+        var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'] = \
+            normalized_SM_input['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
 
     if add_Rnet_caused_ratio:
         LH_ratio_input = pd.read_csv(f'./txt/process1_output/Rnet_caused_ratio_all_sites.csv', na_values=[''])
@@ -119,7 +159,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             else:
                 head = 'model_'
             try:
-                var_output[model_out_name+'_VPD_caused_ratio'] = 1. - LH_ratio_input[head+model_out_name]
+                # Calculate VPD account ratio
+                VPD_caused_ratio_tmp  = 1. - LH_ratio_input[head+model_out_name]
+                VPD_caused_ratio_tmp  = np.where(VPD_caused_ratio_tmp>=0,VPD_caused_ratio_tmp,np.nan)
+                VPD_caused_ratio_tmp  = np.where(VPD_caused_ratio_tmp<=1,VPD_caused_ratio_tmp,np.nan)
+                var_output[model_out_name+'_VPD_caused_ratio'] = VPD_caused_ratio_tmp
             except:
                 var_output[model_out_name+'_VPD_caused_ratio'] = np.nan
 
@@ -128,7 +172,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         var_output['Qle_Qh_qc'] = qc_input['Qle_Qh_qc']
 
     if quality_ctrl:
-
         # Use radiation as threshold
         qc_mask     = (~np.isnan(var_output['Qle_Qh_qc']))
         var_output  = var_output[qc_mask]
@@ -198,13 +241,15 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     if day_time:
         # Use hours as threshold
         # day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
-
-        if middle_day:
+        if VPD_sensitive:
+            day_mask    = (var_output['obs_SWdown'] >= 250)
+            day_mask    = (var_output['obs_Tair']   >= 15+273.15)
+        elif middle_day:
             # Use radiation as threshold
-            day_mask    = (var_output['obs_SWdown'] >= 650)
+            day_mask    = (var_output['obs_SWdown'] >= 600)
         else:
             # Use radiation as threshold
-            day_mask    = (var_output['obs_SWdown'] >= 50)
+            day_mask    = (var_output['obs_SWdown'] >= 10)
 
         var_output  = var_output[day_mask]
         site_num    = len(np.unique(var_output["site_name"]))
@@ -222,7 +267,16 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     # whether only considers one type of IGBP
     if IGBP_type!=None:
-        IGBP_mask   = (var_output['IGBP_type'] == IGBP_type)
+
+        # if more than one IGBP_type
+        if isinstance(IGBP_type, list):
+            IGBP_type_array = np.array(IGBP_type)
+            IGBP_mask   = np.isin(var_output['IGBP_type'], IGBP_type_array)
+        elif isinstance(IGBP_type, str):
+            IGBP_mask   = (var_output['IGBP_type'] == IGBP_type)
+        else:
+            print("IGBP_type is of an unknown type")
+
         # # print('np.any(IGBP_mask)', np.any(IGBP_mask))
         var_output  = var_output[IGBP_mask]
         site_num    = len(np.unique(var_output["site_name"]))
@@ -325,9 +379,9 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
         # print('site_obs_mean',site_obs_mean)
 
-    elif standardize == 'STD_SMtop1m' and add_SMtop1m:
+    elif standardize == 'STD_SMtopXm' and add_SMtopXm:
 
-        print("in standardize == 'STD_SMtop1m' and add_SMtop1m")
+        print("in standardize == 'STD_SMtopXm' and add_SMtopXm")
 
         for model_out_name in model_out_list:
             if 'obs' in model_out_name:
@@ -337,16 +391,16 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             print('before',var_output[head+model_out_name])
 
-            if model_out_name+'_SMtop1m' in var_output.columns:
-                if np.all(np.isnan(var_output[model_out_name+'_SMtop1m'])):
+            if model_out_name+'_SMtop'+str(add_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'])):
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                        var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
                 else:
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop1m']
+                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
             else:
                 var_output[head+model_out_name][:] = \
-                    var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                    var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
 
             ### for testing whether excludes LAI < 0.01 time step matters for the curves
             ### Testing result: exclude time steps that LAI < 0.01, will change the shape
@@ -379,6 +433,41 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
                 raise ValueError("Inf exists")
 
+    elif standardize == 'STD_normalized_SMtopXm' and add_normalized_SMtopXm:
+
+        print("in standardize == 'STD_normalized_SMtopXm' and add_normalized_SMtopXm")
+
+        for model_out_name in model_out_list:
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            print('before',var_output[head+model_out_name])
+
+            if model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'])):
+                    var_output[head+model_out_name][:] = \
+                        var_output[head+model_out_name]/var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+                else:
+                    var_output[head+model_out_name][:] = \
+                        var_output[head+model_out_name]/var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+            else:
+                var_output[head+model_out_name][:] = \
+                    var_output[head+model_out_name]/var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+
+            print('after',var_output[head+model_out_name])
+
+            if np.any(var_output[head+model_out_name] == np.inf):
+                print(model_out_name)
+
+                site_with_inf        = np.where(var_output[head+model_out_name] == np.inf, var_output['site_name'], 'NaN')
+                site_with_inf_unique = np.unique(site_with_inf)
+                for site in site_with_inf_unique:
+                    print(site,'has', np.sum(site_with_inf == site), 'data points with inf')
+
+                raise ValueError("Inf exists")
+
     elif standardize == 'STD_SWdown':
 
         print("in standardize == 'STD_SWdown'")
@@ -392,9 +481,9 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output['obs_SWdown']
 
-    elif standardize == 'STD_SWdown_SMtop1m' and add_SMtop1m:
+    elif standardize == 'STD_SWdown_SMtopXm' and add_SMtopXm:
 
-        print("in standardize == 'STD_SWdown_SMtop1m' and add_SMtop1m")
+        print("in standardize == 'STD_SWdown_SMtopXm' and add_SMtopXm")
 
         for model_out_name in model_out_list:
             if 'obs' in model_out_name:
@@ -404,16 +493,16 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             print('before',var_output[head+model_out_name])
 
-            if model_out_name+'_SMtop1m' in var_output.columns:
-                if np.all(np.isnan(var_output[model_out_name+'_SMtop1m'])):
+            if model_out_name+'_SMtop'+str(add_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'])):
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                        var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
                 else:
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop1m']
+                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
             else:
                 var_output[head+model_out_name][:] = \
-                    var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                    var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
 
             print('after',var_output[head+model_out_name])
 
@@ -430,7 +519,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output['obs_SWdown']
 
-    elif standardize == 'STD_LAI_SMtop1m':
+    elif standardize == 'STD_LAI_SMtopXm':
 
         '''
         standardlize by LAI should only use on TVeg
@@ -444,21 +533,21 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             else:
                 head = 'model_'
 
-            if model_out_name+'_SMtop1m' in var_output.columns:
-                if np.all(np.isnan(var_output[model_out_name+'_SMtop1m'])):
+            if model_out_name+'_SMtop'+str(add_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'])):
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                        var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
                 else:
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop1m']
+                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
             else:
                 var_output[head+model_out_name][:] = \
-                    var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                    var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
 
             if np.any(var_output[head+model_out_name] == np.inf):
                 print(model_out_name)
                 print(var_output[head+model_out_name])
-                print(var_output['model_mean_SMtop1m'])
+                print(var_output['model_mean_SMtop'+str(add_SMtopXm)+'m'])
                 raise ValueError("Inf exists")
 
             # check whether the model has calculated LAI
@@ -479,7 +568,45 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             #                                                 var_output[head+model_out_name]/var_output['obs_LAI'],
             #                                                 np.nan )
 
-    elif standardize == 'STD_SWdown_LAI_SMtop1m':
+    elif standardize == 'STD_LAI_normalized_SMtopXm':
+
+        '''
+        standardlize by LAI should only use on TVeg
+        '''
+
+        # print('standardized by SMtop1m and then LAI')
+        for model_out_name in model_out_list:
+
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            if model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'])):
+                    var_output[head+model_out_name][:] = \
+                        var_output[head+model_out_name]/var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+                else:
+                    var_output[head+model_out_name][:] = \
+                        var_output[head+model_out_name]/var_output[model_out_name+'_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+            else:
+                var_output[head+model_out_name][:] = \
+                    var_output[head+model_out_name]/var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m']
+
+            if np.any(var_output[head+model_out_name] == np.inf):
+                print(model_out_name)
+                print(var_output[head+model_out_name])
+                print(var_output['model_mean_normalized_SMtop'+str(add_normalized_SMtopXm)+'m'])
+                raise ValueError("Inf exists")
+
+            # if use_model_LAI:
+            modeled_LAI = var_output[model_out_name+'_LAI']
+            var_output[head+model_out_name][:] = np.where( np.all([ modeled_LAI >= 0.01, np.isnan(modeled_LAI) == False], axis=0) ,
+                                                        var_output[head+model_out_name]/modeled_LAI,
+                                                        np.nan ) # since removing LAI <0.01 will change curve shape, change the
+                                                                    # restriction to LAI should be >=0.001
+
+    elif standardize == 'STD_SWdown_LAI_SMtopXm':
 
         '''
         standardlize by LAI should only use on TVeg
@@ -494,21 +621,21 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 head = 'model_'
 
             # standardize by SMtop1m
-            if model_out_name+'_SMtop1m' in var_output.columns:
-                if np.all(np.isnan(var_output[model_out_name+'_SMtop1m'])):
+            if model_out_name+'_SMtop'+str(add_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'])):
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                        var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
                 else:
                     var_output[head+model_out_name][:] = \
-                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop1m']
+                        var_output[head+model_out_name]/var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
             else:
                 var_output[head+model_out_name][:] = \
-                    var_output[head+model_out_name]/var_output['model_mean_SMtop1m']
+                    var_output[head+model_out_name]/var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
 
             if np.any(var_output[head+model_out_name] == np.inf):
                 print(model_out_name)
                 print(var_output[head+model_out_name])
-                print(var_output['model_mean_SMtop1m'])
+                print(var_output['model_mean_SMtop'+str(add_SMtopXm)+'m'])
                 raise ValueError("Inf exists")
 
             # standardize by LAI
@@ -655,6 +782,12 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output[head+model_out_name+'_Gs_ref']
 
+    if Tair_constrain != None:
+
+        tair_mask    = (var_output['obs_Tair']>=Tair_constrain)
+        var_output   = var_output[tair_mask]
+        site_num     = len(np.unique(var_output["site_name"]))
+
     if add_Rnet_caused_ratio:
 
         # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
@@ -667,6 +800,8 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 head = 'model_'
 
             var_output[model_out_name+'_VPD_caused'] = var_output[head+model_out_name]*var_output[model_out_name+'_VPD_caused_ratio']
+            print(model_out_name,'no nan LH is',np.sum(~np.isnan(var_output[head+model_out_name])),
+                  'no nan LH_VPD_caused is',np.sum(~np.isnan(var_output[model_out_name+'_VPD_caused_ratio'])))
 
     if output_2d_grids_only:
         mask_VPD_tmp       = (var_output['VPD'] != np.nan)
@@ -689,7 +824,64 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     # ========== Divide dry and wet periods ==========
 
     # Calculate EF thresholds
-    if selected_by == 'EF_obs':
+    if selected_by == 'SM_per_all_models':
+
+        '''
+        Be carefull: this script select the time steps that all 13 models with SM simulations are within the
+        required ranges, rather than the models with the variable (such as TVeg, non TVeg have fewer models).
+        That's the reason use model_names rather than model_out_list
+        '''
+
+        var_output_dry = copy.deepcopy(var_output)
+        var_output_wet = copy.deepcopy(var_output)
+
+        # select time step where obs_EF isn't NaN (when Qh<0 or Qle+Qh<10)
+        for i, model_out_name in enumerate(model_names):
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            SM_per_name = model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'
+
+            if len(low_bound)>1 and len(high_bound)>1:
+                dry_mask  = (var_output[SM_per_name] > low_bound[0]) & (var_output[SM_per_name] < low_bound[1])
+                wet_mask  = (var_output[SM_per_name] > high_bound[0]) & (var_output[SM_per_name] < high_bound[1])
+            elif len(low_bound)==1 and len(high_bound)==1:
+                dry_mask  = (var_output[SM_per_name] < low_bound)
+                wet_mask  = (var_output[SM_per_name] > high_bound)
+            else:
+                sys.exit('len(low_bound)=',len(low_bound),'len(high_bound)=',len(high_bound))
+
+            var_output_dry[head+model_out_name] = np.where(dry_mask, var_output[head+model_out_name], np.nan)
+            var_output_wet[head+model_out_name] = np.where(wet_mask, var_output[head+model_out_name], np.nan)
+
+        SM_per_model_names = ['CABLE_SMtop'+str(add_SMtopXm)+'m_percentile',
+                              'CABLE-POP-CN'+str(add_SMtopXm)+'m_percentile',
+                              'CHTESSEL_Ref_exp1'+str(add_SMtopXm)+'m_percentile',
+                              'CLM5a'+str(add_SMtopXm)+'m_percentile',
+                              'GFDL'+str(add_SMtopXm)+'m_percentile',
+                              'JULES_GL9'+str(add_SMtopXm)+'m_percentile',
+                              'JULES_GL9_withLAI'+str(add_SMtopXm)+'m_percentile',
+                              'MATSIRO'+str(add_SMtopXm)+'m_percentile',
+                              'MuSICA'+str(add_SMtopXm)+'m_percentile',
+                              'NoahMPv401'+str(add_SMtopXm)+'m_percentile',
+                              'ORC2_r6593'+str(add_SMtopXm)+'m_percentile',
+                              'ORC3_r8120'+str(add_SMtopXm)+'m_percentile',
+                              'STEMMUS-SCOPE'+str(add_SMtopXm)+'m_percentile']
+
+        model_mask_names = []
+        for model_out_name in model_out_list:
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            model_mask_names.extend(head+model_out_name)
+        print(model_mask_names)
+
+        var_output_dry[model_mask_names] = var_output_dry[model_mask_names].where(~var_output_dry[SM_per_model_names].isna().any(axis=1), other=np.nan)
+        var_output_wet[model_mask_names] = var_output_wet[model_mask_names].where(~var_output_wet[SM_per_model_names].isna().any(axis=1), other=np.nan)
+
+    elif selected_by == 'EF_obs':
 
         var_output_dry = copy.deepcopy(var_output)
         var_output_wet = copy.deepcopy(var_output)
@@ -716,67 +908,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             var_output_dry[head+model_out_name] = np.where(dry_mask, var_output[head+model_out_name], np.nan)
             var_output_wet[head+model_out_name] = np.where(wet_mask, var_output[head+model_out_name], np.nan)
-
-        # # select time step where obs_EF isn't NaN (when Qh<0 or Qle+Qh<10)
-        # EF_notNan_mask = ~ np.isnan(var_output['obs_EF'])
-        # var_output     = var_output[EF_notNan_mask]
-        #
-        # # # print('np.any(EF_notNan_mask)', np.any(EF_notNan_mask))
-        #
-        # # Select EF<low_bound and EF>high_bound for each site to make sure
-        # # that every site can contribute to the final VPD lines
-        # for site_name in site_names:
-        #
-        #     # select data for this site
-        #     site_mask       = (var_output['site_name'] == site_name)
-        #
-        #     # print('In bin by EF, site_name=', site_name, 'np.any(site_mask)',np.any(site_mask))
-        #
-        #     # calculate EF thresholds for this site
-        #     if len(low_bound)>1 and len(high_bound)>1:
-        #         try:
-        #             bin_dry_low  = np.percentile(var_output[site_mask]['obs_EF'], low_bound[0])
-        #             bin_dry_high = np.percentile(var_output[site_mask]['obs_EF'], low_bound[1])
-        #             bin_wet_low  = np.percentile(var_output[site_mask]['obs_EF'], high_bound[0])
-        #             bin_wet_high = np.percentile(var_output[site_mask]['obs_EF'], high_bound[1])
-        #         except:
-        #             bin_dry_low  = np.nan
-        #             bin_dry_high = np.nan
-        #             bin_wet_low  = np.nan
-        #             bin_wet_high = np.nan
-        #         # make the mask based on EF thresholds and append it to a full-site long logic array
-        #         try:
-        #             dry_mask = dry_mask.append((var_output[site_mask]['obs_EF'] > bin_dry_low)
-        #                                      & (var_output[site_mask]['obs_EF'] < bin_dry_high))
-        #             wet_mask = wet_mask.append((var_output[site_mask]['obs_EF'] > bin_wet_low)
-        #                                      & (var_output[site_mask]['obs_EF'] < bin_wet_high))
-        #         except:
-        #             dry_mask = (var_output[site_mask]['obs_EF'] > bin_dry_low) & (var_output[site_mask]['obs_EF'] < bin_dry_high)
-        #             wet_mask = (var_output[site_mask]['obs_EF'] > bin_wet_low) & (var_output[site_mask]['obs_EF'] < bin_wet_high)
-        #     elif len(low_bound)==1 and len(high_bound)==1:
-        #         try:
-        #             bin_dry     = np.percentile(var_output[site_mask]['obs_EF'], low_bound)
-        #             bin_wet     = np.percentile(var_output[site_mask]['obs_EF'], high_bound)
-        #         except:
-        #             bin_dry     = np.nan
-        #             bin_wet     = np.nan
-        #
-        #         # make the mask based on EF thresholds and append it to a full-site long logic array
-        #         try:
-        #             dry_mask = dry_mask.append(var_output[site_mask]['obs_EF'] < bin_dry)
-        #             wet_mask = wet_mask.append(var_output[site_mask]['obs_EF'] > bin_wet)
-        #         except:
-        #             dry_mask = (var_output[site_mask]['obs_EF'] < bin_dry)
-        #             wet_mask = (var_output[site_mask]['obs_EF'] > bin_wet)
-        #     else:
-        #         sys.exit('len(low_bound)=',len(low_bound),'len(high_bound)=',len(high_bound))
-        #
-        # # Mask out the time steps beyond the EF thresholds
-        # var_output_dry = var_output[dry_mask]
-        # var_output_wet = var_output[wet_mask]
-        #
-        # # free memory
-        # EF_notNan_mask=None
 
     elif selected_by == 'EF_model':
 
@@ -815,6 +946,69 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         # print( 'Check point 7, np.any(~np.isnan(var_output_dry["model_CABLE"]))=',
         #       np.any(~np.isnan(var_output_dry["model_CABLE"])) )
 
+    elif 'EF_' in selected_by:
+
+        bin_by_model = selected_by[3:]
+        print('bin by model', bin_by_model)
+
+        # bin by any model
+        var_output_dry = copy.deepcopy(var_output)
+        var_output_wet = copy.deepcopy(var_output)
+        # select time step where obs_EF isn't NaN (when Qh<0 or Qle+Qh<10)
+        for i, model_out_name in enumerate(model_out_list):
+
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            if len(low_bound)>1 and len(high_bound)>1:
+                dry_mask  = (var_output[bin_by_model+'_EF'] > low_bound[0]) & (var_output[bin_by_model+'_EF'] < low_bound[1])
+                wet_mask  = (var_output[bin_by_model+'_EF'] > high_bound[0]) & (var_output[bin_by_model+'_EF'] < high_bound[1])
+            elif len(low_bound)==1 and len(high_bound)==1:
+                dry_mask  = (var_output[bin_by_model+'_EF'] < low_bound)
+                wet_mask  = (var_output[bin_by_model+'_EF'] > high_bound)
+            else:
+                sys.exit('len(low_bound)=',len(low_bound),'len(high_bound)=',len(high_bound))
+
+            var_output_dry[head+model_out_name] = np.where(dry_mask, var_output[head+model_out_name], np.nan)
+            var_output_wet[head+model_out_name] = np.where(wet_mask, var_output[head+model_out_name], np.nan)
+
+    elif selected_by == 'SMtopXm':
+
+        var_output_dry = copy.deepcopy(var_output)
+        var_output_wet = copy.deepcopy(var_output)
+
+        for i, model_out_name in enumerate(model_out_list):
+
+            # get SMtop1m
+            if model_out_name+'_SMtop'+str(add_SMtopXm)+'m' in var_output.columns:
+                if np.all(np.isnan(var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m'])):
+                    SMtopXm_tmp = var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
+                else:
+                    SMtopXm_tmp = var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m']
+            else:
+                SMtopXm_tmp = var_output['model_mean_SMtop'+str(add_SMtopXm)+'m']
+
+            # get dry and wet thresholds
+            mask_temp   = (~ np.isnan(SMtopXm_tmp))
+            bot_dry_tmp = np.percentile(SMtopXm_tmp[mask_temp], low_bound[0])
+            top_dry_tmp = np.percentile(SMtopXm_tmp[mask_temp], high_bound[0])
+
+            bot_wet_tmp = np.percentile(SMtopXm_tmp[mask_temp], low_bound[1])
+            top_wet_tmp = np.percentile(SMtopXm_tmp[mask_temp], high_bound[1])
+
+            SM_dry_mask  = (SMtopXm_tmp >= bot_dry_tmp) & (SMtopXm_tmp < top_dry_tmp)
+            SM_wet_mask  = (SMtopXm_tmp >= bot_wet_tmp) & (SMtopXm_tmp < top_wet_tmp)
+
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            var_output_dry[head+model_out_name] = np.where(SM_dry_mask, var_output[head+model_out_name], np.nan)
+            var_output_wet[head+model_out_name] = np.where(SM_wet_mask, var_output[head+model_out_name], np.nan)
+
     # print('Finish dividing dry and wet periods')
 
     # ========== Save curves ==========
@@ -833,14 +1027,19 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                                         IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                         standardize=standardize, country_code=country_code, selected_by=selected_by,
                                         bounds=low_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                                        clarify_site=clarify_site, regional_sites=regional_sites)
+                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF)
 
     folder_name, file_message2 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                         IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                         standardize=standardize, country_code=country_code, selected_by=selected_by,
                                         bounds=high_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                                        clarify_site=clarify_site, regional_sites=regional_sites)
-    if middle_day:
+                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF)
+
+    if Tair_constrain != None:
+        message_midday = '_Tair_'+str(Tair_constrain)
+    elif VPD_sensitive:
+        message_midday = '_VPD_sensitive_periods'
+    elif middle_day:
         message_midday = '_midday'
     else:
         message_midday = ''
@@ -854,353 +1053,429 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
     return
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    # Path of PLUMBER 2 dataset
-    PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
-    site_names, IGBP_types, clim_types, model_names = load_default_list()
+#     # Path of PLUMBER 2 dataset
+#     PLUMBER2_path  = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+#     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    var_name       = 'Qle'      #'nonTVeg' #'TVeg'
-    selected_by    = 'EF_model' #'EF_model' #'EF_obs'
-    standardize    = None          # None
-                                   # 'STD_LAI'
-                                   # 'STD_annual_obs'
-                                   # 'STD_monthly_obs'
-                                   # 'STD_monthly_model'
-                                   # 'STD_daily_obs'
+#     var_name       = 'Qle'      #'nonTVeg' #'TVeg'
+#     selected_by    = 'EF_model' #'EF_model' #'EF_obs'
+#     standardize    = None          # None
+#                                    # 'STD_LAI'
+#                                    # 'STD_annual_obs'
+#                                    # 'STD_monthly_obs'
+#                                    # 'STD_monthly_model'
+#                                    # 'STD_daily_obs'
+#     add_SMtopXm            = None
+#     add_normalized_SMtopXm = None
+#     time_scale             = 'hourly' # 'daily'
+#                                       # 'hourly'
 
-    time_scale        = 'hourly' # 'daily'
-                                 # 'hourly'
+#     day_time          = False
+#     if time_scale == 'hourly':
+#         day_time      = True
 
-    day_time          = False
-    if time_scale == 'hourly':
-        day_time      = True
+#     clarify_site      = {'opt': True,
+#                          'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6', # rainfall problems
+#                                          'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1',
+#                                          'AU-Wrr','CN-Din','US-WCr','ZM-Mon' # models miss the simulations of them
+#                                          ]}
 
-    clarify_site      = {'opt': True,
-                         'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
-                         'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+#     models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
 
-    models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
+#     energy_cor        = False
+#     if var_name == 'NEE':
+#         energy_cor = False
 
-    energy_cor        = False
-    if var_name == 'NEE':
-        energy_cor = False
+#     country_code   = None #'AU'
+#     if country_code != None:
+#         site_names = load_sites_in_country_list(country_code)
 
-    country_code   = None #'AU'
-    if country_code != None:
-        site_names = load_sites_in_country_list(country_code)
+#     # IGBP_types     = ['GRA', 'DBF', 'ENF', 'EBF']
 
-    # IGBP_types     = ['GRA', 'DBF', 'ENF', 'EBF']
+#     # whether only provide 2d_grid csv data and stop the script
+#     output_2d_grids_only = False
+#     region_name          = 'global'
+#     if region_name == 'global':
+#         region = {'name':'global', 'lat':None, 'lon':None}
+#         regional_sites   = None
+#     elif region_name == 'east_AU':
+#         region = {'name':'east_AU', 'lat':[-44.5,-10], 'lon':[129,155]}
+#         regional_sites   = get_regional_site_list(region)
+#     elif region_name == 'west_EU':
+#         region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+#         regional_sites   = get_regional_site_list(region)
+#     elif region_name == 'north_Am':
+#         region = {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
+#         regional_sites   = get_regional_site_list(region)
 
-    # whether only provide 2d_grid csv data and stop the script
-    output_2d_grids_only = False
-    region_name          = 'global'
-    if region_name == 'global':
-        region = {'name':'global', 'lat':None, 'lon':None}
-        regional_sites   = None
-    elif region_name == 'east_AU':
-        region = {'name':'east_AU', 'lat':[-44.5,-10], 'lon':[129,155]}
-        regional_sites   = get_regional_site_list(region)
-    elif region_name == 'west_EU':
-        region = {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
-        regional_sites   = get_regional_site_list(region)
-    elif region_name == 'north_Am':
-        region = {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
-        regional_sites   = get_regional_site_list(region)
+#     # # ========= clim_types ==========
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # LAI_range      = None   # [0,1.]
+#     #                         # [1.,2.]
+#     #                         # [2.,4.]
+#     #                         # [4.,10.]
+#     # veg_fraction   = None
+#     # for clim_type in clim_types:
+#     #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+#     #                     country_code=country_code, LAI_range=LAI_range,  clim_type=clim_type,
+#     #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#     #     gc.collect()
 
-    # # ========= clim_types ==========
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-    # veg_fraction   = None
-    # for clim_type in clim_types:
-    #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                     country_code=country_code, LAI_range=LAI_range,  clim_type=clim_type,
-    #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
-    #     gc.collect()
+#     # # ========= veg type ==========
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # LAI_range      = None   # [0,1.]
+#     #                         # [1.,2.]
+#     #                         # [2.,4.]
+#     #                         # [4.,10.]
+#     # veg_fraction   = None
+#     # for IGBP_type in IGBP_types:
+#     #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+#     #                     country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
+#     #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#     #     gc.collect()
 
-    # # ========= veg type ==========
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-    # veg_fraction   = None
-    # for IGBP_type in IGBP_types:
-    #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                     country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
-    #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
-    #     gc.collect()
+#     # ========= wet & dry ==========
+#     if 1:
+#         var_name       = 'Qle'
+#         veg_fraction   = None # [0,0.3] # low veg fraction
+#         LAI_range      = None # [0.,1.]
+#         IGBP_type      = None
+#         middle_day     = False #True
 
-    # ========= wet & dry ==========
-    if 1:
-        var_name       = 'Qle'
-        veg_fraction   = None # [0,0.3] # low veg fraction
-        LAI_range      = None # [0.,1.]
-        IGBP_type      = None
-        add_SMtop1m    = True
-        add_LAI        = True
-        middle_day     = False #True
-        
-        selected_by    = 'EF_model' #'EF_model' #'EF_obs'
-        # standardize    = 'STD_Gs_ref'
-        low_bound      = [0,0.2] #30
-        high_bound     = [0.8,1.0] #70
-        add_Rnet_caused_ratio = True
-        add_qc         = True
+#         selected_by    = 'EF_model' #'EF_obs' #'EF_CABLE' #
+#         add_LAI        = True
+#         add_qc         = True
+#         add_Xday_mean_EF= None
+#         quality_ctrl   = True
+#         add_Rnet_caused_ratio = True
+#         Tair_constrain = None
+#         VPD_sensitive  = False
+#         add_normalized_SMtopXm = None
 
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
-                        country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-                        middle_day=middle_day)
+#         # # SMtop percentile
+#         # low_bounds      = [[0,15], [30,50], [70,90],]#,  [0.2,0.4],[0.6,0.8]]
+#         # high_bounds     = [[15,30],[50,70],[90,100],]#,[0.4,0.6],[0.8,1.0]]
 
-        low_bound      = [0.2,0.4] #30
-        high_bound     = [0.4,0.6] #70
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
-                        country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-                        middle_day=middle_day)
+#         # EF
+#         # low_bounds      = [[0.0,0.2],[0.2,0.4],[0.6,0.8]]
+#         # high_bounds     = [[0.8,1.0],[0.4,0.6],[0.8,1.0]]
+#         # selected_by     = 'EF_CABLE'
+#         # LAI_ranges      = [[0, 1.], [1.,2.], [2.,4.], [4.,10.]]
+#         IGBP_types      = ['GRA', 'OSH', 'SAV', 'WSA', 'CSH', 'DBF', 'ENF', 'EBF', 'MF', 'WET', 'CRO']
 
-        low_bound      = [0.6,0.8] #30
-        high_bound     = [0.8,1.0] #70
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        add_SMtop1m=add_SMtop1m,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
-                        country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-                        middle_day=middle_day)
+#         low_bounds      = [[0.0,0.3]]
+#         high_bounds     = [[0.7,1.0]]
 
-        # low_bound      = [0,0.1] #30
-        # high_bound     = [0.1,0.2] #70
-        # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-        #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-        #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-        #                 add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-        #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-        #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-        #                 middle_day=middle_day)
-        #
-        # low_bound      = [0.2,0.3] #30
-        # high_bound     = [0.3,0.4] #70
-        # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-        #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-        #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-        #                 add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-        #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-        #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-        #                 middle_day=middle_day)
-        #
-        # low_bound      = [0.4,0.5] #30
-        # high_bound     = [0.5,0.6] #70
-        # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-        #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-        #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-        #                 add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-        #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-        #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-        #                 middle_day=middle_day)
-        #
-        # low_bound      = [0.6,0.7] #30
-        # high_bound     = [0.7,0.8] #70
-        # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-        #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-        #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-        #                 add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-        #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-        #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-        #                 middle_day=middle_day)
-        #
-        # low_bound      = [0.8,0.9] #30
-        # high_bound     = [0.9,1.0] #70
-        # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-        #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-        #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-        #                 add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-        #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-        #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
-        #                 middle_day=middle_day)
-        #
-    # ========= standardize ==========
-    if 0:
+#         # Tair_constrain = 15
+#         add_Xday_mean_EF= '1'
 
-        var_name       = 'TVeg'
-        standardize    = 'STD_SWdown_SMtop1m'
-        low_bound      = [0,0.2]  #30
-        high_bound     = [0.8,1.] #70
-        veg_fraction   = None # [0,0.3] # low veg fraction
-        LAI_range      = None # [0.,1.]
-        add_SMtop1m    = True
-        add_LAI        = True
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        country_code=country_code, LAI_range=LAI_range, add_SMtop1m=add_SMtop1m, add_LAI=add_LAI,# IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         for i in np.arange(1):
 
-        low_bound      = [0.2,0.4] #30
-        high_bound     = [0.6,0.8] #70
-        veg_fraction   = None # [0,0.3] # low veg fraction
-        LAI_range      = None # [0.,1.]
-        add_SMtop1m    = True
-        add_LAI        = True
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        country_code=country_code, LAI_range=LAI_range, add_SMtop1m=add_SMtop1m, add_LAI=add_LAI,# IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#             add_SMtopXm = '0.3'
+#             low_bound   = low_bounds[i]
+#             high_bound  = high_bounds[i]
 
-        low_bound      = [0.4,0.6] #30
-        high_bound     = [0.6,0.8] #70
-        veg_fraction   = None # [0,0.3] # low veg fraction
-        LAI_range      = None # [0.,1.]
-        add_SMtop1m    = True
-        add_LAI        = True
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        country_code=country_code, LAI_range=LAI_range, add_SMtop1m=add_SMtop1m, add_LAI=add_LAI,# IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#             # var_name    = 'Qle'
+#             selected_by = 'EF_model'
+#             # standardize = 'STD_normalized_SMtopXm'
+#             # add_normalized_SMtopXm = '0.3'
 
-    # ========= add_LAI ==========
-    if 0:
-        var_name       = 'Qle'
-        low_bound      = [0,0.2] #30
-        high_bound     = [0.8,1.] #70
-        veg_fraction   = None # [0,0.3] # low veg fraction
-        LAI_range      = None # [0.,1.]
-        add_SMtop1m    = True
-        add_LAI        = True
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-                        country_code=country_code, LAI_range=LAI_range, add_SMtop1m=add_SMtop1m, add_LAI=add_LAI,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#             var_name    = 'Qle'
+#             # for IGBP_type in IGBP_types:
+#             # for LAI_range in LAI_ranges:
+#             write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                             high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                             models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                             add_SMtopXm=add_SMtopXm, add_normalized_SMtopXm=add_normalized_SMtopXm,
+#                             add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,  IGBP_type=IGBP_type,
+#                             country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#                             energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#                             middle_day=middle_day, VPD_sensitive=VPD_sensitive, Tair_constrain=Tair_constrain,
+#                             add_Xday_mean_EF=add_Xday_mean_EF)
 
-    # # # ================ Select sites ====================
-    # # low_bound      = [0,0.2] #30
-    # # high_bound     = [0.8,1.] #70
-    # # veg_fraction   = None # [0,0.3] # low veg fraction
-    # # LAI_range      = None # [0.,1.]
-    #
-    # # for select_site in site_names:
-    # #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    # #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    # #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    # #                 country_code=country_code, LAI_range=LAI_range, select_site=select_site,
-    # #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
-    #
-    #
-    # # ========= 0.2 < EF < 0.8 ==========
-    if 0:
-        veg_fraction   = None
-        IGBP_type      = None
-        add_SMtop1m    = True
-        add_LAI        = True
-        LAI_range      = None   # [0,1.]
-                                # [1.,2.]
-                                # [2.,4.]
-                                # [4.,10.]
-        low_bound      = [0.2,0.4] #30
-        high_bound     = [0.6,0.8] #70
-        # standardize    = 'STD_Gs_ref'
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale,add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-                        country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#                 # var_name    = 'TVeg'
+#                 # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                 #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                 #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                 #                 add_SMtopXm=add_SMtopXm, add_normalized_SMtopXm=add_normalized_SMtopXm,
+#                 #                 add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,  IGBP_type=IGBP_type,
+#                 #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#                 #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#                 #                 middle_day=middle_day, VPD_sensitive=VPD_sensitive, Tair_constrain=Tair_constrain)
 
-        low_bound      = [0.2,0.4] #30
-        high_bound     = [0.4,0.6] #70
+#                 # var_name    = 'nonTVeg'
+#                 # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                 #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                 #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                 #                 add_SMtopXm=add_SMtopXm, add_normalized_SMtopXm=add_normalized_SMtopXm,
+#                 #                 add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,  IGBP_type=IGBP_type,
+#                 #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, #
+#                 #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#                 #                 middle_day=middle_day, VPD_sensitive=VPD_sensitive, Tair_constrain=Tair_constrain)
 
-        write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-                        high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-                        models_calc_LAI=models_calc_LAI, time_scale=time_scale,add_SMtop1m=add_SMtop1m,add_LAI=add_LAI,
-                        country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
-                        energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#             # var_name    = 'Qle'
+#             # selected_by = 'EF_obs'
+#             # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#             #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#             #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#             #                 add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#             #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#             #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#             #                 middle_day=middle_day)
 
-        gc.collect()
 
-    # # ========= LAI ==========
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # IGBP_type      = None
-    # veg_fraction   = None
+#             # LAI_ranges      = [3.,15.]
+#             # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#             #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#             #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#             #                 add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#             #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#             #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#             #                 middle_day=middle_day)
+#             #
+#             # selected_by    = 'EF_model' #'EF_obs'
+#             # # LAI_ranges      = [0.,0.1]
+#             # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#             #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#             #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#             #                 add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#             #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#             #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#             #                 middle_day=middle_day)
 
-    # LAI_range      = [0.,1.]
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#             # LAI_ranges      = [3.,15.]
+#             # standardize    = 'STD_LAI'
+#             # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#             #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#             #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#             #                 add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#             #                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#             #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#             #                 middle_day=middle_day)
 
-    # LAI_range      = [1.,2.]
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         # low_bounds      = [[0,0.8]]#,  [0.2,0.4],[0.6,0.8]]
+#         # high_bounds     = [[0.2,1.0]]#,[0.4,0.6],[0.8,1.0]]
 
-    # LAI_range      = [2.,4.]
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         # for i in np.arange(1):
 
-    # LAI_range      = [4.,10.]
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         #     # selected_by = 'SMtop1m'
+#         #     low_bound  = low_bounds[i]
+#         #     high_bound = high_bounds[i]
 
-    # # ========= veg type ==========
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # LAI_range      = None   # [0,1.]
-    #                         # [1.,2.]
-    #                         # [2.,4.]
-    #                         # [4.,10.]
-    # veg_fraction   = None
-    # for IGBP_type in IGBP_types:
-    #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
-    #                     country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
-    #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
-    #     gc.collect()
+#         #     # standardize    = 'STD_SMtop1m'
+#         #     # selected_by    = 'EF_obs' #'EF_model' #'EF_obs'
+#         #     LAI_ranges      = [0.,0.1]
+#         #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#         #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#         #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#         #                     add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#         #                     country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#         #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#         #                     middle_day=middle_day)
 
-    # ========= veg fraction ==========
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # veg_fraction   = [0,0.3] # low veg fraction
-    # LAI_range      = None
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code,  # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         #     standardize    = 'STD_LAI'
+#         #     LAI_ranges      = [3.,15.]
+#         #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#         #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#         #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#         #                     add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#         #                     country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#         #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#         #                     middle_day=middle_day)
+#         #     #
+#         #     selected_by    = 'EF_model' #'EF_obs'
+#         #     LAI_ranges      = [0.,0.1]
+#         #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#         #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#         #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#         #                     add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#         #                     country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#         #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#         #                     middle_day=middle_day)
 
-    # low_bound      = [0,0.2] #30
-    # high_bound     = [0.8,1.] #70
-    # veg_fraction   = [0.7,1.] # high veg fraction
-    # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
-    #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
-    #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
-    #                 country_code=country_code,  # IGBP_type=IGBP_type,
-    #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#         #     standardize    = 'STD_LAI'
+#         #     LAI_ranges      = [3.,15.]
+#         #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#         #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#         #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#         #                     add_SMtopXm=add_SMtopXm,add_LAI=add_LAI, add_Rnet_caused_ratio=add_Rnet_caused_ratio,
+#         #                     country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
+#         #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
+#         #                     middle_day=middle_day)
+#     # ========= standardize ==========
+#     if 0:
+
+#         var_name       = 'TVeg'
+#         standardize    = 'STD_SWdown_SMtopXm'
+#         low_bound      = [0,0.2]  #30
+#         high_bound     = [0.8,1.] #70
+#         veg_fraction   = None # [0,0.3] # low veg fraction
+#         LAI_range      = None # [0.,1.]
+#         add_SMtopXm    = True
+#         add_LAI        = True
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                         country_code=country_code, LAI_range=LAI_range, add_SMtopXm=add_SMtopXm, add_LAI=add_LAI,# IGBP_type=IGBP_type,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#         low_bound      = [0.2,0.4] #30
+#         high_bound     = [0.6,0.8] #70
+#         veg_fraction   = None # [0,0.3] # low veg fraction
+#         LAI_range      = None # [0.,1.]
+#         add_SMtopXm    = True
+#         add_LAI        = True
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                         country_code=country_code, LAI_range=LAI_range, add_SMtopXm=add_SMtopXm, add_LAI=add_LAI,# IGBP_type=IGBP_type,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#         low_bound      = [0.4,0.6] #30
+#         high_bound     = [0.6,0.8] #70
+#         veg_fraction   = None # [0,0.3] # low veg fraction
+#         LAI_range      = None # [0.,1.]
+#         add_SMtopXm    = True
+#         add_LAI        = True
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                         country_code=country_code, LAI_range=LAI_range, add_SMtopXm=add_SMtopXm, add_LAI=add_LAI,# IGBP_type=IGBP_type,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # ========= add_LAI ==========
+#     if 0:
+#         var_name       = 'Qle'
+#         low_bound      = [0,0.2] #30
+#         high_bound     = [0.8,1.] #70
+#         veg_fraction   = None # [0,0.3] # low veg fraction
+#         LAI_range      = None # [0.,1.]
+#         add_SMtopXm    = True
+#         add_LAI        = True
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#                         country_code=country_code, LAI_range=LAI_range, add_SMtopXm=add_SMtopXm, add_LAI=add_LAI,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # # # ================ Select sites ====================
+#     # # low_bound      = [0,0.2] #30
+#     # # high_bound     = [0.8,1.] #70
+#     # # veg_fraction   = None # [0,0.3] # low veg fraction
+#     # # LAI_range      = None # [0.,1.]
+#     #
+#     # # for select_site in site_names:
+#     # #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     # #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     # #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     # #                 country_code=country_code, LAI_range=LAI_range, select_site=select_site,
+#     # #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#     #
+#     #
+#     # # ========= 0.2 < EF < 0.8 ==========
+#     if 0:
+#         veg_fraction   = None
+#         IGBP_type      = None
+#         add_SMtopXm    = True
+#         add_LAI        = True
+#         LAI_range      = None   # [0,1.]
+#                                 # [1.,2.]
+#                                 # [2.,4.]
+#                                 # [4.,10.]
+#         low_bound      = [0.2,0.4] #30
+#         high_bound     = [0.6,0.8] #70
+#         # standardize    = 'STD_Gs_ref'
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale,add_SMtopXm=add_SMtopXm,add_LAI=add_LAI,
+#                         country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#         low_bound      = [0.2,0.4] #30
+#         high_bound     = [0.4,0.6] #70
+
+#         write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#                         high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#                         models_calc_LAI=models_calc_LAI, time_scale=time_scale,add_SMtopXm=add_SMtopXm,add_LAI=add_LAI,
+#                         country_code=country_code, LAI_range=LAI_range,  # IGBP_type=IGBP_type,
+#                         energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#         gc.collect()
+
+#     # # ========= LAI ==========
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # IGBP_type      = None
+#     # veg_fraction   = None
+
+#     # LAI_range      = [0.,1.]
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # LAI_range      = [1.,2.]
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # LAI_range      = [2.,4.]
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # LAI_range      = [4.,10.]
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code, LAI_range=LAI_range, # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # # ========= veg type ==========
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # LAI_range      = None   # [0,1.]
+#     #                         # [1.,2.]
+#     #                         # [2.,4.]
+#     #                         # [4.,10.]
+#     # veg_fraction   = None
+#     # for IGBP_type in IGBP_types:
+#     #     write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                     high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                     models_calc_LAI=models_calc_LAI, time_scale=time_scale,
+#     #                     country_code=country_code, LAI_range=LAI_range,  IGBP_type=IGBP_type,
+#     #                     energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+#     #     gc.collect()
+
+#     # ========= veg fraction ==========
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # veg_fraction   = [0,0.3] # low veg fraction
+#     # LAI_range      = None
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code,  # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)
+
+#     # low_bound      = [0,0.2] #30
+#     # high_bound     = [0.8,1.] #70
+#     # veg_fraction   = [0.7,1.] # high veg fraction
+#     # write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected_by, low_bound=low_bound,
+#     #                 high_bound=high_bound, day_time=day_time,clarify_site=clarify_site,standardize=standardize,
+#     #                 models_calc_LAI=models_calc_LAI, time_scale=time_scale, veg_fraction=veg_fraction,
+#     #                 country_code=country_code,  # IGBP_type=IGBP_type,
+#     #                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites)

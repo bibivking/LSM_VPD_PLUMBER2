@@ -468,20 +468,17 @@ def add_model_LAI_to_write_spatial_land_days_parallel(site_names, models_calc_LA
 
     return
 
-def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path):
+def add_model_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=1.):
 
     # read the variables
     var_output   = pd.read_csv(f'./txt/process1_output/{var_name}_all_sites.csv',usecols=['time','month',
                                'hour','site_name','IGBP_type','climate_type','half_hrs_after_precip'],
                                na_values=[''])
 
-    #
-    # ntime        = len(var_output)
-
     # Initlize the model SMtop1m
     SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
     for model_name in SM_names:
-        var_output[model_name+'_SMtop1m'] = np.nan
+        var_output[model_name+'_SMtop'+str(top_thickness)+'m'] = np.nan
 
     # Loop accross all sites
     for i, site_name in enumerate(site_names):
@@ -498,14 +495,38 @@ def add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, PLUMBER2_
         for model_name in SM_names:
             # if the model output is half-hourly
             try:
-                var_output.loc[site_mask, model_name+'_SMtop1m'] = f_in.variables[model_name+'_SMtop1m'][:]
+                var_output.loc[site_mask, model_name+'_SMtop'+str(top_thickness)+'m'] = f_in.variables[model_name+'_SMtop'+str(top_thickness)+'m'][:]
             except:
                 # for the few sites missing some models simulations
-                var_output.loc[site_mask, model_name+'_SMtop1m'] = f_in.variables['model_mean_SMtop1m'][:]
+                var_output.loc[site_mask, model_name+'_SMtop'+str(top_thickness)+'m'] = f_in.variables['model_mean_SMtop'+str(top_thickness)+'m'][:]
 
-        var_output.loc[site_mask, 'model_mean_SMtop1m'] = f_in.variables['model_mean_SMtop1m'][:]
+        var_output.loc[site_mask, 'model_mean_SMtop'+str(top_thickness)+'m'] = f_in.variables['model_mean_SMtop'+str(top_thickness)+'m'][:]
 
-    var_output.to_csv(f'./txt/process1_output/SMtop1m_all_sites.csv')
+    var_output.to_csv('./txt/process1_output/SMtop'+str(top_thickness)+'m_all_sites.csv')
+    return
+
+def add_normalized_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=1.):
+
+    # read the variables
+    var_output   = pd.read_csv(f'./txt/process1_output/SMtop'+str(top_thickness)+'m_all_sites.csv',
+                               na_values=[''])
+
+    # Initlize the model SMtop1m
+    SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
+    for model_name in SM_names:
+
+        single_model_mean = np.nanmean(var_output[model_name+'_SMtop'+str(top_thickness)+'m'])
+        var_output[model_name+'_normalized_SMtop'+str(top_thickness)+'m'] = \
+                    var_output[model_name+'_SMtop'+str(top_thickness)+'m']/single_model_mean
+        print(model_name, 'model mean SM is', single_model_mean)
+
+    single_model_mean = np.nanmean(var_output['model_mean_SMtop'+str(top_thickness)+'m'])
+    var_output['model_mean_normalized_SMtop'+str(top_thickness)+'m'] = \
+                var_output['model_mean_SMtop'+str(top_thickness)+'m']/single_model_mean
+
+    print('mean model mean SM is', single_model_mean)
+
+    var_output.to_csv('./txt/process1_output/normalized_SMtop'+str(top_thickness)+'m_all_sites.csv')
     return
 
 def add_greenness_to_write_spatial_land_days(var_name, site_names):
@@ -547,7 +568,7 @@ if __name__ == "__main__":
     all_site_path     = sorted(glob.glob(PLUMBER2_met_path+"/*.nc"))
     site_names        = [os.path.basename(site_path).split("_")[0] for site_path in all_site_path]
 
-    var_name          = 'TVeg' #'Qle'
+    # var_name          = 'TVeg' #'Qle'
     add_LAI           = False
     models_calc_LAI   = ['ORC2_r6593','ORC2_r6593_CO2','ORC3_r7245_NEE','ORC3_r8120','GFDL','SDGVM','QUINCY','NoahMPv401']
     model_LAI_names   = {'ORC2_r6593':'lai','ORC2_r6593_CO2':'lai','ORC3_r7245_NEE':'lai','ORC3_r8120':'lai',
@@ -555,9 +576,19 @@ if __name__ == "__main__":
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    # write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
-
-    add_model_SMtop1m_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path)
+    var_name         = 'Rnet'
+    write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    # top_thickness     = 0.3
+    # add_model_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
+    #
+    # top_thickness     = 0.3
+    # add_normalized_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
+    #
+    # top_thickness     = 0.5
+    # add_normalized_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
+    #
+    # top_thickness     = 1
+    # add_normalized_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
 
     # # === Together ===
     var_name          = 'LAI'

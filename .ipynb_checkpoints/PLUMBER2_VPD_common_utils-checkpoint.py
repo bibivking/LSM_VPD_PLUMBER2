@@ -11,13 +11,21 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import joblib
-from pygam import LinearGAM, PoissonGAM, s, f
+from pygam import LinearGAM, PoissonGAM,GAM, GammaGAM, s, f, l
 from sklearn.model_selection import KFold
 from scipy import stats, interpolate
 from scipy.interpolate import griddata
 from scipy.signal import savgol_filter
+from sklearn.metrics import r2_score
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import warnings
+
+def get_header(model_out_name):
+    if 'obs' in model_out_name:
+        return ''
+    else:
+        return 'model_'
 
 def check_server():
 
@@ -26,11 +34,49 @@ def check_server():
     print("Disk usage:", psutil.disk_usage("/").percent, "%")  # Replace "/" with the desired path
     return
 
+def get_region_info(region_name):
+
+    print(region_name)
+
+    if region_name == 'global':
+        return {'name':'global', 'lat':None, 'lon':None}
+    elif region_name == 'east_AU':
+        return {'name':'east_AU', 'lat':[-44.5,-10], 'lon':[129,155]}
+    elif region_name == 'west_EU':
+        return {'name':'west_EU', 'lat':[35,60], 'lon':[-12,22]}
+    elif region_name == 'north_Am':
+        return {'name':'north_Am', 'lat':[25,52], 'lon':[-125,-65]}
+
+def get_regional_site_list(region= {'name':'global','lat':None, 'lon':None}):
+
+    '''
+    Get the site name list for the selected region
+    '''
+
+    PLUMBER2_path      = "/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/"
+    PLUMBER2_met_path  = "/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+    all_site_path      = sorted(glob.glob(PLUMBER2_path+"/*.nc"))
+    site_names         = [os.path.basename(site_path).split(".")[0] for site_path in all_site_path]
+    lat_dict, lon_dict = read_lat_lon(site_names, PLUMBER2_met_path)
+
+    sites              = []
+
+    for site_name in site_names:
+
+        within_region = ((lat_dict[site_name] >= region['lat'][0]) &
+                         (lat_dict[site_name] <= region['lat'][1]) &
+                         (lon_dict[site_name] >= region['lon'][0]) &
+                         (lon_dict[site_name] <= region['lon'][1]))
+        if within_region:
+            sites.append(site_name)
+    regional_sites = {'name':region['name'],'sites':sites}
+    return regional_sites
+
 def decide_filename(day_time=False, summer_time=False, energy_cor=False,
                     IGBP_type=None, clim_type=None, time_scale=None, standardize=None,
                     country_code=None, selected_by=None, bounds=None, veg_fraction=None,
                     uncertain_type=None, method=None,LAI_range=None,
-                    clarify_site={'opt':False,'remove_site':None}):
+                    clarify_site={'opt':False,'remove_site':None},regional_sites=None):
 
     # file name
     file_message = ''
@@ -91,6 +137,9 @@ def decide_filename(day_time=False, summer_time=False, energy_cor=False,
     if uncertain_type != None and method == 'CRV_bins':
         file_message = file_message + '_' + uncertain_type
 
+    if regional_sites != None:
+        file_message = file_message+'_'+regional_sites['name']
+
     folder_name = 'original'
 
     if standardize != None:
@@ -107,6 +156,18 @@ def get_model_out_list(var_name):
     f             = nc.Dataset("/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/nc_files/AR-SLu.nc", mode='r')
     if var_name == 'Gs':
         model_in_list = f.variables['Qle_models']
+    elif 'TVeg' in var_name:
+        model_in_list = f.variables['TVeg_models']
+    elif 'SMtop' in var_name:
+        model_in_list = f.variables['Qle_models']
+        # SM_names, soil_thicknesses = get_model_soil_moisture_info('AU-Tum')
+        # model_in_list = list(SM_names.keys())
+    elif var_name == 'SWdown':
+        model_in_list = f.variables['Qle_models']
+    elif 'VPD_caused' in var_name:
+        model_in_list = f.variables['Qle_models']
+    elif var_name == 'LAI':
+        model_in_list = ['ORC2_r6593','ORC3_r8120','GFDL','QUINCY','NoahMPv401'] #'obs',
     else:
         model_in_list = f.variables[var_name + '_models']
     ntime         = len(f.variables['CABLE_time'])
@@ -115,11 +176,11 @@ def get_model_out_list(var_name):
     # Compare each model's output time interval with CABLE hourly interval
     # If the model has hourly output then use the model simulation
     for model_in in model_in_list:
-        if len(f.variables[f"{model_in}_time"]) == ntime:
+        if len(f.variables[f"{model_in}_time"]) == ntime and model_in != '1lin':
             model_out_list.append(model_in)
 
     # add obs to draw-out namelist
-    if var_name in ['Qle','Qh','NEE','GPP']:
+    if var_name in ['Qle','Qh','NEE','GPP','EF','LAI','SWdown','Qle_VPD_caused']:
         model_out_list.append('obs')
 
     return model_out_list
@@ -151,6 +212,81 @@ def calculate_VPD_by_RH(rh, tair):
 
     return vpd
 
+def calculate_VPD_by_Qair(qair, tair, press):
+    '''
+    calculate vpd
+    Input:
+          qair: kg/kg
+          tair: K
+          press: Pa
+    Output:
+          vpd: kPa
+    '''
+
+    # set nan values
+    qair = np.where(qair==-9999.,np.nan,qair)
+    tair = np.where(tair==-9999.,np.nan,tair)
+    press= np.where(press<-9999.,np.nan,press)
+
+    DEG_2_KELVIN = 273.15
+    PA_TO_KPA    = 0.001
+    PA_TO_HPA    = 0.01
+
+    # convert back to Pa
+    # press        /= PA_TO_HPA
+    tair         -= DEG_2_KELVIN
+
+    # saturation vapor pressure
+    es = 100.0 * 6.112 * np.exp((17.67 * tair) / (243.5 + tair))
+
+    # vapor pressure
+    ea = (qair * press) / (0.622 + (1.0 - 0.622) * qair)
+
+    print('np.shape(qair)',np.shape(qair))
+    print('np.shape(tair)',np.shape(tair))
+    print('np.shape(press)',np.shape(press))
+    print('np.shape(es)',np.shape(es))
+    print('np.shape(ea)',np.shape(ea))
+
+
+    vpd = (es - ea) * PA_TO_KPA
+    # vpd = np.where(vpd < 0.0, 0.0, vpd)
+
+    return vpd
+
+def change_model_name(model_in):
+
+    if model_in == 'CABLE-POP-CN':
+        model_out = 'CABLE-POP'
+
+    elif model_in == 'CHTESSEL_Ref_exp1':
+        model_out = 'CHTESSEL_1'
+
+    elif model_in == 'CLM5a':
+        model_out = 'CLM5'
+
+    elif model_in == 'JULES_GL9_withLAI':
+        model_out = 'JULES_GL9_LAI'
+
+    elif model_in == 'NASAEnt':
+        model_out = 'EntTBM'
+
+    elif model_in == 'NoahMPv401':
+        model_out = 'NoahMP'
+
+    elif model_in == 'ORC2_r6593':
+        model_out = 'ORCHIDEE2'
+
+    elif model_in == 'ORC3_r8120':
+        model_out = 'ORCHIDEE3'
+
+    elif model_in == 'obs':
+        model_out = 'Observed'
+    else:
+        model_out = model_in
+
+    return model_out
+
 def load_default_list():
 
     # The site names
@@ -181,20 +317,40 @@ def load_default_list():
                          'ORC3_r7245_NEE', 'ORC3_r8120', 'QUINCY',
                          'STEMMUS-SCOPE', 'obs'] #"BEPS"
 
-    empirical_model  = ["1lin","3km27", "6km729","6km729lag",
+    model_names_new_select= ['CABLE', 'CABLE-POP-CN',
+                             'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL',
+                             'JULES_GL9', 'JULES_GL9_withLAI',
+                             'MATSIRO', 'MuSICA', 'NASAEnt',
+                             'NoahMPv401', 'ORC2_r6593',
+                             'ORC3_r8120', 'QUINCY',
+                             'STEMMUS-SCOPE', 'obs'] #"BEPS"
+
+    model_names_tveg  = ['CABLE', 'CABLE-POP-CN',
+                         'CHTESSEL_Ref_exp1', 'CLM5a', 'GFDL',
+                         'JULES_GL9_withLAI',
+                         'MATSIRO', 'MuSICA',
+                         'NoahMPv401', 'ORC2_r6593',
+                         'ORC3_r8120', 'QUINCY'] #"BEPS"
+
+
+    empirical_model   = ["1lin","3km27", "6km729","6km729lag",
                         "LSTM_eb","LSTM_raw", "RF_eb","RF_raw",]
-    hydrological_model  = ["Manabe", "ManabeV2","PenmanMonteith",]
-    land_surface_model=["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
-                        "CHTESSEL_Ref_exp1","CLM5a","GFDL",
-                        "JULES_GL9_withLAI","JULES_test","MATSIRO",
-                        "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
-                        "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",]
+
+    hydrological_model= ["Manabe", "ManabeV2","PenmanMonteith",]
+
+    land_surface_model= ["CABLE", "CABLE-POP-CN","CHTESSEL_ERA5_3",
+                         "CHTESSEL_Ref_exp1","CLM5a","GFDL",
+                         "JULES_GL9_withLAI","JULES_test","MATSIRO",
+                         "NoahMPv401","ORC2_r6593", "ORC2_r6593_CO2",
+                         "ORC3_r7245_NEE", "ORC3_r8120","STEMMUS-SCOPE",]
+
     ecosystem_model  = ["ACASA","LPJ-GUESS","MuSICA",
                         "NASAEnt","QUINCY", "SDGVM",]
 
-    model_names      = {
-                        'all_model': model_names_all,
+    model_names      = {'all_model': model_names_all,
                         'model_select':model_names_select,
+                        'model_select_new':model_names_new_select,
+                        'model_tveg': model_names_tveg,
                         'empirical_model':empirical_model,
                         'hydrological_model':hydrological_model,
                         'land_surface_model':land_surface_model,
@@ -230,7 +386,28 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
 
     return x_series, y_pred, y_int
 
-def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values):
+def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
+
+    '''
+    In this method, it tests all parameter combinations to select the best parameter
+    combination for each fold, and select from all folds to get the best combination.
+    However, the best parameter combination should come from best average score of 5
+    folds. So I wrote a new function to replace def fit_GAM_complex_old.
+    '''
+    print(model_out_name, 'x_top',x_top)
+
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_name = f'{dist_type}_greater_200_samples'
+        concave        = False
+
+    elif vpd_top_type == 'to_10':
+        subfolder_name = f'{dist_type}_to_10'
+        concave        = True
+
+    # In case no VPD bin has data points >= VPD_num_threshold
+    if np.isnan(x_top):
+        return np.nan, np.nan, np.nan
 
     # Remove nan values
     x_values_tmp = copy.deepcopy(x_values)
@@ -244,12 +421,38 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     x_values    = x_values_tmp[nonnan_mask]
     y_values    = y_values_tmp[nonnan_mask]
 
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
     # Set x_series
     x_series   = np.arange(x_bot, x_top, x_interval)
 
-    # Define grid search parameters
-    lam        = np.logspace(-5, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
-    n_splines  = np.arange(3, 10, 1)   # Number of splines per smooth term range
+    # GAM parameter set 6 -- new try since optimized n_spline mostly = 10,
+    # thus increase the range to find the best, sample_larger_200:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(5, 14, 1)   # Number of splines per smooth term range
+
+    # GAM parameter set 5 -- final for sample_larger_200:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # # GAM parameter set 4: => high VPD end surge quickly
+    # lam        = np.logspace(-1, 5, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # # GAM parameter set 3:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 7, 1)   # Number of splines per smooth term range
+
+    # # GAM parameter set 2:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(3, 5, 1)   # Number of splines per smooth term range
+
+    # GAM parameter set 1:
+    #     lam        = np.logspace(-5, 5, 11)
+    #     n_splines  = np.arange(3, 10, 1)
+
     # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
     # n_splines: Number of spline basis functions (7 values between 3 and 9).
 
@@ -262,10 +465,10 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
 
     # Perform grid search
     for train_index, test_index in kf.split(x_values):
-        X_train, X_test = x_values.iloc[train_index], x_values.iloc[test_index]
-        y_train, y_test = y_values.iloc[train_index], y_values.iloc[test_index]
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
 
-        X_train = X_train.to_numpy().reshape(-1, 1)
+        X_train = X_train.reshape(-1, 1)
 
         print('X_train.shape', X_train.shape)
         print('X_test.shape', X_test.shape)
@@ -273,34 +476,65 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
         print('y_test.shape', y_test.shape)
 
         # Define and fit GAM model
-        gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            # concave assumption
+            if concave:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            if concave:
+                # concave assumption
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+
+            # no concave assumption
+            # gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+            # process4-3
+            # for n_spline in n_splines:
+            #     gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave', spline_order=3, n_splines=n_spline)
+            #           + l(0)).gridsearch(X_train, y_train, lam=lam)
+            #     models.append(gam)
+
+            #     # Evaluate model performance (replace with your preferred metric)
+            #     score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+            #     scores.append(score)
+
+            # gam = GAM(s(0, edge_knots=[x_bot, x_top]),distribution='gamma', link='inverse').gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
         # LinearGAM(s(0)) creates a GAM with a spline term
-        # edge_knots: specify minimum and maximum domain of the spline function. 
+        # edge_knots: specify minimum and maximum domain of the spline function.
         #             To make GAM model covers the whole range of VPD, I manually set them as VPD boundaries
 
         # Alternative
         # gam = LinearGAM(s(0) + f(0)).fit(X_train, y_train)
         # Fits the GAM model to the data using default hyperparameters.
 
+        # process4-4
         models.append(gam)
-
         # Evaluate model performance (replace with your preferred metric)
         score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
         scores.append(score)
 
-    print('scores',scores)
     # Find the best model based on average score
     # For gam.score which calcuate deviance, the best model's score is closet to 0
     best_model_index = np.argmin(np.abs(scores))
-    print('best_model_index',best_model_index)
-    best_model = models[best_model_index]
-    print('best_model',best_model)
-    best_score = scores[best_model_index]
-    print('best_score',best_score)
-    print(f"Best model parameters: {best_model.lam}, {best_model.n_splines}")
-    
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print(model_out_name,'scores',scores)
+    print(model_out_name,'best_score',best_score)
+    print(model_out_name,'best_model_index',best_model_index)
+    print(model_out_name,'best_model',best_model)
+    print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
+
     # Save the best model using joblib
-    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
     y_pred       = best_model.predict(x_series)
@@ -309,10 +543,6 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     #           intervals should generally be calculated on the actual test data points,
     #           not a new set of equally spaced values like x_series
     y_int        = best_model.confidence_intervals(x_series, width=.95)
-
-    print('x_series',x_series)
-    print('y_pred',y_pred)
-    print('y_int',y_int)
 
     # Create the scatter plot for X and Y
     plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
@@ -325,24 +555,287 @@ def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, 
     plt.xlabel('VPD')
     plt.ylabel('Qle')
     plt.title('Check the GAM fitted curve')
+    # plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
 
     # Add legend
     plt.legend()
 
-    plt.savefig(f'./Check_{model_out_name}_GAM_fitted_curve.png')
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
 
     return x_series, y_pred, y_int
 
-def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values):
+def fit_GAM_complex_new(model_out_name, var_name, folder_name, file_message, x_top,
+    x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
+
+    print(model_out_name, 'x_top',x_top)
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_name = f'{dist_type}_greater_200_samples'
+        concave        = False
+
+    elif vpd_top_type == 'to_10':
+        subfolder_name = f'{dist_type}_to_10'
+        concave        = True
+
+    # In case no VPD bin has data points >= VPD_num_threshold
+    if np.isnan(x_top):
+        return np.nan, np.nan, np.nan
+
+    # Remove nan values
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    # copy.deepcopy: creates a complete, independent copy of an object
+    # and its entire internal structure, including nested objects and any
+    # references they contain.
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # Set x_series
+    x_series   = np.arange(x_bot, x_top, x_interval)
+
+    # GAM parameter set7 -- lam -3,3; n_splines 3,11 doesn't work work well so change to new ranges:
+    lams           = np.logspace(-3, 2, 10)  # Smoothing parameter range
+    n_splines      = np.arange(3, 11, 1)     # Number of splines per smooth term range
+    parameter_grid = [(lam, n_spline) for lam in lams for n_spline in n_splines]
+
+    # lam: Smoothing parameter controlling model complexity (21 values between 10^-3 and 10^3).
+    # n_splines: Number of spline basis functions (7 values between 3 and 9).
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Store results for each parameter set
+    param_results = []
+
+    for lam, n_spline in parameter_grid:
+
+        print('lam',lam,'n_spline',n_spline)
+
+        fold_scores = []
+
+        try:
+            for train_index, test_index in kf.split(x_values):
+                X_train, X_test = x_values[train_index], x_values[test_index]
+                y_train, y_test = y_values[train_index], y_values[test_index]
+
+                X_train = X_train.reshape(-1, 1)
+
+                # Define and fit GAM model based on the dist_type
+                if dist_type == 'Linear':
+                    gam = LinearGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                elif dist_type == 'Poisson':
+                    if concave:
+                        gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                    else:
+                        gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                elif dist_type == 'Gamma':
+                    if concave:
+                        gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+                    else:
+                        gam = GammaGAM(s(0, edge_knots=[x_bot, x_top]), lam=lam, n_splines=n_spline).fit(X_train, y_train)
+
+                # Evaluate model performance
+                score = gam.score(X_test, y_test)  # compute explained deviance
+                fold_scores.append(score)
+
+        except Exception as e:
+            print(f'Error for {model_out_name}, lam={lam}, n_spline={n_spline}: {e}')
+            continue
+
+        # Calculate the average performance for the current parameter set
+        if fold_scores:
+            avg_score = np.mean(fold_scores)
+            param_results.append((lam, n_spline, avg_score))
+
+    # Find the parameter set with the best average performance
+
+    # Print the best parameters and their score
+    print(f"{model_out_name}, param_results: {param_results}")
+
+    best_params = min(param_results, key=lambda x: np.abs(x[2]))
+    best_lam, best_n_spline, best_score = best_params
+
+    # Print the best parameters and their score
+    print(f"Best Parameters: lam={best_lam}, n_splines={best_n_spline} with average score={best_score}")
+
+    # Fit the best model with the best parameters on the full dataset
+    if dist_type == 'Linear':
+        best_model = LinearGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+    elif dist_type == 'Poisson':
+        if concave:
+            best_model = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+        else:
+            best_model = PoissonGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+    elif dist_type == 'Gamma':
+        if concave:
+            best_model = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave'), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+        else:
+            best_model = GammaGAM(s(0, edge_knots=[x_bot, x_top]), lam=best_lam, n_splines=best_n_spline).fit(x_values, y_values)
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
+    # Generate predictions and confidence intervals
+    y_pred   = best_model.predict(x_series)
+    y_int    = best_model.confidence_intervals(x_series, width=.95)
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    # plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
+
+    return x_series, y_pred, y_int
+
+def fit_GAM_CMIP6_predict(model_out_name, file_output, x_series, x_values, y_values, dist_type='Linear'):
+
+    # Remove nan values
+
+    x_interval = x_series[1]-x_series[0]
+    x_bot      = x_series[0]-x_interval/2.
+    x_top      = x_series[-1]+x_interval/2.
+
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # GAM parameter set 5 -- final for sample_larger_200:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 11, 1)   # Number of splines per smooth term range
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Initialize empty lists for storing results
+    models = []
+    scores = []
+
+    # Perform grid search
+    for train_index, test_index in kf.split(x_values):
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
+
+        X_train = X_train.reshape(-1, 1)
+
+        # Define and fit GAM model
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+        # process4-4
+        models.append(gam)
+        # Evaluate model performance (replace with your preferred metric)
+        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+        scores.append(score)
+
+    # Find the best model based on average score
+    # For gam.score which calcuate deviance, the best model's score is closet to 0
+    best_model_index = np.argmin(np.abs(scores))
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print(model_out_name,'scores',scores)
+    print(model_out_name,'best_score',best_score)
+    print(model_out_name,'best_model_index',best_model_index)
+    print(model_out_name,'best_model',best_model)
+    print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/CMIP6/GAM_fit/bestGAM_{file_output}.pkl")
+
+    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
+    y_pred       = best_model.predict(x_series)
+    y_int        = best_model.confidence_intervals(x_series, width=.95)
+
+    # Save output
+    var             = pd.DataFrame(x_series, columns=['bin_series'])
+    var['vals']     = y_pred
+    var['vals_top'] = y_int[:,0]
+    var['vals_bot'] = y_int[:,1]
+    var.to_csv(f'./txt/CMIP/GAM_fit/GAM_{file_output}.csv')
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+
+    plt.savefig(f'./check_plots/check_CMIP6_GAM_fitted_{file_out_message}_{dist_type}.png',dpi=600)
+
+    return
+
+def read_best_GAM_model(var_name, model_out_name, folder_name, file_message, x_values, dist_type=None,
+                        vpd_top_type='sample_larger_200',confidence_intervals=False):
     '''
-    Read the fitted GAM curve and based on x_values to calcuate predicted Y 
+    Read the fitted GAM curve and based on x_values to calcuate predicted Y
     '''
+
+    print('dist_type',dist_type)
+
     # Load the model using joblib
-    best_model = joblib.load(f"./txt/process4_output/{folder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    # if dist_type == None:
+    #     best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    # else:
+    #     best_model = joblib.load(f"./txt/process4_output/{folder_name}/Gamma_concave/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_message= 'greater_200_samples'
+    elif vpd_top_type == 'to_10':
+        subfolder_message= 'to_10'
+
+    if dist_type == None:
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_{subfolder_message}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}.pkl")
+    else:
+        best_model = joblib.load(f"./txt/process4_output/{folder_name}/{dist_type}_{subfolder_message}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
 
     # Predict using new data
     y_pred = best_model.predict(x_values)
-    return y_pred
+
+    if confidence_intervals:
+        y_int = best_model.confidence_intervals(x_values, width=.95)
+        return y_pred, y_int
+    else:
+        return y_pred
 
 def fit_spline(x_top, x_bot, x_interval, x_values,y_values,n_splines=4,spline_order=2):
 
@@ -404,7 +897,7 @@ def get_key_words(varname):
     match varname:
         case 'TVeg':
             key_word      = "trans"
-            key_word_not  = ["evap","transmission","pedo","electron",]
+            key_word_not  = ["evap","transmission","pedo","electron","stomatal","elasticity"]
         case 'Qle':
             key_word      = 'latent'
             key_word_not  = ['None']
@@ -480,7 +973,7 @@ def check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_
     return var_name_in_model
 
 def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
-
+    print(varname)
     # get key words
     key_word, key_word_not = get_key_words(varname)
 
@@ -488,11 +981,13 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
     my_dict      = {}
 
     for j, model_name in enumerate(model_names):
+
         # print(model_name)
+        
         var_name_in_model = check_variable_exists_in_one_model(PLUMBER2_path, varname, site_name, model_name,
                                                                key_word, key_word_not)
         # if Rnet doesn't exist
-        if var_name_in_model == 'None' and varname == 'Rnet':
+        if varname == 'Rnet' and var_name_in_model == 'None':
             SWnet_key_word, SWnet_key_word_not = get_key_words('SWnet')
             LWnet_key_word, LWnet_key_word_not = get_key_words('LWnet')
             SWnet_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'SWnet', site_name, model_name,
@@ -503,12 +998,35 @@ def check_variable_exists(PLUMBER2_path, varname, site_name, model_names):
             if SWnet_in_model == 'SinAng':
                 # correct the SWnet var name for ORC models
                 SWnet_in_model = 'SWnet'
-
-            if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
-                my_dict[model_name] = 'None'
+            
+            # if SWnet and LWnet don't exist the same time
+            if SWnet_in_model == 'None' or LWnet_in_model == 'None':
+                Qle_key_word, Qle_key_word_not = get_key_words('Qle')
+                Qh_key_word, Qh_key_word_not   = get_key_words('Qh')
+                Qg_key_word, Qg_key_word_not   = get_key_words('Qg')
+                
+                
+                Qle_in_model = check_variable_exists_in_one_model(PLUMBER2_path, 'Qle', site_name, model_name,
+                                                                   Qle_key_word, Qle_key_word_not)
+                Qh_in_model  = check_variable_exists_in_one_model(PLUMBER2_path, 'Qh', site_name, model_name,
+                                                                   Qh_key_word, Qh_key_word_not)      
+                Qg_in_model  = check_variable_exists_in_one_model(PLUMBER2_path, 'Qg', site_name, model_name,
+                                                                   Qg_key_word, Qg_key_word_not)      
+                
+                # print(Qle_in_model)
+                
+                # none of Qle, Qh, Qh exists, then use SWnet or LWnet
+                if Qle_in_model == 'None' and Qh_in_model == 'None' and Qg_in_model == 'None':
+                    if SWnet_in_model == 'None' and LWnet_in_model ==  'None':
+                        my_dict[model_name] = 'None'
+                    else:
+                        my_dict[model_name] = [SWnet_in_model, LWnet_in_model]
+                else: # all of Qle, Qh, Qh exist
+                    my_dict[model_name] = [Qle_in_model, Qh_in_model, Qg_in_model]
+                    
             else:
                 my_dict[model_name] = [SWnet_in_model, LWnet_in_model]
-
+            
         else:
             my_dict[model_name] = var_name_in_model
 
@@ -552,8 +1070,6 @@ def check_variable_units(PLUMBER2_path, varname, site_name, model_names, key_wor
                                 var_exist = True
                                 # print(f"The word '{key_word}' is in the description of variable '{var_name}'.")
                                 break  # Exit the loop once a variable is found
-
-
         except Exception as e:
             print(f"An error occurred: {e}")
 
@@ -692,31 +1208,115 @@ def regrid_data(lat_in, lon_in, lat_out, lon_out, input_data, method='linear',th
 
     return Value
 
+def set_IGBP_colors():
+
+    # file path
+    IGBP_colors = {
+                    'CRO':'gold',
+                    'GRA':'yellowgreen',
+                    'EBF':'lightgreen',
+                    'ENF':'forestgreen',
+                    'MF':'deepskyblue',
+                    'DBF':'aquamarine',#'brown',
+                    'OSH':'red',
+                    'CSH':'coral',
+                    'SAV':'pink',
+                    'WSA':'violet',
+                    'WET':'blue',
+                    }
+
+    return IGBP_colors
+
+def set_clim_colors():
+
+    # file path
+    clim_colors = {
+                    # A: Tropical
+                    'Af': 'forestgreen',      # Tropical rainforest climate
+                    'Am': 'darkolivegreen',   # Tropical monsoon climate
+                    'Aw': 'lightgreen',       # Tropical savanna climate
+                    # B: Dry red
+                    'BWh': 'red',  # Hot deserts
+                    'BWk': 'violet' ,  # Cold deserts
+                    'BSh': 'hotpink',  # Hot semi-arid
+                    'BSk': 'pink',  # Cold semi-arid
+                    # C: Temperate blue
+                    'Csa': 'peru', # Hot-summer Mediterranean climates
+                    'Csb': 'tan', # Warm-summer Mediterranean climates
+                    'Cwa': 'orange', # Dry-winter subtropical climates
+                    'Cfa': 'gold', # Humid subtropical climates
+                    'Cfb': 'yellow', # Oceanic climates
+                    # D: Continental brown/yellow
+                    'Dsb': 'c',  # Mediterranean-influenced warm-summer humid continental climate
+                    'Dwa': 'aqua', # Monsoon-influenced hot-summer humid continental climate
+                    'Dwb': 'deepskyblue',  # Monsoon-influenced warm-summer humid continental climate
+                    'Dfa': 'dodgerblue',  # Hot-summer humid continental climate
+                    'Dfb': 'royalblue',  # Warm-summer humid continental climate
+                    'Dfc': 'Navy',  # Subarctic climate
+                    # E: Polar
+                    'ET': 'gray', # Tundra climate;
+                    }
+
+    return clim_colors
+
+def set_model_colors_Gs_based():
+
+    # file path
+    model_colors = {
+                    'obs': 'black',
+                    'CMIP6':'firebrick',
+                    'CABLE':'deepskyblue', # Medlyn
+                    'CABLE-POP-CN':'deepskyblue', # Medlyn
+                    'CHTESSEL_ERA5_3':'red', # No Gs model
+                    'CHTESSEL_Ref_exp1':'red', # No Gs model
+                    'CLM5a':'deepskyblue', # Medlyn
+                    'GFDL':'lightseagreen', # Wolf
+                    'JULES_GL9':'firebrick', # Jacobs
+                    'JULES_GL9_withLAI':'firebrick', # Jacobs
+                    'JULES_test':'deepskyblue', # Medlyn
+                    'LPJ-GUESS':'yellow', # Collatz
+                    'MATSIRO':'gold',# Ball-Berry
+                    'MuSICA':'green', # Leuning
+                    'NASAEnt':'gold', # Ball-Berry
+                    'NoahMPv401':'gold', # Ball-Berry
+                    'ORC2_r6593':'pink', # Yin and Struik
+                    'ORC2_r6593_CO2':'gold', # Ball-Berry
+                    'ORC3_r7245_NEE':'pink', # Yin and Struik
+                    'ORC3_r8120':'pink', # Yin and Struik
+                    'QUINCY':'gold', # Ball-Berry
+                    'SDGVM':'deepskyblue' , # Medlyn
+                    'STEMMUS-SCOPE':'grey' , # unknown
+                    }
+
+    return model_colors
+
 def set_model_colors():
 
     # file path
     model_colors = {
                     'obs': 'black',
+                    'CMIP6':'firebrick',
                     'CABLE':'darkblue',
                     'CABLE-POP-CN':'blue',
-                    'CHTESSEL_ERA5_3':'cornflowerblue',
-                    'CHTESSEL_Ref_exp1':'c',
+                    'CHTESSEL_ERA5_3':'coral',
+                    'CHTESSEL_Ref_exp1':'cornflowerblue',
                     'CLM5a':'deepskyblue',
-                    'GFDL':'aquamarine',
-                    'JULES_GL9_withLAI':'lime',
+                    'GFDL':'c',
+                    'JULES_GL9':'aquamarine',
+                    'JULES_GL9_withLAI':'yellowgreen',
                     'JULES_test':'forestgreen',
                     'LPJ-GUESS':'darkolivegreen',
-                    'MATSIRO':'limegreen',
-                    'MuSICA':'yellowgreen',
-                    'NASAEnt':'yellow'  ,
-                    'NoahMPv401':'gold',
-                    'ORC2_r6593':'orange',
-                    'ORC2_r6593_CO2':'red',
-                    'ORC3_r7245_NEE':'coral',
-                    'ORC3_r8120':'pink',
-                    'QUINCY':'deeppink',
-                    'SDGVM':'violet' ,
-                    'STEMMUS-SCOPE':'darkviolet' ,
+                    'MATSIRO':'forestgreen',
+                    'MuSICA':'lime',
+                    'NASAEnt':'gold' , # 'yellow'
+                    'NoahMPv401':'orange' ,
+                    'ORC2_r6593':'pink',#'limegreen'
+                    'ORC2_r6593_CO2':'pink',
+                    'ORC3_r7245_NEE':'red',
+                    'ORC3_r8120':'deeppink',
+                    'QUINCY':'mediumorchid',
+                    'SDGVM': 'darkviolet',
+                    'STEMMUS-SCOPE':'purple',# ,
                     }
 
     # model_colors = {
@@ -759,7 +1359,7 @@ def set_model_colors():
 
     return model_colors
 
-def conduct_quality_control(varname, data_input,zscore_threshold=2):
+def conduct_quality_control(varname, data_input,zscore_threshold=2, gap_fill='nan'):
 
     '''
     Please notice EF has nan values
@@ -768,32 +1368,36 @@ def conduct_quality_control(varname, data_input,zscore_threshold=2):
     z_scores    = np.abs(stats.zscore(data_input, nan_policy='omit'))
     data_output = np.where(z_scores > zscore_threshold, np.nan, data_input)
 
-    # print('z_scores',z_scores)
-    if 'EF' not in varname:
-        print('EF is not in ', varname)
-        # Iterate through the data to replace NaN with the average of nearby non-NaN values
-        for i in range(1, len(data_output) - 1):
-            if np.isnan(data_output[i]):
-                prev_index = i - 1
-                next_index = i + 1
+    if gap_fill=='interpolate':
 
-                # find the closest non nan values
-                while prev_index >= 0 and np.isnan(data_output[prev_index]):
-                    prev_index -= 1
+        print('Gap filling by linear interpolation')
 
-                while next_index < len(data_output) and np.isnan(data_output[next_index]):
-                    next_index += 1
+        if 'EF' not in varname:
 
-                # use average them
-                if prev_index >= 0 and next_index < len(data_output):
-                    prev_non_nan = data_output[prev_index]
-                    next_non_nan = data_output[next_index]
-                    data_output[i] = (prev_non_nan + next_non_nan) / 2.0
+            # Iterate through the data to replace NaN with the average of nearby non-NaN values
+            for i in range(1, len(data_output) - 1):
+                if np.isnan(data_output[i]):
+                    prev_index = i - 1
+                    next_index = i + 1
 
-    print('len(z_scores)',len(z_scores))
-    # print('data_output',data_output)
+                    # find the closest non nan values
+                    while prev_index >= 0 and np.isnan(data_output[prev_index]):
+                        prev_index -= 1
 
-    return data_output
+                    while next_index < len(data_output) and np.isnan(data_output[next_index]):
+                        next_index += 1
+
+                    # use average them
+                    if prev_index >= 0 and next_index < len(data_output):
+                        prev_non_nan = data_output[prev_index]
+                        next_non_nan = data_output[next_index]
+                        data_output[i] = (prev_non_nan + next_non_nan) / 2.0
+
+        return data_output
+
+    elif gap_fill=='nan':
+        print('Gap filling by NaN values')
+        return data_output
 
 def convert_into_kg_m2_s(data_input, var_units):
 
@@ -813,15 +1417,44 @@ def convert_from_umol_m2_s_into_gC_m2_s(data_input, var_units):
 
     return data_output
 
-def get_model_soil_moisture_info():
+def get_model_soil_moisture_info(site_name):
 
+    '''
+    CLM5: Increased soil vertical resolution (20 soil layers + 5 bedrock layers), thus the last 5 layers
+        are bedrock layers which don't have soil moisture data. [The Community Land Model Version 5: Description
+        of New Features, Benchmarking, and Impact of Forcing Uncertainty]
+    MATSIRO: As the default setting, the soil has six layers whose thicknesses are defined by the depth boundaries
+        of 5, 20, 75, 100, 200, and 1000 cm from the surface. [Description of MATSIRO6]
+        However, I communicated with Qiang Guo, who worked in Tokyo University, he told the thickness are
+        0.05, 0.20, 0.75, 1., 2., 8 meter.
+    '''
     # Set models with simulated soil mositure
-    SM_names      = { 'CABLE':'SoilMoist', 'CABLE-POP-CN':'SoilMoist',
-                      'CHTESSEL_ERA5_3':'SoilMoist', 'CHTESSEL_Ref_exp1':'SoilMoist',
-                      'CLM5a':'mrlsl', 'GFDL':'SoilMoist', 'JULES_GL9_withLAI':'SoilMoist',
-                      'JULES_test':'SoilMoist', 'MATSIRO':'SoilMoistV', 'MuSICA':'SoilMoist',
-                      'NoahMPv401':'SoilMoist', 'ORC2_r6593':'SoilMoist','ORC3_r7245_NEE':'SoilMoist',
-                      'ORC3_r8120':'SoilMoist','STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
+    SM_names      = { 'CABLE':'SoilMoist',
+                      'CABLE-POP-CN':'SoilMoist',
+                    #   'CHTESSEL_ERA5_3':'SoilMoist',
+                      'CHTESSEL_Ref_exp1':'SoilMoist',
+                      'CLM5a':'mrlsl',
+                      'GFDL':'SoilMoist',
+                      'JULES_GL9':'SoilMoist',
+                      'JULES_GL9_withLAI':'SoilMoist',
+                    #   'JULES_test':'SoilMoist',
+                      'MATSIRO':'SoilMoistV',
+                      'MuSICA':'SoilMoist',
+                      'NoahMPv401':'SoilMoist',
+                      'ORC2_r6593':'SoilMoist',
+                    #   'ORC3_r7245_NEE':'SoilMoist',
+                      'ORC3_r8120':'SoilMoist',
+                      'STEMMUS-SCOPE':'SoilMoist'} #  'SDGVM':'RootMoist',
+
+    # get soil thickness in MuSICA model
+    MuSICA_path = glob.glob(f"/g/data/w97/mm3972/data/PLUMBER2/MuSICA/{site_name}*.nc")
+
+    if MuSICA_path:
+        f                = nc.Dataset(MuSICA_path[0])
+        MuSICA_thickness = f.variables['dz_soil'][:]
+        MuSICA_thickness = MuSICA_thickness.tolist()
+    else:
+        MuSICA_thickness = [np.nan]
 
     # Set soil layer thickness
     soil_thicknesses = {'CABLE':[0.022,0.058, 0.154, 0.409, 1.085, 2.872],
@@ -829,18 +1462,16 @@ def get_model_soil_moisture_info():
                         'CHTESSEL_ERA5_3':[0.07, 0.21, 0.72, 1.89],
                         'CHTESSEL_Ref_exp1':[0.07, 0.21, 0.72, 1.89],
                         'JULES_test': [0.1, 0.25, 0.65, 2.0],
+                        'JULES_GL9': [0.1, 0.25, 0.65, 2.0],
                         'JULES_GL9_withLAI': [0.1, 0.25, 0.65, 2.0],
-                        'MATSIRO': [0.05, 0.2, 0.75, 1., 2.],
+                        'MATSIRO': [0.05, 0.20, 0.75, 1., 2., 8],
                         'NoahMPv401': [0.10, 0.30, 0.60,1.],
                         'CLM5a':[0.02, 0.04, 0.06, 0.08, 0.12, 0.16, 0.2, 0.24, 0.28, 0.32, 0.36, 0.4,
                                  0.44, 0.54, 0.64, 0.74, 0.84, 0.94, 1.04, 1.14, 2.39, 4.675534, 7.63519,
                                  11.14, 15.11543],
                         'GFDL': [0.02,0.04,0.04,0.05,0.05,0.1,0.1,0.2,0.2,0.2,
                                   0.4,0.4,0.4,0.4,0.4,1,1,1,1.5,2.5],
-                        'MuSICA': [0.01695884, 0.01970336, 0.02289203, 0.02659675, 0.03090101,
-                                    0.03590186, 0.041712, 0.04846244, 0.05630532, 0.06541745, 0.07600423,
-                                    0.08830432, 0.102595, 0.1191984, 0.1384887, 0.160901, 0.1869402,
-                                    0.2171936, 0.2523429, 0.2931806],
+                        'MuSICA': MuSICA_thickness,
                         'ORC2_r6593':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
                                       0.09188661, 0.1857283, 0.3734115, 0.7487781, 1.499511, 2],
                         'ORC3_r7245_NEE':[0.0009775171, 0.003910068, 0.009775171, 0.02150538, 0.04496579,
@@ -852,6 +1483,7 @@ def get_model_soil_moisture_info():
                                         0.05, 0.05, 0.05, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10,
                                         0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.10, 0.15, 0.15,
                                         0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]}
+
     return SM_names, soil_thicknesses
 
 def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
@@ -879,9 +1511,9 @@ def bootstrap_ci( data, statfunction=np.average, alpha = 0.05, n_samples = 100):
     data = data.ravel()
 
     boot_indexes = bootstrap_ids(data, n_samples)
-    print('boot_indexes',boot_indexes)
+    # print('boot_indexes',boot_indexes)
     stat         = np.asarray([statfunction(data[_ids]) for _ids in boot_indexes])
-    print('stat',stat)
+    # print('stat',stat)
     stat.sort(axis=0)
 
     return stat[nvals]
