@@ -95,22 +95,17 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[model_out_name+'_LAI'] = LAI_input['obs_LAI']
 
     if selected_by == 'SM_per_all_models':
-    
+
         site_names, IGBP_types, clim_types, model_names = load_default_list()
         model_names = model_names['model_select_new']
 
         SM_percentile_input = pd.read_csv(f'./txt/process2_output/SMtop{add_SMtopXm}m_percentile_all_sites.csv', na_values=[''])
 
         for model_out_name in model_names:
-            if model_out_name == 'obs':
-                head = ''
-            else:
-                head = 'model_'
             try:
                 var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = \
-                    SM_percentile_input[head+model_out_name].values
+                    SM_percentile_input[model_out_name]
             except:
-                print(f'{model_out_name}_SMtop{add_SMtopXm}m_percentile, does not exist')
                 var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = np.nan
 
     if add_SMtopXm != None:
