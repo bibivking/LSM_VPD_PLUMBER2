@@ -576,9 +576,12 @@ if __name__ == "__main__":
 
     country_code      = None #'AU'
     # site_names  = load_sites_in_country_list(country_code)
-    var_name         = 'Rnet'
+    var_name         = 'Qle'
     write_spatial_land_days(var_name, site_names, PLUMBER2_path, PLUMBER2_met_path, add_LAI)
+    
     # top_thickness     = 0.3
+    # add_model_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
+    # top_thickness     = 0.5
     # add_model_SMtopXm_to_write_spatial_land_days(var_name, site_names, PLUMBER2_path, top_thickness=top_thickness)
     #
     # top_thickness     = 0.3

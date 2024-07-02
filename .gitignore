@@ -28,7 +28,9 @@
 /__pycache__/
 /nc_files/*
 /nc_files_backup/*
-/submit/*
+/submit/*.sh.o*
+/submit/refuse/*
+/submit/logs/*
 */*/refuse/*
 */*/plots/*
 */*/data/*

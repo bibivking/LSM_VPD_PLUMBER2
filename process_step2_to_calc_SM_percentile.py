@@ -57,7 +57,7 @@ def calc_SM_percentile_single_site(SM_file, model_names, SM_depth, site_name):
 def calc_SM_percentile_parallel(SM_file, model_names, SM_depth, site_names):
 
     # with mp.Pool() as pool:
-    #     pool.starmap(calc_SM_percentile_single_site, [(SM_file, model_names, SM_depth, site_name) for site_name in site_names])
+    #     pool.starmap(calc_SM_percentile_single_site, [(SM_file, model_names, SM_depth, site_name) for site_name in site_names[160:170]])
 
     var_input = pd.read_csv(f'./txt/process1_output/Qle_all_sites.csv', na_values=[''], usecols=['time', 'site_name'])
 
@@ -101,9 +101,9 @@ def calc_SM_percentile_parallel(SM_file, model_names, SM_depth, site_names):
 if __name__ == "__main__":
     site_names, IGBP_types, clim_types, model_names = load_default_list()
 
-    SM_depth = '0.5'
+    SM_depth = '0.3'
     SM_file  = f"/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process1_output/SMtop{SM_depth}m_all_sites.csv"
-    
+
     # site_names = [ 'US-NR1'] # 'IT-Mal', 'RU-Fyo', 'US-AR2', 'US-Bar', 'US-Los',
-    
+
     calc_SM_percentile_parallel(SM_file, model_names['model_select_new'], SM_depth, site_names)

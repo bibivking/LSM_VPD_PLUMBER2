@@ -352,7 +352,8 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
                   uncertain_type='UCRTN_percentile', models_calc_LAI=None, veg_fraction=None,
                   clarify_site={'opt':False,'remove_site':None}, standardize=None, select_site=None,
                   remove_strange_values=True, country_code=None, vpd_top_type='to_10',middle_day=None,
-                  hours_precip_free=None, method='CRV_bins',dist_type='Linear', add_Xday_mean_EF=None):
+                  hours_precip_free=None, method='CRV_bins',dist_type='Linear', add_Xday_mean_EF=None,
+                  data_selection=True):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -384,7 +385,7 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
                                                 country_code=country_code, selected_by=selected_by, bounds=bounds,
                                                 veg_fraction=veg_fraction, LAI_range=LAI_range, method=method,
                                                 uncertain_type=uncertain_type, clarify_site=clarify_site,
-                                                add_Xday_mean_EF=add_Xday_mean_EF)
+                                                add_Xday_mean_EF=add_Xday_mean_EF,data_selection=data_selection)
 
     # Checks if a folder exists and creates it if it doesn't
     if not os.path.exists(f'./txt/process4_output/{folder_name}'):

@@ -46,7 +46,8 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                             remove_strange_values=True, country_code=None, LAI_range=None, add_SMtopXm=None,
                             add_normalized_SMtopXm=None, hours_precip_free=None, output_2d_grids_only=True,
                             regional_sites=None, middle_day=False, VPD_sensitive=False,
-                            Tair_constrain=None, add_Xday_mean_EF=None ):
+                            Tair_constrain=None, add_Xday_mean_EF=None, data_selection=True,
+                            add_aridity_index=True):
 
     '''
     1. bin the dataframe by percentile of obs_EF
@@ -81,6 +82,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
     print('model_out_list',model_out_list)
 
     # Read LAI if needed
+    if add_aridity_index:
+        AI_input = pd.read_csv(f'./txt/process1_output/Aridity_index_all_sites.csv', na_values=[''])
+        var_output['aridity_index'] = AI_input['aridity_index']
+
+    # Read LAI if needed
     if LAI_range !=None or add_LAI:
         if time_scale == 'daily':
             LAI_input = pd.read_csv(f'./txt/process2_output/daily/LAI_all_sites_daily.csv', na_values=[''])
@@ -95,7 +101,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[model_out_name+'_LAI'] = LAI_input['obs_LAI']
 
     if selected_by == 'SM_per_all_models':
-    
+
         site_names, IGBP_types, clim_types, model_names = load_default_list()
         model_names = model_names['model_select_new']
 
@@ -110,6 +116,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = \
                     SM_percentile_input[head+model_out_name].values
             except:
+                # Since obs and models without simulated SM are given model mean SM so code should not go here
                 print(f'{model_out_name}_SMtop{add_SMtopXm}m_percentile, does not exist')
                 var_output[model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'] = np.nan
 
@@ -172,19 +179,16 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             except:
                 var_output[model_out_name+'_VPD_caused_ratio'] = np.nan
 
-    if add_qc:
-        qc_input = pd.read_csv(f'./txt/process1_output/Qle_Qh_quality_control_all_sites.csv', na_values=[''])
-        var_output['Qle_Qh_qc'] = qc_input['Qle_Qh_qc']
-
-    if quality_ctrl:
-        # Use radiation as threshold
-        qc_mask     = (~np.isnan(var_output['Qle_Qh_qc']))
-        var_output  = var_output[qc_mask]
+    # !!!!!!!!!!!!!!!! edit here !!!!!!!!!!!!!!!!!!
+    if data_selection:
+        ds_input            = pd.read_csv(f'./txt/process2_output/data_selection_all_sites.csv', na_values=[''])
+        data_selection_mask = ds_input['select_data'].values
+        print('np.sum(data_selection_mask)',np.sum(data_selection_mask))
+        var_output          = var_output[data_selection_mask]
+        print('len(var_output)',len(var_output))
 
     if standardize=='STD_Gs_ref':
-
         Gs_ref_input = pd.read_csv(f'./txt/process1_output/Gs_ref_all_sites_filtered.csv', na_values=[''])
-
         for model_out_name in model_out_list:
             if 'obs' in model_out_name:
                 head = ''
@@ -210,18 +214,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         cor_notNan_mask = ~ np.isnan(var_output['obs_cor'])
         var_output      = var_output[cor_notNan_mask]
 
-    if remove_strange_values:
-        for model_out_name in model_out_list:
-            # print('Checking strange values in', model_out_name)
-            if 'obs' in model_out_name:
-                head = ''
-            else:
-                head = 'model_'
-            var_output[head+model_out_name] = np.where(np.any([var_output[head+model_out_name]>999.,
-                                                       var_output[head+model_out_name]<-999.],axis=0),
-                                                       np.nan, var_output[head+model_out_name])
-            # print('np.any(np.isnan(var_output[head+model_out_name]))',np.any(np.isnan(var_output[head+model_out_name])))
-
     if select_site!=None:
         # Use radiation as threshold
         site_mask   = (var_output['site_name'] == select_site)
@@ -241,34 +233,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         var_output  = var_output[site_keep_mask]
         site_num    = len(np.unique(var_output["site_name"]))
         print(regional_sites['name'],":",np.unique(var_output["site_name"]))
-
-    # whether only considers day time
-    if day_time:
-        # Use hours as threshold
-        # day_mask    = (var_output['hour'] >= 9) & (var_output['hour'] <= 16)
-        if VPD_sensitive:
-            day_mask    = (var_output['obs_SWdown'] >= 250)
-            day_mask    = (var_output['obs_Tair']   >= 15+273.15)
-        elif middle_day:
-            # Use radiation as threshold
-            day_mask    = (var_output['obs_SWdown'] >= 600)
-        else:
-            # Use radiation as threshold
-            day_mask    = (var_output['obs_SWdown'] >= 10)
-
-        var_output  = var_output[day_mask]
-        site_num    = len(np.unique(var_output["site_name"]))
-        # # print('Point 2, site_num=',site_num)
-
-        check_site = var_output[ var_output['site_name']=='CA-NS1']
-
-    # whether only considers summers
-    if summer_time:
-        summer_mask = (var_output['month'] > 11) | (var_output['month']< 3)
-        # # print('np.any(summer_mask)', np.any(summer_mask))
-        var_output  = var_output[summer_mask]
-        site_num    = len(np.unique(var_output["site_name"]))
-        # # print('Point 3, site_num=',site_num)
 
     # whether only considers one type of IGBP
     if IGBP_type!=None:
@@ -317,28 +281,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             var_output[head+model_out_name]  = np.where(LAI_mask, var_output[head+model_out_name], np.nan)
         site_num     = len(np.unique(var_output["site_name"]))
 
-    # whether only considers observation without precipitation in hours_precip_free hours
-    if hours_precip_free!=None:
-        rain_mask   = (var_output['hrs_after_precip'] > hours_precip_free)
-        var_output  = var_output[rain_mask]
-        site_num    = len(np.unique(var_output["site_name"]))
-        # # print('Point 7, site_num=',site_num)
-
-    # To exclude the sites have rainfall input problems
-    if clarify_site['opt']:
-        # print('clarifying sites')
-        length    = len(var_output)
-        site_mask = np.full(length,True)
-
-        for site_remove in clarify_site['remove_site']:
-            site_mask = np.where(var_output['site_name'] == site_remove, False, site_mask)
-        # # print('np.all(site_mask)',np.all(site_mask))
-
-        # site_mask = ~(var_output['site_name'] in clarify_site['remove_site'])
-        var_output  = var_output[site_mask]
-        site_num    = len(np.unique(var_output["site_name"]))
-        # # print('Point 8, site_num=',site_num)
-
     if var_name == 'NEE':
         for model_out_name in model_out_list:
             if 'obs' in model_out_name:
@@ -352,6 +294,21 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 values = var_output[head+model_out_name]*(-1)
             var_output[head+model_out_name] = values
 
+    # remove outlier data
+    if remove_strange_values:
+        for model_out_name in model_out_list:
+            # print('Checking strange values in', model_out_name)
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            print('before remove_strange_values', model_out_name, np.sum(~np.isnan(var_output[head+model_out_name])))
+            var_output[head+model_out_name] = np.where(np.any([var_output[head+model_out_name]>2000.,
+                                                       var_output[head+model_out_name]<0.],axis=0),
+                                                       np.nan, var_output[head+model_out_name])
+            print('after remove_strange_values', model_out_name, np.sum(~np.isnan(var_output[head+model_out_name])))
+
+    # ========== Standardize data ==========
     if standardize == 'STD_annual_obs':
 
         # print('standardized by annual obs mean')
@@ -383,6 +340,33 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_mean[site]
 
         # print('site_obs_mean',site_obs_mean)
+    if standardize == 'STD_annual_model':
+
+        # print('standardized by annual model mean')
+
+        # Get all sites left
+        sites_left    = np.unique(var_output["site_name"])
+
+        for site in sites_left:
+
+            # Get the mask of this site
+            site_mask_tmp   = (var_output['site_name'] == site)
+
+            # Mask the dataframe to get slide of the dataframe for this site
+            var_tmp         = var_output[site_mask_tmp]
+
+            # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+            for i, model_out_name in enumerate(model_out_list):
+                if 'obs' in model_out_name:
+                    head = ''
+                else:
+                    head = 'model_'
+
+                # Calculate site obs mean
+                site_model_mean = np.nanmean(var_tmp[head+model_out_name])
+
+                # Standardize the different model's values by the obs mean for this site
+                var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_mean
 
     elif standardize == 'STD_SMtopXm' and add_SMtopXm:
 
@@ -437,7 +421,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                     print(site,'has', np.sum(site_with_inf == site), 'data points with inf')
 
                 raise ValueError("Inf exists")
-
     elif standardize == 'STD_normalized_SMtopXm' and add_normalized_SMtopXm:
 
         print("in standardize == 'STD_normalized_SMtopXm' and add_normalized_SMtopXm")
@@ -472,7 +455,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                     print(site,'has', np.sum(site_with_inf == site), 'data points with inf')
 
                 raise ValueError("Inf exists")
-
     elif standardize == 'STD_SWdown':
 
         print("in standardize == 'STD_SWdown'")
@@ -485,7 +467,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output['obs_SWdown']
-
     elif standardize == 'STD_SWdown_SMtopXm' and add_SMtopXm:
 
         print("in standardize == 'STD_SWdown_SMtopXm' and add_SMtopXm")
@@ -523,7 +504,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output['obs_SWdown']
-
     elif standardize == 'STD_LAI_SMtopXm':
 
         '''
@@ -572,7 +552,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             #     var_output[head+model_out_name][:] = np.where( var_output['obs_LAI'] >= 0.01 ,
             #                                                 var_output[head+model_out_name]/var_output['obs_LAI'],
             #                                                 np.nan )
-
     elif standardize == 'STD_LAI_normalized_SMtopXm':
 
         '''
@@ -610,7 +589,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                                                         var_output[head+model_out_name]/modeled_LAI,
                                                         np.nan ) # since removing LAI <0.01 will change curve shape, change the
                                                                     # restriction to LAI should be >=0.001
-
     elif standardize == 'STD_SWdown_LAI_SMtopXm':
 
         '''
@@ -664,7 +642,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output['obs_SWdown']
-
     elif standardize == 'STD_LAI':
 
         # print('standardized by LAI')
@@ -692,7 +669,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output[head+model_out_name] = np.where( var_output['obs_LAI'] != 0 ,
                                                             var_output[head+model_out_name]/var_output['obs_LAI'],
                                                             np.nan )
-
     elif standardize == 'STD_montly_obs':
 
         # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
@@ -724,7 +700,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                         head = 'model_'
                     var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_month
         # print('var_output',var_output)
-
     elif standardize == 'STD_month_model':
 
         # print('standardized by monthly model mean')
@@ -756,7 +731,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                     # get site monthly mean
                     site_model_month      = var_monthly_input.loc[site_mask_month][head+model_out_name].values
                     var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_month
-
     elif standardize == 'STD_daily_obs':
 
         # print('standardized by daily obs mean')
@@ -773,7 +747,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             var_output[head+model_out_name] = np.where( obs_daily != 0 ,var_output[head+model_out_name]/obs_daily,
                                                         np.nan )
-
     elif standardize == 'Gs_ref_input':
 
         print("in standardize == 'Gs_ref_input'")
@@ -786,12 +759,6 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
 
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output[head+model_out_name+'_Gs_ref']
-
-    if Tair_constrain != None:
-
-        tair_mask    = (var_output['obs_Tair']>=Tair_constrain)
-        var_output   = var_output[tair_mask]
-        site_num     = len(np.unique(var_output["site_name"]))
 
     if add_Rnet_caused_ratio:
 
@@ -819,7 +786,7 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         folder_name, file_message = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                                     IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                                     standardize=standardize, country_code=country_code, LAI_range=LAI_range,
-                                                    veg_fraction=veg_fraction, clarify_site=clarify_site)
+                                                    veg_fraction=veg_fraction, clarify_site=clarify_site , data_selection=data_selection)
         if select_site != None:
             var_output_raw_data.to_csv(f'./txt/process3_output/2d_grid/raw_data_{var_name}_VPD{file_message}_{select_site}.csv')
         else:
@@ -841,24 +808,11 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         var_output_wet = copy.deepcopy(var_output)
 
         # select time step where obs_EF isn't NaN (when Qh<0 or Qle+Qh<10)
-        for i, model_out_name in enumerate(model_names):
-            if 'obs' in model_out_name:
-                head = ''
-            else:
-                head = 'model_'
-            SM_per_name = model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'
-
-            if len(low_bound)>1 and len(high_bound)>1:
-                dry_mask  = (var_output[SM_per_name] > low_bound[0]) & (var_output[SM_per_name] < low_bound[1])
-                wet_mask  = (var_output[SM_per_name] > high_bound[0]) & (var_output[SM_per_name] < high_bound[1])
-            elif len(low_bound)==1 and len(high_bound)==1:
-                dry_mask  = (var_output[SM_per_name] < low_bound)
-                wet_mask  = (var_output[SM_per_name] > high_bound)
-            else:
-                sys.exit('len(low_bound)=',len(low_bound),'len(high_bound)=',len(high_bound))
-
-            var_output_dry[head+model_out_name] = np.where(dry_mask, var_output[head+model_out_name], np.nan)
-            var_output_wet[head+model_out_name] = np.where(wet_mask, var_output[head+model_out_name], np.nan)
+        models_with_SM_per = ['CABLE', 'CABLE-POP-CN',
+                              'CHTESSEL_Ref_exp1', 'CLM5a',
+                              'GFDL', 'JULES_GL9', 'JULES_GL9_withLAI',
+                              'MATSIRO', 'MuSICA', 'NoahMPv401',
+                              'ORC2_r6593', 'ORC3_r8120', 'STEMMUS-SCOPE']
 
         SM_per_model_names = ['CABLE_SMtop'+str(add_SMtopXm)+'m_percentile',
                               'CABLE-POP-CN_SMtop'+str(add_SMtopXm)+'m_percentile',
@@ -874,6 +828,29 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                               'ORC3_r8120_SMtop'+str(add_SMtopXm)+'m_percentile',
                               'STEMMUS-SCOPE_SMtop'+str(add_SMtopXm)+'m_percentile']
 
+        for i, model_out_name in enumerate(models_with_SM_per):
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            SM_per_name = model_out_name+'_SMtop'+str(add_SMtopXm)+'m_percentile'
+
+            try:
+                if len(low_bound)>1 and len(high_bound)>1:
+                    dry_mask  = (var_output[SM_per_name] > low_bound[0]) & (var_output[SM_per_name] < low_bound[1])
+                    wet_mask  = (var_output[SM_per_name] > high_bound[0]) & (var_output[SM_per_name] < high_bound[1])
+                elif len(low_bound)==1 and len(high_bound)==1:
+                    dry_mask  = (var_output[SM_per_name] < low_bound)
+                    wet_mask  = (var_output[SM_per_name] > high_bound)
+                else:
+                    sys.exit('len(low_bound)=',len(low_bound),'len(high_bound)=',len(high_bound))
+
+                var_output_dry[SM_per_name] = np.where(dry_mask, var_output[SM_per_name], np.nan)
+                var_output_wet[SM_per_name] = np.where(wet_mask, var_output[SM_per_name], np.nan)
+            except:
+                print(SM_per_name,'does not exist')
+
         # Print the expected column names
         print("Expected columns (SM_per_model_names):")
         print(SM_per_model_names)
@@ -886,6 +863,8 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
         # Mask out SM is inconsistent
         var_output_dry[SM_per_model_names] = var_output_dry[SM_per_model_names].where(~var_output_dry[SM_per_model_names].isna().any(axis=1), other=np.nan)
         var_output_wet[SM_per_model_names] = var_output_wet[SM_per_model_names].where(~var_output_wet[SM_per_model_names].isna().any(axis=1), other=np.nan)
+        print('CABLE SM per non nan:', np.sum(~np.isnan(var_output_dry['CABLE_SMtop'+str(add_SMtopXm)+'m_percentile'].values)),
+              'GFDL SM per non nan:', np.sum(~np.isnan(var_output_dry['GFDL_SMtop'+str(add_SMtopXm)+'m_percentile'].values)))
 
         for model_out_name in model_out_list:
             if 'obs' in model_out_name:
@@ -1025,6 +1004,24 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             var_output_dry[head+model_out_name] = np.where(SM_dry_mask, var_output[head+model_out_name], np.nan)
             var_output_wet[head+model_out_name] = np.where(SM_wet_mask, var_output[head+model_out_name], np.nan)
 
+    # ======== add 2 July 2024: keep time steps that only all models have data ========
+    model_unify_names = []
+    for i, model_out_name in enumerate(model_out_list):
+        if 'obs' in model_out_name:
+            head = ''
+        else:
+            head = 'model_'
+        model_unify_names.append(head+model_out_name)
+    # print('model_unify_names', model_unify_names)
+
+    # Mask out SM is inconsistent
+    print('before dry',np.sum(~np.isnan(var_output_dry['obs'])))
+    print('before wet',np.sum(~np.isnan(var_output_wet['obs'])))
+    var_output_dry[model_unify_names] = var_output_dry[model_unify_names].where(~var_output_dry[model_unify_names].isna().any(axis=1), other=np.nan)
+    var_output_wet[model_unify_names] = var_output_wet[model_unify_names].where(~var_output_wet[model_unify_names].isna().any(axis=1), other=np.nan)
+    print('after dry',np.sum(~np.isnan(var_output_dry['obs'])))
+    print('after wet',np.sum(~np.isnan(var_output_wet['obs'])))
+
     # print('Finish dividing dry and wet periods')
 
     # ========== Save curves ==========
@@ -1043,13 +1040,13 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                                         IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                         standardize=standardize, country_code=country_code, selected_by=selected_by,
                                         bounds=low_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF)
+                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF, data_selection=data_selection)
 
     folder_name, file_message2 = decide_filename(day_time=day_time, summer_time=summer_time, energy_cor=energy_cor,
                                         IGBP_type=IGBP_type, clim_type=clim_type, time_scale=time_scale,
                                         standardize=standardize, country_code=country_code, selected_by=selected_by,
                                         bounds=high_bound, veg_fraction=veg_fraction, LAI_range=LAI_range,
-                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF)
+                                        clarify_site=clarify_site, regional_sites=regional_sites, add_Xday_mean_EF=add_Xday_mean_EF, data_selection=data_selection)
 
     if Tair_constrain != None:
         message_midday = '_Tair_'+str(Tair_constrain)

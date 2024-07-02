@@ -190,7 +190,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
                 file_names = [  f'./txt/process4_output/{folder_name}/{var_name}{file_message_wet}{site_info}{message_midday}.csv',
                                 f'./txt/process4_output/{folder_name}/{var_name}{file_message_dry}{site_info}{message_midday}.csv',]
 
-        print(file_names)
+        # print(file_names)
 
         # # Read data uncertainties
         # uncertain_dry_tmp     = pd.read_csv(file_names_uncertain[0],usecols=['vpd_series',model_out_name+'_vpd_num',model_out_name+'_vals',model_out_name+'_top',model_out_name+'_bot'])
@@ -342,12 +342,12 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     if standardize is None:
             standardize = []
 
-    # Set x axis 
+    # Set x axis
     # ax[0,0].set_xlim(-0.1,10.5)
     ax[0,0].set_xlim(-0.1,5.5)
     ax[0,0].set_xticks([0,1,2,3,4,5])
     ax[0,0].set_xticklabels(['0','1','2', '3','4','5'],fontsize=12)
-    
+
     # ax[0,1].set_xlim(-0.1,10.5)
     ax[0,1].set_xlim(-0.1,7.5)
     ax[0,1].set_xticks([0,1,2,3,4,5,6,7])
@@ -383,7 +383,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             elif 'VPD_caused' in var_name:
                 ax[0,0].set_ylim(0,350)
             elif clim_type == None:
-                ax[0,0].set_ylim(0,350)
+                ax[0,0].set_ylim(0,500)
                 # ax[0,0].set_ylim(0,1000)
             else:
                 ax[0,0].set_ylim(0,500)
@@ -409,7 +409,7 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
             elif 'VPD_caused' in var_name:
                 ax[0,1].set_ylim(0,100)
             elif clim_type == None:
-                ax[0,1].set_ylim(0,100)
+                ax[0,1].set_ylim(0,300)
             else:
                 ax[0,1].set_ylim(0,300)
 
@@ -451,10 +451,15 @@ def plot_var_VPD_uncertainty(var_name=None, day_time=False, energy_cor=False, ti
     if calc_correl:
         message = '_correl'
 
-    if class_by !=None:
-        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}_color_{class_by}{message}_gs_eq{site_info}{message_midday}.png",bbox_inches='tight',dpi=300) # '_30percent'
+    if select_site!=None:
+        site_plot = 'site_plots/'
     else:
-        fig.savefig(f"./plots/Fig_{var_name}_VPD{file_message_dry}{message}{site_info}{message_midday}.png",bbox_inches='tight',dpi=300) # '_30percent'
+        site_plot = ''
+
+    if class_by !=None:
+        fig.savefig(f"./plots/{site_plot}Fig_{var_name}_VPD{file_message_dry}_color_{class_by}{message}_gs_eq{site_info}{message_midday}.png",bbox_inches='tight',dpi=300) # '_30percent'
+    else:
+        fig.savefig(f"./plots/{site_plot}Fig_{var_name}_VPD{file_message_dry}{message}{site_info}{message_midday}.png",bbox_inches='tight',dpi=300) # '_30percent'
 
     return
 
@@ -1173,8 +1178,9 @@ if __name__ == "__main__":
     day_time       = True
     method         = 'CRV_bins' #'GAM'
     clarify_site   = {'opt': True,
-                     'remove_site': ['AU-Rig','AU-Rob','AU-Whr','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
-                     'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1',
+                                      'AU-Wrr','CN-Din','US-WCr','ZM-Mon']}
     error_type     = 'one_std'
 
     # Smoothing setting
@@ -1202,9 +1208,10 @@ if __name__ == "__main__":
 
     IGBP_type    = None
     clim_type    = None
-    clarify_site = {'opt': True,
-                   'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
-                   'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1']}
+    clarify_site  = {'opt': True,
+                      'remove_site': ['AU-Rig','AU-Rob','AU-Whr','AU-Ync','CA-NS1','CA-NS2','CA-NS4','CA-NS5','CA-NS6',
+                                      'CA-NS7','CA-SF1','CA-SF2','CA-SF3','RU-Che','RU-Zot','UK-PL3','US-SP1',
+                                      'AU-Wrr','CN-Din','US-WCr','ZM-Mon']}
     var_name     = 'Qle'
     num_threshold= 200
 
@@ -1218,48 +1225,51 @@ if __name__ == "__main__":
     if 1:
         selected_by    = 'SM_per_all_models'
         middle_day     = False
-        # standardize = 'STD_normalized_SMtopXm'
+        standardize    = 'STD_annual_model'
         var_name       = 'Qle'
         LAI_range      = None
-        select_site    = 'AU-Tum'
         add_Xday_mean_EF= None#'1'
 
-        # selected_by    = 'EF_obs'
-        var_name       = 'Qle'
-        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
-                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
-        
-        var_name       = 'LAI'
-        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
-                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+        for site_name in site_names:
+            if not site_name in clarify_site['remove_site']:
+                select_site    = site_name
 
-        var_name       = 'SWdown'
-        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
-                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
-        
-        var_name       = 'SMtop0.5m'
-        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
-                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
-        
-        var_name       = 'Qle_VPD_caused'
-        plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
-                        selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
-                        IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
-                        LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
-                        dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
-        #
+                # selected_by    = 'EF_obs'
+                var_name       = 'Qle'
+                plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                                selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                                IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                                LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                                dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+
+                # var_name       = 'LAI'
+                # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                #                 LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+                #
+                # var_name       = 'SWdown'
+                # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                #                 LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+                #
+                # var_name       = 'SMtop0.5m'
+                # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                #                 LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+                #
+                # var_name       = 'Qle_VPD_caused'
+                # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
+                #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
+                #                 IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
+                #                 LAI_range = LAI_range, add_Xday_mean_EF=add_Xday_mean_EF,
+                #                 dist_type=dist_type, calc_correl=calc_correl, select_site=select_site, middle_day=middle_day)
+                gc.collect()
         # selected_by    = 'EF_CABLE'
         # plot_var_VPD_uncertainty(var_name=var_name, day_time=day_time, energy_cor=energy_cor, time_scale=time_scale, country_code=country_code,
         #                 selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
@@ -1350,4 +1360,3 @@ if __name__ == "__main__":
     #                  selected_by=selected_by, veg_fraction=veg_fraction, standardize=standardize, uncertain_type=uncertain_type, method=method,
     #                  IGBP_type=IGBP_type, clim_type=clim_type, clarify_site=clarify_site,num_threshold=num_threshold, class_by=class_by,
     #                  dist_type=dist_type, calc_correl=calc_correl, select_site=select_site)
-
