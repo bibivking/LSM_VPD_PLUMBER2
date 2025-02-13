@@ -2,33 +2,29 @@
 
 # Set the path to search
 PLUMBER2_met_path="/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+IGBP_types=('GRA' 'OSH' 'SAV' 'WSA' 'CSH' 'DBF' 'ENF' 'EBF' 'MF' 'WET' 'CRO')
+clim_types=('Af' 'Am' 'Aw' 'BSh' 'BSk' 'BWh' 'BWk' 'Cfa' 'Cfb' 'Csa' 'Csb' 'Cwa' 'Dfa' 'Dfb' 'Dfc' 'Dsb' 'Dsc' 'Dwa' 'Dwb' 'ET')
 
 # Loop through all files in the path
-for file in $(find "$PLUMBER2_met_path" -type f -name "*.nc"); do
-
-  # Extract the file name
-  file_name=$(basename "$file")
-
-  # Extract the site name from the file name
-  site_name="${file_name%%_*}"
+for IGBP_type in ${IGBP_types[@]}; do
 
   # Print the site name to the console
-  echo "$site_name"
-  # site_name="AU-How"
+  echo "$IGBP_type"
+
   # Set the parameters
-  case_name="Qle_SM_per_all_models_${site_name}_data_selected_STD_annual_model"
+  case_name="TVeg_SM_per_all_models_${IGBP_type}_data_selected_STD_annual_model"
   data_selection='True'
   add_aridity_index='True'
-  var_name='"Qle"'
-  standardize='"STD_annual_model"'
+  var_name='"TVeg"'
+  standardize='"STD_annual_model"' # 'None' #
   selected_by='"SM_per_all_models"'
   add_Xday_mean_EF='None'
   low_bound='[0,15]'
   high_bound='[85,100]'
-  select_site="'${site_name}'"
+  select_site="None"
   middle_day='False'
   LAI_range='None'
-  IGBP_type='None'
+  IGBP_type="'${IGBP_type}'"
   add_LAI='True'
   add_qc='True'
   add_SMtopXm='"0.5"'

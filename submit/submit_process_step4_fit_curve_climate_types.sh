@@ -2,6 +2,8 @@
 
 # Set the path to search
 PLUMBER2_met_path="/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+IGBP_types=('GRA' 'OSH' 'SAV' 'WSA' 'CSH' 'DBF' 'ENF' 'EBF' 'MF' 'WET' 'CRO')
+clim_types=('Af' 'Am' 'Aw' 'BSh' 'BSk' 'BWh' 'BWk' 'Cfa' 'Cfb' 'Csa' 'Csb' 'Cwa' 'Dfa' 'Dfb' 'Dfc' 'Dsb' 'Dsc' 'Dwa' 'Dwb' 'ET')
 
 # Set the path to search
 var_name2s=('Qle' 'Qle_VPD_caused' 'LAI'  'SWdown' 'SMtop0.5m') #
@@ -13,20 +15,13 @@ for var_name2 in "${var_name2s[@]}"; do
   site_scripts=()
 
   # Loop through all files in the path
-  for file in $(find "$PLUMBER2_met_path" -type f -name "*.nc"); do
+  for clim_type in ${clim_types[@]}; do
 
-    # Extract the file name
-    file_name=$(basename "$file")
-
-    # Extract the site name from the file name
-    site_name="${file_name%%_*}"
-
-    # site_name="AU-Tum"
     # Print the site name to the console
-    echo "$site_name"
+    echo "$clim_type"
 
-    case_name_no_site="${var_name2}_SM_per_all_models_85-100th_data_selected"
-    case_name="${var_name2}_SM_per_all_models_85-100th_${site_name}_data_selected"
+    case_name_no_site="${var_name2}_SM_per_all_models_0-15th_data_selected_clim_type"
+    case_name="${var_name2}_SM_per_all_models_0-15th_${clim_type}_data_selected"
 
     # Print the script name to the console
     echo "process_step4_fit_curve_${case_name}.py"
@@ -37,14 +32,14 @@ for var_name2 in "${var_name2s[@]}"; do
     selected_by='"SM_per_all_models"'
     data_selection='"True"'
     add_Xday_mean_EF='None'
-    bounds='[85,100]'
+    bounds='[0,15]'
     middle_day='False'
-    select_site="'${site_name}'"
+    select_site="None"
     VPD_num_threshold='5' #'200'
 
     method='"CRV_bins"'
     uncertain_type='"UCRTN_bootstrap"'
-    standardize='None' #'"STD_annual_model"' #
+    standardize='"STD_annual_model"' #
     dist_type='None'
     vpd_top_type='"sample_larger_200"'
 
@@ -53,7 +48,7 @@ for var_name2 in "${var_name2s[@]}"; do
     veg_fraction='None'
     LAI_range='None'
     IGBP_type='None'
-
+    clim_type="'${clim_type}'"
     cd /g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2
 
     cat > "process_step4_fit_curve_${case_name}.py" << EOF_process_step4
@@ -98,6 +93,7 @@ IGBP_type      = ${IGBP_type}
 LAI_range      = ${LAI_range}
 veg_fraction   = ${veg_fraction}
 middle_day     = ${middle_day}
+clim_type      = ${clim_type}
 
 # default setting
 energy_cor     = False
@@ -113,7 +109,7 @@ else:
     message_midday = ''
 
 folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy_cor, time_scale=time_scale,
-                                            standardize=standardize, country_code=country_code,
+                                            standardize=standardize, country_code=country_code, clim_type=clim_type,
                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                             LAI_range=LAI_range, clarify_site=clarify_site, add_Xday_mean_EF=add_Xday_mean_EF,
                                             data_selection=data_selection)
@@ -126,7 +122,7 @@ write_var_VPD_parallel(var_name2, site_names, file_input, PLUMBER2_path, selecte
                        bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
                        standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
                        models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
-                       country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type,
+                       country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type, clim_type=clim_type,
                        add_Xday_mean_EF=add_Xday_mean_EF, select_site=select_site, data_selection=data_selection)
 gc.collect()
 

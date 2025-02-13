@@ -2,6 +2,8 @@
 
 # Set the path to search
 PLUMBER2_met_path="/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+IGBP_types=('GRA' 'OSH' 'SAV' 'WSA' 'CSH' 'DBF' 'ENF' 'EBF' 'MF' 'WET' 'CRO')
+clim_types=('Af' 'Am' 'Aw' 'BSh' 'BSk' 'BWh' 'BWk' 'Cfa' 'Cfb' 'Csa' 'Csb' 'Cwa' 'Dfa' 'Dfb' 'Dfc' 'Dsb' 'Dsc' 'Dwa' 'Dwb' 'ET')
 
 # Set the path to search
 var_name2s=('Qle' 'Qle_VPD_caused' 'LAI'  'SWdown' 'SMtop0.5m') #
@@ -13,20 +15,13 @@ for var_name2 in "${var_name2s[@]}"; do
   site_scripts=()
 
   # Loop through all files in the path
-  for file in $(find "$PLUMBER2_met_path" -type f -name "*.nc"); do
+  for IGBP_type in ${IGBP_types[@]}; do
 
-    # Extract the file name
-    file_name=$(basename "$file")
-
-    # Extract the site name from the file name
-    site_name="${file_name%%_*}"
-
-    # site_name="AU-Tum"
     # Print the site name to the console
-    echo "$site_name"
+    echo "$IGBP_type"
 
-    case_name_no_site="${var_name2}_SM_per_all_models_85-100th_data_selected"
-    case_name="${var_name2}_SM_per_all_models_85-100th_${site_name}_data_selected"
+    case_name_no_site="${var_name2}_SM_per_all_models_0-15th_data_selected_IGBP_type"
+    case_name="${var_name2}_SM_per_all_models_0-15th_${IGBP_type}_data_selected"
 
     # Print the script name to the console
     echo "process_step4_fit_curve_${case_name}.py"
@@ -37,14 +32,14 @@ for var_name2 in "${var_name2s[@]}"; do
     selected_by='"SM_per_all_models"'
     data_selection='"True"'
     add_Xday_mean_EF='None'
-    bounds='[85,100]'
+    bounds='[0,15]'
     middle_day='False'
-    select_site="'${site_name}'"
+    select_site='None'
     VPD_num_threshold='5' #'200'
 
     method='"CRV_bins"'
     uncertain_type='"UCRTN_bootstrap"'
-    standardize='None' #'"STD_annual_model"' #
+    standardize='"STD_annual_model"' #'None' #
     dist_type='None'
     vpd_top_type='"sample_larger_200"'
 
@@ -52,7 +47,7 @@ for var_name2 in "${var_name2s[@]}"; do
     time_scale='"hourly"'
     veg_fraction='None'
     LAI_range='None'
-    IGBP_type='None'
+    IGBP_type="'${IGBP_type}'"
 
     cd /g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2
 
@@ -116,7 +111,7 @@ folder_name, file_message = decide_filename(day_time=day_time, energy_cor=energy
                                             standardize=standardize, country_code=country_code,
                                             selected_by=selected_by, bounds=bounds, veg_fraction=veg_fraction,
                                             LAI_range=LAI_range, clarify_site=clarify_site, add_Xday_mean_EF=add_Xday_mean_EF,
-                                            data_selection=data_selection)
+                                            data_selection=data_selection, IGBP_type=IGBP_type)
 if select_site == None:
     file_input     = 'raw_data_'+var_name+'_VPD'+file_message+message_midday+'.csv'
 else:
@@ -126,7 +121,7 @@ write_var_VPD_parallel(var_name2, site_names, file_input, PLUMBER2_path, selecte
                        bounds=bounds, day_time=day_time, clarify_site=clarify_site, VPD_num_threshold=VPD_num_threshold,
                        standardize=standardize, time_scale=time_scale, uncertain_type=uncertain_type, vpd_top_type=vpd_top_type,
                        models_calc_LAI=models_calc_LAI, veg_fraction=veg_fraction, LAI_range=LAI_range, middle_day=middle_day,
-                       country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type,
+                       country_code=country_code, energy_cor=energy_cor, method=method, dist_type=dist_type, IGBP_type=IGBP_type,
                        add_Xday_mean_EF=add_Xday_mean_EF, select_site=select_site, data_selection=data_selection)
 gc.collect()
 

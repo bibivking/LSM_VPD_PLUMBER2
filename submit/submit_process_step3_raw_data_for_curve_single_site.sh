@@ -16,11 +16,11 @@ for file in $(find "$PLUMBER2_met_path" -type f -name "*.nc"); do
   echo "$site_name"
   # site_name="AU-How"
   # Set the parameters
-  case_name="Qle_SM_per_all_models_${site_name}_data_selected_STD_annual_model"
+  case_name="TVeg_SM_per_all_models_${site_name}_data_selected_STD_annual_model"
   data_selection='True'
   add_aridity_index='True'
-  var_name='"Qle"'
-  standardize='"STD_annual_model"'
+  var_name='"TVeg"'
+  standardize='"STD_annual_model"' #'None' #
   selected_by='"SM_per_all_models"'
   add_Xday_mean_EF='None'
   low_bound='[0,15]'

@@ -25,8 +25,8 @@ for var_name2 in "${var_name2s[@]}"; do
     # Print the site name to the console
     echo "$site_name"
 
-    case_name_no_site="${var_name2}_SM_per_all_models_85-100th_data_selected"
-    case_name="${var_name2}_SM_per_all_models_85-100th_${site_name}_data_selected"
+    case_name_no_site="${var_name2}_SM_per_all_models_85-100th_data_selected_CRV_fit_GAM_complex"
+    case_name="${var_name2}_SM_per_all_models_85-100th_${site_name}_data_selected_CRV_fit_GAM_complex"
 
     # Print the script name to the console
     echo "process_step4_fit_curve_${case_name}.py"
@@ -34,6 +34,7 @@ for var_name2 in "${var_name2s[@]}"; do
 
     # Set the variables
     var_name='"Qle"'
+    standardize='None' #'"STD_annual_model"' #
     selected_by='"SM_per_all_models"'
     data_selection='"True"'
     add_Xday_mean_EF='None'
@@ -42,10 +43,14 @@ for var_name2 in "${var_name2s[@]}"; do
     select_site="'${site_name}'"
     VPD_num_threshold='5' #'200'
 
-    method='"CRV_bins"'
+    # method='"CRV_bins"' # '"CRV_fit_GAM_complex"' #
+    # uncertain_type='"UCRTN_bootstrap"'
+    # dist_type='None' # '"Gamma"' #
+    # vpd_top_type='"sample_larger_200"'
+
+    method='"CRV_fit_GAM_complex"' #'"CRV_bins"'
     uncertain_type='"UCRTN_bootstrap"'
-    standardize='None' #'"STD_annual_model"' #
-    dist_type='None'
+    dist_type='"Poisson"' #'None'
     vpd_top_type='"sample_larger_200"'
 
     day_time='True'

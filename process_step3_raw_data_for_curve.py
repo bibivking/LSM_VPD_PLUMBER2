@@ -340,33 +340,33 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                 var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_obs_mean[site]
 
         # print('site_obs_mean',site_obs_mean)
-    if standardize == 'STD_annual_model':
-
-        # print('standardized by annual model mean')
-
-        # Get all sites left
-        sites_left    = np.unique(var_output["site_name"])
-
-        for site in sites_left:
-
-            # Get the mask of this site
-            site_mask_tmp   = (var_output['site_name'] == site)
-
-            # Mask the dataframe to get slide of the dataframe for this site
-            var_tmp         = var_output[site_mask_tmp]
-
-            # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
-            for i, model_out_name in enumerate(model_out_list):
-                if 'obs' in model_out_name:
-                    head = ''
-                else:
-                    head = 'model_'
-
-                # Calculate site obs mean
-                site_model_mean = np.nanmean(var_tmp[head+model_out_name])
-
-                # Standardize the different model's values by the obs mean for this site
-                var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_mean
+    # elif standardize == 'STD_annual_model':
+    #
+    #     # print('standardized by annual model mean')
+    #
+    #     # Get all sites left
+    #     sites_left    = np.unique(var_output["site_name"])
+    #
+    #     for site in sites_left:
+    #
+    #         # Get the mask of this site
+    #         site_mask_tmp   = (var_output['site_name'] == site)
+    #
+    #         # Mask the dataframe to get slide of the dataframe for this site
+    #         var_tmp         = var_output[site_mask_tmp]
+    #
+    #         # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+    #         for i, model_out_name in enumerate(model_out_list):
+    #             if 'obs' in model_out_name:
+    #                 head = ''
+    #             else:
+    #                 head = 'model_'
+    #
+    #             # Calculate site obs mean
+    #             site_model_mean = np.nanmean(var_tmp[head+model_out_name])
+    #
+    #             # Standardize the different model's values by the obs mean for this site
+    #             var_output.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_mean
 
     elif standardize == 'STD_SMtopXm' and add_SMtopXm:
 
@@ -760,20 +760,20 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             # standardize by SWdown
             var_output[head+model_out_name][:] = var_output[head+model_out_name]/var_output[head+model_out_name+'_Gs_ref']
 
-    if add_Rnet_caused_ratio:
-
-        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
-        for i, model_out_name in enumerate(model_out_list):
-
-            # check whether the model has calculated LAI
-            if 'obs' in model_out_name:
-                head = ''
-            else:
-                head = 'model_'
-
-            var_output[model_out_name+'_VPD_caused'] = var_output[head+model_out_name]*var_output[model_out_name+'_VPD_caused_ratio']
-            print(model_out_name,'no nan LH is',np.sum(~np.isnan(var_output[head+model_out_name])),
-                  'no nan LH_VPD_caused is',np.sum(~np.isnan(var_output[model_out_name+'_VPD_caused_ratio'])))
+    # if add_Rnet_caused_ratio:
+    #
+    #     # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+    #     for i, model_out_name in enumerate(model_out_list):
+    #
+    #         # check whether the model has calculated LAI
+    #         if 'obs' in model_out_name:
+    #             head = ''
+    #         else:
+    #             head = 'model_'
+    #
+    #         var_output[model_out_name+'_VPD_caused'] = var_output[head+model_out_name]*var_output[model_out_name+'_VPD_caused_ratio']
+    #         print(model_out_name,'no nan LH is',np.sum(~np.isnan(var_output[head+model_out_name])),
+    #               'no nan LH_VPD_caused is',np.sum(~np.isnan(var_output[model_out_name+'_VPD_caused_ratio'])))
 
     if output_2d_grids_only:
         mask_VPD_tmp       = (var_output['VPD'] != np.nan)
@@ -875,6 +875,24 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
                                                            var_output_dry[head+model_out_name], np.nan)
             var_output_wet.loc[:,head+model_out_name] = np.where(~np.isnan(var_output_wet['CABLE_SMtop'+str(add_SMtopXm)+'m_percentile'].values),
                                                            var_output_wet[head+model_out_name], np.nan)
+
+        # ======== add 2 July 2024: keep time steps that only all models have data ========
+        model_unify_names = []
+        for i, model_out_name in enumerate(model_out_list):
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+            model_unify_names.append(head+model_out_name)
+        # print('model_unify_names', model_unify_names)
+
+        # Mask out SM is inconsistent
+        print('before dry',np.sum(~np.isnan(var_output_dry['model_CABLE'])))
+        print('before wet',np.sum(~np.isnan(var_output_wet['model_CABLE'])))
+        var_output_dry[model_unify_names] = var_output_dry[model_unify_names].where(~var_output_dry[model_unify_names].isna().any(axis=1), other=np.nan)
+        var_output_wet[model_unify_names] = var_output_wet[model_unify_names].where(~var_output_wet[model_unify_names].isna().any(axis=1), other=np.nan)
+        print('after dry',np.sum(~np.isnan(var_output_dry['model_CABLE'])))
+        print('after wet',np.sum(~np.isnan(var_output_wet['model_CABLE'])))
 
     elif selected_by == 'EF_obs':
 
@@ -1004,25 +1022,117 @@ def write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=None
             var_output_dry[head+model_out_name] = np.where(SM_dry_mask, var_output[head+model_out_name], np.nan)
             var_output_wet[head+model_out_name] = np.where(SM_wet_mask, var_output[head+model_out_name], np.nan)
 
-    # ======== add 2 July 2024: keep time steps that only all models have data ========
-    model_unify_names = []
-    for i, model_out_name in enumerate(model_out_list):
-        if 'obs' in model_out_name:
-            head = ''
-        else:
-            head = 'model_'
-        model_unify_names.append(head+model_out_name)
-    # print('model_unify_names', model_unify_names)
-
-    # Mask out SM is inconsistent
-    print('before dry',np.sum(~np.isnan(var_output_dry['obs'])))
-    print('before wet',np.sum(~np.isnan(var_output_wet['obs'])))
-    var_output_dry[model_unify_names] = var_output_dry[model_unify_names].where(~var_output_dry[model_unify_names].isna().any(axis=1), other=np.nan)
-    var_output_wet[model_unify_names] = var_output_wet[model_unify_names].where(~var_output_wet[model_unify_names].isna().any(axis=1), other=np.nan)
-    print('after dry',np.sum(~np.isnan(var_output_dry['obs'])))
-    print('after wet',np.sum(~np.isnan(var_output_wet['obs'])))
-
     # print('Finish dividing dry and wet periods')
+
+    # ========== Test standardize by only by the data used in the curves rather than all available time steps
+    if add_Rnet_caused_ratio:
+
+        # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+        for i, model_out_name in enumerate(model_out_list):
+
+            # check whether the model has calculated LAI
+            if 'obs' in model_out_name:
+                head = ''
+            else:
+                head = 'model_'
+
+            var_output_dry[model_out_name+'_VPD_caused'] = var_output_dry[head+model_out_name]*var_output_dry[model_out_name+'_VPD_caused_ratio']
+            var_output_wet[model_out_name+'_VPD_caused'] = var_output_wet[head+model_out_name]*var_output_wet[model_out_name+'_VPD_caused_ratio']
+
+            print(model_out_name,'in dry file, no nan LH is',np.sum(~np.isnan(var_output_dry[head+model_out_name])),
+                  'in dry file, no nan LH_VPD_caused is',np.sum(~np.isnan(var_output_dry[model_out_name+'_VPD_caused'])))
+            print(model_out_name,'in wet file, no nan LH is',np.sum(~np.isnan(var_output_wet[head+model_out_name])),
+                  'in wet file, no nan LH_VPD_caused is',np.sum(~np.isnan(var_output_wet[model_out_name+'_VPD_caused'])))
+
+    if standardize == 'STD_annual_model':
+
+        # print('standardized by annual model mean')
+
+        # Get all sites left
+        sites_left_dry    = np.unique(var_output_dry["site_name"])
+        sites_left_wet    = np.unique(var_output_wet["site_name"])
+
+        for site in sites_left_dry:
+
+            # Get the mask of this site
+            site_mask_tmp   = (var_output_dry['site_name'] == site)
+
+            # Mask the dataframe to get slide of the dataframe for this site
+            var_tmp         = var_output_dry[site_mask_tmp]
+
+            # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+            for i, model_out_name in enumerate(model_out_list):
+                if 'obs' in model_out_name:
+                    head = ''
+                else:
+                    head = 'model_'
+
+                # Calculate site obs mean
+                site_model_mean = np.nanmean(var_tmp[head+model_out_name])
+
+                # Standardize the different model's values by the obs mean for this site
+                var_output_dry.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_mean
+
+        for site in sites_left_wet:
+
+            # Get the mask of this site
+            site_mask_tmp   = (var_output_wet['site_name'] == site)
+
+            # Mask the dataframe to get slide of the dataframe for this site
+            var_tmp         = var_output_wet[site_mask_tmp]
+
+            # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+            for i, model_out_name in enumerate(model_out_list):
+                if 'obs' in model_out_name:
+                    head = ''
+                else:
+                    head = 'model_'
+
+                # Calculate site obs mean
+                site_model_mean = np.nanmean(var_tmp[head+model_out_name])
+
+                # Standardize the different model's values by the obs mean for this site
+                var_output_wet.loc[site_mask_tmp, head+model_out_name] = var_tmp[head+model_out_name]/site_model_mean
+
+        if add_Rnet_caused_ratio:
+
+            # Get all sites left
+            sites_left_dry    = np.unique(var_output_dry["site_name"])
+            sites_left_wet    = np.unique(var_output_wet["site_name"])
+
+            for site in sites_left_dry:
+
+                # Get the mask of this site
+                site_mask_tmp   = (var_output_dry['site_name'] == site)
+
+                # Mask the dataframe to get slide of the dataframe for this site
+                var_tmp         = var_output_dry[site_mask_tmp]
+
+                # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+                for i, model_out_name in enumerate(model_out_list):
+
+                    # Calculate site obs mean
+                    site_model_mean = np.nanmean(var_tmp[model_out_name+'_VPD_caused'])
+
+                    # Standardize the different model's values by the obs mean for this site
+                    var_output_dry.loc[site_mask_tmp, model_out_name+'_VPD_caused'] = var_tmp[model_out_name+'_VPD_caused']/site_model_mean
+
+            for site in sites_left_wet:
+
+                # Get the mask of this site
+                site_mask_tmp   = (var_output_wet['site_name'] == site)
+
+                # Mask the dataframe to get slide of the dataframe for this site
+                var_tmp         = var_output_wet[site_mask_tmp]
+
+                # Calculute the mean obs for each site and use the mean to standardize the varibale of this file
+                for i, model_out_name in enumerate(model_out_list):
+
+                    # Calculate site obs mean
+                    site_model_mean = np.nanmean(var_tmp[model_out_name+'_VPD_caused'])
+
+                    # Standardize the different model's values by the obs mean for this site
+                    var_output_wet.loc[site_mask_tmp, model_out_name+'_VPD_caused'] = var_tmp[model_out_name+'_VPD_caused']/site_model_mean
 
     # ========== Save curves ==========
     if var_name == 'NEE':

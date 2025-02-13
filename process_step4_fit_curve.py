@@ -439,45 +439,45 @@ def write_var_VPD_parallel(var_name, site_names, file_input, PLUMBER2_path, sele
         fitting GAM curve
         '''
 
-        if select_site != None:
-            print("method='CRV_fit_GAM_simple' or 'CRV_fit_GAM_complex' don't support write optimized GAM model out for one selected site yet")
-            return
-        else:
-            # ============ Check whether the folder save GAM_fit data exist ============
-            if not os.path.exists(f'./txt/process4_output/{folder_name}/GAM_fit'):
-                os.makedirs(f'./txt/process4_output/{folder_name}/GAM_fit')
+        # if select_site != None:
+        #     print("method='CRV_fit_GAM_simple' or 'CRV_fit_GAM_complex' don't support write optimized GAM model out for one selected site yet")
+        #     return
+        # else:
+        # ============ Check whether the folder save GAM_fit data exist ============
+        if not os.path.exists(f'./txt/process4_output/{folder_name}/GAM_fit'):
+            os.makedirs(f'./txt/process4_output/{folder_name}/GAM_fit')
 
-            # ============ Creat the output dataframe ============
-            x_bot      = 0.001
-            x_interval = 0.1
+        # ============ Creat the output dataframe ============
+        x_bot      = 0.001
+        x_interval = 0.1
 
-            # Use multiprocessing to fit GAM models in parallel
-            if vpd_top_type == 'sample_larger_200':
+        # Use multiprocessing to fit GAM models in parallel
+        if vpd_top_type == 'sample_larger_200':
 
-                # Find x_top
-                vpd_series, vpd_num, var_vals, var_vals_top, var_vals_bot = bin_VPD(var_input, model_out_list, uncertain_type)
-                x_top = {}
+            # Find x_top
+            vpd_series, vpd_num, var_vals, var_vals_top, var_vals_bot = bin_VPD(var_input, model_out_list, uncertain_type)
+            x_top = {}
 
-                for i, model_out_name in enumerate(model_out_list):
-                    try:
-                        tmp                   = np.where(vpd_num[i,:]>=VPD_num_threshold, 1, 0)
-                        x_top[model_out_name] = vpd_series[np.argwhere(tmp==1)[-1]]
-                    except:
-                        print('Totally ',np.sum(tmp),'VPD bins have data points >=',VPD_num_threshold)
-                        x_top[model_out_name] = np.nan
-                print(x_top)
+            for i, model_out_name in enumerate(model_out_list):
+                try:
+                    tmp                   = np.where(vpd_num[i,:]>=VPD_num_threshold, 1, 0)
+                    x_top[model_out_name] = vpd_series[np.argwhere(tmp==1)[-1]]
+                except:
+                    print('Totally ',np.sum(tmp),'VPD bins have data points >=',VPD_num_threshold)
+                    x_top[model_out_name] = np.nan
+            print(x_top)
 
-                with mp.Pool() as pool:
-                    pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top[model_in], x_bot, x_interval,
-                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
-                                for model_in in model_out_list])
+            with mp.Pool() as pool:
+                pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top[model_in], x_bot, x_interval,
+                            var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
+                            for model_in in model_out_list])
 
-            elif vpd_top_type == 'to_10':
-                x_top      = 10.001
-                with mp.Pool() as pool:
-                    pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top, x_bot, x_interval,
-                                var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
-                                for model_in in model_out_list])
+        elif vpd_top_type == 'to_10':
+            x_top      = 10.001
+            with mp.Pool() as pool:
+                pool.starmap(fit_GAM_for_model, [(folder_name, file_message, var_name, model_in, x_top, x_bot, x_interval,
+                            var_input['VPD'],  var_input[get_header(model_in) + model_in], method, dist_type, vpd_top_type)
+                            for model_in in model_out_list])
 
     return
 

@@ -2,33 +2,30 @@
 
 # Set the path to search
 PLUMBER2_met_path="/g/data/w97/mm3972/data/Fluxnet_data/Post-processed_PLUMBER2_outputs/Nc_files/Met/"
+IGBP_types=('GRA' 'OSH' 'SAV' 'WSA' 'CSH' 'DBF' 'ENF' 'EBF' 'MF' 'WET' 'CRO')
+clim_types=('Af' 'Am' 'Aw' 'BSh' 'BSk' 'BWh' 'BWk' 'Cfa' 'Cfb' 'Csa' 'Csb' 'Cwa' 'Dfa' 'Dfb' 'Dfc' 'Dsb' 'Dsc' 'Dwa' 'Dwb' 'ET')
 
 # Loop through all files in the path
-for file in $(find "$PLUMBER2_met_path" -type f -name "*.nc"); do
-
-  # Extract the file name
-  file_name=$(basename "$file")
-
-  # Extract the site name from the file name
-  site_name="${file_name%%_*}"
+for clim_type in ${clim_types[@]}; do
 
   # Print the site name to the console
-  echo "$site_name"
-  # site_name="AU-How"
+  echo "$clim_type"
+
   # Set the parameters
-  case_name="Qle_SM_per_all_models_${site_name}_data_selected_STD_annual_model"
+  case_name="TVeg_SM_per_all_models_${clim_type}_data_selected_STD_annual_model"
   data_selection='True'
   add_aridity_index='True'
-  var_name='"Qle"'
-  standardize='"STD_annual_model"'
+  var_name='"TVeg"'
+  standardize='"STD_annual_model"' # 'None' #
   selected_by='"SM_per_all_models"'
   add_Xday_mean_EF='None'
   low_bound='[0,15]'
   high_bound='[85,100]'
-  select_site="'${site_name}'"
+  select_site="None"
   middle_day='False'
   LAI_range='None'
   IGBP_type='None'
+  clim_type="'${clim_type}'"
   add_LAI='True'
   add_qc='True'
   add_SMtopXm='"0.5"'
@@ -89,6 +86,7 @@ region_name    =${region_name}
 veg_fraction   =${veg_fraction}
 LAI_range      =${LAI_range}
 IGBP_type      =${IGBP_type}
+clim_type      =${clim_type}
 middle_day     =${middle_day}
 Tair_constrain =${Tair_constrain}
 VPD_sensitive  =${VPD_sensitive}
@@ -130,7 +128,7 @@ write_raw_data_var_VPD(var_name, site_names, PLUMBER2_path, selected_by=selected
                 country_code=country_code, LAI_range=LAI_range, add_qc=add_qc, quality_ctrl=quality_ctrl, # IGBP_type=IGBP_type,
                 energy_cor=energy_cor, output_2d_grids_only=output_2d_grids_only,regional_sites=regional_sites,
                 middle_day=middle_day, VPD_sensitive=VPD_sensitive, Tair_constrain=Tair_constrain,
-                add_Xday_mean_EF=add_Xday_mean_EF, select_site=select_site,
+                add_Xday_mean_EF=add_Xday_mean_EF, select_site=select_site, clim_type=clim_type,
                 data_selection=data_selection, add_aridity_index=add_aridity_index)
 
 EOF_process_step3

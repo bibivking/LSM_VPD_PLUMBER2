@@ -293,6 +293,19 @@ def change_model_name(model_in):
 
     return model_out
 
+def check_site_info(site_name,var_to_check):
+
+    process1_names      = ['NoahMPv401_greenness','IGBP_type','climate_type']
+
+    if var_to_check in process1_names:
+        var_tmp = pd.read_csv('/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process1_output/Qle_all_sites.csv',
+                  usecols=['site_name',var_to_check])
+        return var_tmp.loc[(var_tmp['site_name'] == site_name), var_to_check].values[0]
+    elif var_to_check == 'aridity_index':
+        var_tmp = pd.read_csv('/g/data/w97/mm3972/scripts/PLUMBER2/LSM_VPD_PLUMBER2/txt/process1_output/Aridity_index_all_sites.csv',
+                  usecols=['site_name',var_to_check])
+        return var_tmp.loc[(var_tmp['site_name'] == site_name), var_to_check].values[0]
+
 def load_default_list():
 
     # The site names
@@ -375,7 +388,8 @@ def load_sites_in_country_list(country_code):
         site_names     = None
     return site_names
 
-def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spline_order=2):
+
+def fit_GAM_simple_for_all_sites(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spline_order=2):
 
     x_series   = np.arange(x_bot, x_top, x_interval)
 
@@ -393,6 +407,152 @@ def fit_GAM_simple(x_top, x_bot, x_interval, x_values, y_values,n_splines=4,spli
     return x_series, y_pred, y_int
 
 def fit_GAM_complex(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
+
+    '''
+    In this method, it tests all parameter combinations to select the best parameter
+    combination for each fold, and select from all folds to get the best combination.
+    However, the best parameter combination should come from best average score of 5
+    folds. So I wrote a new function to replace def fit_GAM_complex_old.
+    '''
+    print(model_out_name, 'x_top',x_top)
+
+
+    if vpd_top_type == 'sample_larger_200':
+        subfolder_name = f'{dist_type}_greater_200_samples'
+        concave        = False
+
+    elif vpd_top_type == 'to_10':
+        subfolder_name = f'{dist_type}_to_10'
+        concave        = True
+
+    # In case no VPD bin has data points >= VPD_num_threshold
+    if np.isnan(x_top):
+        return np.nan, np.nan, np.nan
+
+    # Remove nan values
+    x_values_tmp = copy.deepcopy(x_values)
+    y_values_tmp = copy.deepcopy(y_values)
+
+    # copy.deepcopy: creates a complete, independent copy of an object
+    # and its entire internal structure, including nested objects and any
+    # references they contain.
+
+    nonnan_mask = (~np.isnan(x_values_tmp)) & (~np.isnan(y_values_tmp))
+    x_values    = x_values_tmp[nonnan_mask]
+    y_values    = y_values_tmp[nonnan_mask]
+
+    if len(x_values) <= 10:
+        print("Alarm! Not enought sample")
+        return np.nan, np.nan, np.nan
+
+    # Set x_series
+    x_series   = np.arange(x_bot, x_top, x_interval)
+
+    # GAM parameter set 6 -- new try since optimized n_spline mostly = 10,
+    # thus increase the range to find the best, sample_larger_200:
+    # lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    # n_splines  = np.arange(5, 14, 1)   # Number of splines per smooth term range
+
+    # GAM parameter set 5 -- final for sample_larger_200:
+    lam        = np.logspace(-3, 3, 11)#np.logspace(-3, 3, 21)  # Smoothing parameter range
+    n_splines  = np.arange(3, 6, 1)   # Number of splines per smooth term range
+
+    # Set up KFold cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+    # Initialize empty lists for storing results
+    models = []
+    scores = []
+
+    # Perform grid search
+    for train_index, test_index in kf.split(x_values):
+        X_train, X_test = x_values[train_index], x_values[test_index]
+        y_train, y_test = y_values[train_index], y_values[test_index]
+
+        X_train = X_train.reshape(-1, 1)
+
+        print('X_train.shape', X_train.shape)
+        print('X_test.shape', X_test.shape)
+        print('y_train.shape', y_train.shape)
+        print('y_test.shape', y_test.shape)
+
+        # Define and fit GAM model
+        if dist_type=='Linear':
+            gam = LinearGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines) #  + f(0)
+        elif dist_type=='Poisson':
+            # concave assumption
+            if concave:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = PoissonGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+        elif dist_type=='Gamma':
+            if concave:
+                # concave assumption
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top], constraints='concave')).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+            else:
+                gam = GammaGAM(s(0, edge_knots=[x_bot, x_top])).gridsearch(X_train, y_train, lam=lam, n_splines=n_splines)
+
+
+        # LinearGAM(s(0)) creates a GAM with a spline term
+        # edge_knots: specify minimum and maximum domain of the spline function.
+        #             To make GAM model covers the whole range of VPD, I manually set them as VPD boundaries
+
+        # Alternative
+        # gam = LinearGAM(s(0) + f(0)).fit(X_train, y_train)
+        # Fits the GAM model to the data using default hyperparameters.
+
+        # process4-4
+        models.append(gam)
+        # Evaluate model performance (replace with your preferred metric)
+        score = gam.score(X_test, y_test) # gam.score: compute the explained deviance for a trained model for a given X data and y labels
+        scores.append(score)
+
+    # Find the best model based on average score
+    # For gam.score which calcuate deviance, the best model's score is closet to 0
+    best_model_index = np.argmin(np.abs(scores))
+    best_model       = models[best_model_index]
+    best_score       = scores[best_model_index]
+
+    print(model_out_name,'scores',scores)
+    print(model_out_name,'best_score',best_score)
+    print(model_out_name,'best_model_index',best_model_index)
+    print(model_out_name,'best_model',best_model)
+    print(f"{model_out_name} best model parameters: {best_model.lam}, {best_model.n_splines}")
+
+    # Save the best model using joblib
+    joblib.dump(best_model, f"./txt/process4_output/{folder_name}/{subfolder_name}/GAM_fit/bestGAM_{var_name}{file_message}_{model_out_name}_{dist_type}.pkl")
+
+    # Further analysis of the best model (e.g., plot smoothers, analyze interactions)
+    y_pred       = best_model.predict(x_series)
+
+    # Note that The code calculates 95% confidence intervals, but remember that confidence
+    #           intervals should generally be calculated on the actual test data points,
+    #           not a new set of equally spaced values like x_series
+    y_int        = best_model.confidence_intervals(x_series, width=.95)
+
+    # Create the scatter plot for X and Y
+    plt.scatter(x_values, y_values, s=0.5, facecolors='none', edgecolors='blue',  alpha=0.5, label='data points')
+
+    # Plot the line for X_predict and Y_predict
+    plt.plot(x_series, y_pred, color='red', label='Predicted line')
+    plt.fill_between(x_series,y_int[:,1],y_int[:,0], color='red', edgecolor="none", alpha=0.1) #  .
+
+    # Add labels and title
+    plt.xlabel('VPD')
+    plt.ylabel('Qle')
+    plt.title('Check the GAM fitted curve')
+    # plt.xlim(0, 10)  # Set x-axis limits
+    plt.ylim(0, 800)  # Set y-axis limits
+
+    # Add legend
+    plt.legend()
+
+    plt.savefig(f'./check_plots/check_{var_name}_{model_out_name}_GAM_fitted_curve_{dist_type}.png',dpi=600)
+
+    return x_series, y_pred, y_int
+
+
+def fit_GAM_complex_old(model_out_name, var_name, folder_name, file_message, x_top, x_bot, x_interval, x_values, y_values, dist_type='Linear', vpd_top_type='to_10'):
 
     '''
     In this method, it tests all parameter combinations to select the best parameter
@@ -878,6 +1038,13 @@ def smooth_vpd_series(values, window_size=11, order=3, smooth_type='S-G_filter',
 
     if smooth_type=='S-G_filter':
         vals_smooth = savgol_filter(values, window_size, order, mode='nearest',deriv=deriv)
+    elif smooth_type=='rolling':
+        if np.sum(~np.isnan(values)) > 0:
+            value_tmp   = pd.DataFrame(values, columns=['var'])
+            vals_smooth = value_tmp.rolling(window=window_size, min_periods=1).mean().values
+        else:
+            vals_smooth = values
+        print('vals_smooth',vals_smooth)
     elif smooth_type=='smoothing':
         for j in np.arange(window_half,nx-window_half):
             vals_smooth[j] = np.nanmean(values[j-window_half:j+window_half])
@@ -1256,11 +1423,12 @@ def set_clim_colors():
                     'Dsb': 'c',  # Mediterranean-influenced warm-summer humid continental climate
                     'Dwa': 'aqua', # Monsoon-influenced hot-summer humid continental climate
                     'Dwb': 'deepskyblue',  # Monsoon-influenced warm-summer humid continental climate
-                    'Dfa': 'dodgerblue',  # Hot-summer humid continental climate
-                    'Dfb': 'royalblue',  # Warm-summer humid continental climate
-                    'Dfc': 'Navy',  # Subarctic climate
+                    'Dfa': 'blue',  # Hot-summer humid continental climate
+                    'Dfb': 'dodgerblue',  # Warm-summer humid continental climate
+                    'Dfc': 'royalblue',  # Subarctic climate
+                    'Dsc': 'Navy', # cold, dry summer climate with cool summers
                     # E: Polar
-                    'ET': 'gray', # Tundra climate;
+                    'ET': 'gray' # Tundra climate;
                     }
 
     return clim_colors
