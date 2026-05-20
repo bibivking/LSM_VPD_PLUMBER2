@@ -1,0 +1,1 @@
+/srv/ccrc/LandAP/z5218916/script/commom_script/kill_all_jobs.sh

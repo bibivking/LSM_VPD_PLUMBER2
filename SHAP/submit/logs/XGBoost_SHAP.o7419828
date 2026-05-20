@@ -1,0 +1,32 @@
+usage: XGBoost_SHAP.py [-h] --select_model SELECT_MODEL
+                       [--select_site SELECT_SITE] [--folder_path FOLDER_PATH]
+                       [--batch_size BATCH_SIZE]
+                       [--GridSearchCV_score GRIDSEARCHCV_SCORE] [--test]
+XGBoost_SHAP.py: error: unrecognized arguments: no
+
+================================================================================
+                     Resource Usage on 22/01/2026 08:26:02                      
+
+Job Id: 7419828 
+Queue: GENERAL
+Walltime: 00:00:04  (requested 02:00:00)
+Job unsucesfull. Exit Status 2 - Exit status refers to the exit value of the
+top process in the job, typically the shell.
+This may be the exit value of the last command executed in the shell.
+See job output error.
+
+--------------------------------------------------------------------------------
+|              |             GPUs              |            Memory             |
+--------------------------------------------------------------------------------
+| Node  GPU ID | Requested   Used   Efficiency | Available   Used              |
+| k166    0    |     1        0.0       0%     | 95830 MiB   0.0B              |
+--------------------------------------------------------------------------------
+|Total         |     1        0.0      0.0%    |                               |
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+|              |             CPUs              |            Memory             |
+--------------------------------------------------------------------------------
+| Node         | Requested   Used   Efficiency | Requested   Used   Efficiency |
+| k166         |     1        0.5      50.0%   |  180.0gb   0.14gb     0.1%    |
+--------------------------------------------------------------------------------

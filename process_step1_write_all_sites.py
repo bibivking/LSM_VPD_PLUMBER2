@@ -76,6 +76,7 @@ def read_data(var_name, site_name, input_file):
                 var_output[model_in+'_EF'] = f.variables[model_bin_name][:]
             except:
                 var_output[model_in+'_EF'] = np.nan
+        
         elif model_ntime == int(ntime/2):
             print('model ', model_in, ' is hourly, model_ntime is', model_ntime, ' ntime is', ntime)
             model_out_list.append(model_in)
